@@ -11,6 +11,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
@@ -27,10 +28,11 @@ type ComplianceService interface {
 	ListExceptions(ctx context.Context, tenant string) ([]compliance.ExceptionView, error)
 	AuditEvents(ctx context.Context, tenant string, limit int) ([]audit.Record, error)
 	VerifyAudit(ctx context.Context, tenant string) (audit.Verification, error)
+	AuditHashAt(ctx context.Context, tenant string, seq int64) (string, error)
 }
 
-// ActorHeader identifies who performs an action. TEMPORARY: caller-asserted
-// until authentication exists (see security/threat-model.md).
+// ActorHeader identifies who performs an action in development header mode
+// only; with OIDC the actor is the verified token subject (docs/auth.md).
 const ActorHeader = "X-Aegis-Actor"
 
 var actorRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._@-]{0,63}$`)
@@ -38,6 +40,68 @@ var actorRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._@-]{0,63}$`)
 type complianceHandlers struct {
 	svc     ComplianceService
 	catalog *compliance.Catalog
+	signer  *signing.Signer
+}
+
+// auditHead returns the signed head of the tenant's audit chain. Storing it
+// outside Aegis (a ticket, a Git tag, a transparency log) anchors the chain:
+// a later rewrite of history no longer matches the stored head.
+func (h complianceHandlers) auditHead(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.VerifyAudit(r.Context(), tenant)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	if h.signer == nil {
+		writeError(w, http.StatusServiceUnavailable, "signing_unavailable", "no signing key is configured")
+		return
+	}
+	signed, err := h.signer.Sign(struct {
+		Type       string `json:"type"`
+		Tenant     string `json:"tenant"`
+		Seq        int64  `json:"seq"`
+		Hash       string `json:"hash"`
+		ChainValid bool   `json:"chain_valid"`
+		SignedAt   string `json:"signed_at"`
+	}{"aegis.audit-head/v1", tenant, v.Checked, v.HeadHash, v.Valid, time.Now().UTC().Format(time.RFC3339)})
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, signed)
+}
+
+// verifyAnchor checks a previously stored head (seq, hash) against the live chain.
+func (h complianceHandlers) verifyAnchor(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Seq  int64  `json:"seq"`
+		Hash string `json:"hash"`
+	}
+	if err := decodeStrict(r, &req); err != nil || req.Seq < 1 || req.Hash == "" {
+		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"seq": <n>, "hash": "<hex>"}`)
+		return
+	}
+	v, err := h.svc.VerifyAudit(r.Context(), tenant)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	stored, err := h.svc.AuditHashAt(r.Context(), tenant, req.Seq)
+	if err != nil && !errors.Is(err, compliance.ErrNotFound) {
+		h.fail(w, r, err)
+		return
+	}
+	matches := err == nil && stored == req.Hash
+	writeJSON(w, http.StatusOK, map[string]any{"matches": matches, "event_exists": err == nil,
+		"chain_valid": v.Valid, "current_head_seq": v.Checked, "anchored_and_intact": matches && v.Valid})
 }
 
 func (h complianceHandlers) tenant(w http.ResponseWriter, r *http.Request) (string, bool) {

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { can, type PageProps } from '../nav'
 import type { Remediation as Rem, Template } from '../types'
 import { Badge, Empty, ErrorBox, Panel } from '../ui'
-import { useAction, useLoad, when } from '../hooks'
+import { useAction, useLoad, when, useDraft } from '../hooks'
 
 const fmt = (v: unknown) => (v === undefined ? '—' : JSON.stringify(v))
 
@@ -50,8 +50,8 @@ function Propose({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) 
   const [source, setSource] = useState<'finding' | 'manual'>('finding')
   const [rule, setRule] = useState(params.get('rule') ?? 'AEGIS-S3-001')
   const [resource, setResource] = useState(params.get('resource') ?? '')
-  const [ops, setOps] = useState('[{"op": "set", "path": "tags.owner", "value": "platform-team"}]')
-  const [just, setJust] = useState('')
+  const [ops, setOps, clearOps] = useDraft('remediation.ops', '[{"op": "set", "path": "tags.owner", "value": "platform-team"}]')
+  const [just, setJust, clearJust] = useDraft('remediation.justification', '')
   const act = useAction()
   const submit = async () => {
     let operations: unknown
@@ -66,7 +66,11 @@ function Propose({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) 
     const r = await act.run(() => api<Rem>('POST', '/api/v1/remediations', source === 'finding'
       ? { source, rule_id: rule, resource_id: resource, justification: just }
       : { source, resource_id: resource, operations, justification: just }))
-    if (r) go('remediation', { id: r.id })
+    if (r) {
+      clearOps()
+      clearJust()
+      go('remediation', { id: r.id })
+    }
   }
   const t = tpl.data?.items.find((x) => x.rule_id === rule)
   return (
@@ -165,6 +169,12 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
       {x.change_set && (
         <Panel title="Change set">
           <p className="small">{x.change_set.instructions}</p>
+          {x.change_set.signed ? (
+            <p className="small ok-text">
+              Signed (Ed25519, key <code>{x.change_set.signed.key_id}</code>). Before applying, verify it with
+              {' '}<code>go run ./cmd/aegis-verify -key &lt;public key&gt; remediation.json</code>; the public key is at <code>/api/v1/signing-key</code>.
+            </p>
+          ) : <p className="small muted">This change set is not signed (no signing key configured).</p>}
           <pre className="code">{JSON.stringify(x.change_set.operations, null, 2)}</pre>
         </Panel>
       )}

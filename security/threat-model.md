@@ -35,6 +35,11 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 | Elevation of privilege (IaC tools) | Untrusted Terraform or scanner input escapes the tool container | No network except `terraform init`, all capabilities dropped, `no-new-privileges`, read-only root filesystem with a size-limited `/tmp`, 2 CPUs, 2 GiB memory, 512 processes | implemented |
 | Spoofing (development mode) | A development API (header-trusting) is exposed to a network | `dev-headers` refused in production; it only accepts clients on loopback or private networks; production refuses a `*.localhost` OIDC issuer | implemented |
 
+| Repudiation / tampering (change sets) | A pipeline applies a change that was never approved in Aegis | Released change sets are signed with Ed25519 (plan hash, operations, approvers, releaser, time); `cmd/aegis-verify` checks them against the published key | implemented |
+| Tampering (audit history) | A database owner rewrites the whole audit chain | The API runs as `aegis_app`, which cannot UPDATE or DELETE audit, history or approvals, disable triggers, or touch migrations. A signed chain head (`GET /api/v1/audit/head`) can be stored outside Aegis and checked later (`POST /api/v1/audit/anchors/verify`) | implemented (anchoring is the operator's job) |
+| Information disclosure (transport) | Plain HTTP between browser, API and identity provider | Optional `tls` profile: Caddy terminates TLS for the API with HSTS; production refuses `sslmode=disable` and http issuers | implemented (local CA) |
+| Session hijack window | Long-lived tokens | 1-hour ID tokens renewed silently with refresh tokens; renewal must return the same identity | implemented |
+
 ## Implemented so far
 - HTTP server timeouts (header/read/write/idle) and max header size.
 - Request body size limit (default 1 MiB).

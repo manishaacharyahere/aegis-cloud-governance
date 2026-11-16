@@ -25,18 +25,24 @@ const (
 
 // Config is the validated runtime configuration for the API process.
 type Config struct {
-	Environment     string
-	HTTPAddr        string
-	DatabaseURL     string
-	LogLevel        slog.Level
-	MigrateOnStart  bool
-	ShutdownTimeout time.Duration
-	MaxBodyBytes    int64
-	MaxImportBytes  int64
+	Environment string
+	HTTPAddr    string
+	DatabaseURL string
+	// MigrationDatabaseURL, if set, is used for migrations (schema owner);
+	// DatabaseURL is then the least-privilege runtime role.
+	MigrationDatabaseURL string
+	LogLevel             slog.Level
+	MigrateOnStart       bool
+	ShutdownTimeout      time.Duration
+	MaxBodyBytes         int64
+	MaxImportBytes       int64
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
 	OPAToken        string
+	// SigningKey is a base64 Ed25519 seed for signed change sets and audit
+	// heads (required in production; development generates a throwaway key).
+	SigningKey string
 	// Database pools: request pool size and statement timeout (background work
 	// such as the relay and retention uses a separate small pool).
 	DBMaxConns         int32
@@ -89,9 +95,10 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	var errs []error
 	cfg := Config{
-		Environment: get("AEGIS_ENV", EnvDevelopment),
-		HTTPAddr:    get("AEGIS_HTTP_ADDR", ":8080"),
-		DatabaseURL: get("AEGIS_DATABASE_URL", ""),
+		Environment:          get("AEGIS_ENV", EnvDevelopment),
+		HTTPAddr:             get("AEGIS_HTTP_ADDR", ":8080"),
+		DatabaseURL:          get("AEGIS_DATABASE_URL", ""),
+		MigrationDatabaseURL: get("AEGIS_MIGRATION_DATABASE_URL", ""),
 	}
 
 	switch cfg.Environment {
@@ -178,6 +185,10 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, errors.New("AEGIS_DB_STATEMENT_TIMEOUT: must be a duration (0 disables)"))
 	} else {
 		cfg.DBStatementTimeout = d
+	}
+	cfg.SigningKey = get("AEGIS_SIGNING_KEY", "")
+	if cfg.Environment == EnvProduction && cfg.SigningKey == "" {
+		errs = append(errs, errors.New("AEGIS_SIGNING_KEY: required in production (generate with: go run ./cmd/aegis-verify -new-key)"))
 	}
 	cfg.OPAToken = get("AEGIS_OPA_TOKEN", "")
 	if cfg.Environment == EnvProduction && len(cfg.OPAToken) < 32 {

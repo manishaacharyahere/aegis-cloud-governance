@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { beginLogin, codeChallenge, completeLogin, decodeJWT, identityHeaders, loadSession, type AuthConfig } from './auth'
+import { beginLogin, codeChallenge, completeLogin, decodeJWT, identityHeaders, loadSession, renew, renewIn, type AuthConfig } from './auth'
 import { ApiError, describeError, makeClient } from './client'
 import { can, hashFor, parseHash } from './nav'
 
@@ -76,6 +76,28 @@ describe('sign-in', () => {
     const store = new MemStore()
     store.setItem('aegis.pending_login', '{}')
     await expect(completeLogin(new URLSearchParams({ error: 'access_denied' }), cfg, 'http://app.test', store)).rejects.toThrow(/access_denied/)
+  })
+
+  it('renews silently with the refresh token, for the same person only', async () => {
+    const store = new MemStore()
+    const exp = Math.floor(Date.now() / 1000) + 3600
+    let body = ''
+    const fetchFn = (async (_u: string, init: RequestInit) => {
+      body = String(init.body)
+      return new Response(JSON.stringify({ id_token: jwt({ email: 'alice@aegis.local', exp }), refresh_token: 'r2' }))
+    }) as unknown as typeof fetch
+    const s = { mode: 'oidc' as const, token: 'old', subject: 'alice@aegis.local', refreshToken: 'r1', tokenEndpoint: 'http://idp.test/token', expiresAt: Date.now() + 60_000 }
+    const next = await renew(s, 'aegis-web', store, fetchFn)
+    expect(body).toContain('grant_type=refresh_token')
+    expect(body).toContain('refresh_token=r1')
+    expect(next.refreshToken).toBe('r2')
+    expect(next.expiresAt).toBe(exp * 1000)
+    expect(loadSession(store)?.token).toBe(next.token)
+
+    const otherPerson = (async () => new Response(JSON.stringify({ id_token: jwt({ email: 'mallory@x.yz', exp }) }))) as unknown as typeof fetch
+    await expect(renew(s, 'aegis-web', store, otherPerson)).rejects.toThrow(/different identity/)
+    expect(renewIn(s, s.expiresAt - 600_000)).toBe(480_000)
+    expect(renewIn({ mode: 'dev-headers', subject: 'x' })).toBeNull()
   })
 
   it('drops expired sessions', () => {

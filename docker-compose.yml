@@ -3,6 +3,7 @@
 #   docker compose --profile core up -d --build     # postgres, nats, opa, api
 #   docker compose --profile core --profile ai up -d # + optional local model (Module G)
 #   docker compose --profile core --profile auth up -d   # + Dex (local OIDC), see docs/auth.md
+#   docker compose --profile core --profile tls up -d    # + HTTPS on https://localhost:8443 (local CA)
 #   docker compose --profile core --profile observability up -d
 #                                       # + Prometheus :9090, Grafana :3000, Jaeger :16686
 #
@@ -28,8 +29,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-aegis}
       POSTGRES_USER: ${POSTGRES_USER:-aegis}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      AEGIS_APP_DB_PASSWORD: ${AEGIS_APP_DB_PASSWORD:?set AEGIS_APP_DB_PASSWORD in .env}
     ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes: ["pgdata:/var/lib/postgresql/data", "./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -87,6 +89,7 @@ services:
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
       AEGIS_OPA_URL: http://opa:8181
       AEGIS_OPA_TOKEN: ${AEGIS_OPA_TOKEN}
+      AEGIS_SIGNING_KEY: ${AEGIS_SIGNING_KEY:-}
       AEGIS_NATS_URL: nats://nats:4222
       AEGIS_NATS_USER: aegis_api
       AEGIS_NATS_PASSWORD: ${AEGIS_NATS_PASSWORD}
@@ -97,7 +100,9 @@ services:
       AEGIS_BOOTSTRAP_ADMINS: ${AEGIS_BOOTSTRAP_ADMINS:-}
       # Set AEGIS_OTLP_ENDPOINT=http://jaeger:4318 in .env with the observability profile to export traces.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${AEGIS_OTLP_ENDPOINT:-}
-      AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+      # Runtime: least-privilege aegis_app role. Migrations: the schema owner.
+      AEGIS_DATABASE_URL: postgres://aegis_app:${AEGIS_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+      AEGIS_MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
       AEGIS_AI_PROVIDER: ${AEGIS_AI_PROVIDER:-none}
       AEGIS_AI_URL: http://ollama:11434
       AEGIS_AI_MODEL: ${AEGIS_AI_MODEL:-}
@@ -127,12 +132,31 @@ services:
     image: ghcr.io/dexidp/dex:v2.46.1
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     ports: ["127.0.0.1:5556:5556"]
-    volumes: ["./infrastructure/auth/dex.yml:/etc/dex/config.yaml:ro", "dexdata:/var/dex"]
+    volumes: ["./infrastructure/auth/dex.yml:/etc/dex/config.yaml:ro"]
+    environment:
+      DEX_DB_USER: ${POSTGRES_USER:-aegis}
+      DEX_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      postgres: { condition: service_healthy }
     networks:
       default:
         aliases: ["dex.localhost"]
     read_only: true
     tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+  caddy:
+    <<: *hardening
+    profiles: ["tls"]
+    image: caddy:2.11.7-alpine
+    ports: ["127.0.0.1:8443:8443"]
+    volumes:
+      - ./infrastructure/tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [api]
     deploy:
       resources:
         limits: { memory: 128m }
@@ -179,7 +203,8 @@ services:
         limits: { memory: 512m }
 
 volumes:
-  dexdata:
+  caddydata:
+  caddyconfig:
   pgdata:
   promdata:
   grafanadata:

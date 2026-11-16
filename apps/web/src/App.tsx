@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import { fetchReadiness, type Readiness } from './api'
-import { DEV_USERS, beginLogin, completeLogin, devSession, fetchAuthConfig, loadSession, logout, type AuthConfig, type Session } from './auth'
+import { DEV_USERS, beginLogin, completeLogin, devSession, fetchAuthConfig, loadSession, logout, renew, renewIn, type AuthConfig, type Session } from './auth'
 import { describeError, makeClient } from './client'
 import { hashFor, parseHash, type PageProps } from './nav'
 import type { Me } from './types'
@@ -81,6 +81,19 @@ export default function App() {
     if (!session) return
     api<Me>('GET', '/api/v1/me').then(setMe).catch((e) => setError(describeError(e)))
   }, [api, session])
+
+  // Silent renewal: refresh the ID token two minutes before it expires. If
+  // renewal fails, the next API call gets 401 and the user signs in again
+  // (drafts of forms are kept).
+  useEffect(() => {
+    if (!session || cfg?.mode !== 'oidc') return
+    const wait = renewIn(session)
+    if (wait === null) return
+    const id = window.setTimeout(() => {
+      renew(session, cfg.client_id).then(setSession).catch(() => {})
+    }, wait)
+    return () => window.clearTimeout(id)
+  }, [session, cfg])
 
   if (!cfg) return <div className="center">{error ?? 'Loading…'}</div>
   if (!session) return <Login cfg={cfg} error={error} onDev={(u) => setSession(devSession(u))} />

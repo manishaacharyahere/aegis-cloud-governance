@@ -39,6 +39,35 @@ export function useAction() {
   return { busy, error, run, setError }
 }
 
+/** State that survives reloads and re-sign-in (sessionStorage, this tab only).
+ * clear() removes the draft after a successful submit. */
+export function useDraft(key: string, initial: string): [string, (v: string) => void, () => void] {
+  const k = `aegis.draft.${key}`
+  const [value, setValue] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem(k) ?? initial
+    } catch {
+      return initial
+    }
+  })
+  const set = useCallback((v: string) => {
+    setValue(v)
+    try {
+      sessionStorage.setItem(k, v)
+    } catch {
+      /* storage unavailable: keep in memory */
+    }
+  }, [k])
+  const clear = useCallback(() => {
+    try {
+      sessionStorage.removeItem(k)
+    } catch {
+      /* ignore */
+    }
+  }, [k])
+  return [value, set, clear]
+}
+
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 export const when = (s?: string) => (s ? new Date(s).toLocaleString() : '—')
 export const pct = (n: number) => `${(n * 100).toFixed(1)} %`

@@ -20,6 +20,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
@@ -89,7 +90,19 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err := database.Migrate(ctx, pool, migs, log); err != nil {
+		// Migrations run as the schema owner when a separate URL is given; the
+		// API itself then runs as the least-privilege aegis_app role.
+		migPool := pool
+		if cfg.MigrationDatabaseURL != "" {
+			if migPool, err = database.OpenWith(ctx, cfg.MigrationDatabaseURL, database.Options{MaxConns: 2, AppName: "aegis-migrate"}); err != nil {
+				return fmt.Errorf("migration database: %w", err)
+			}
+		}
+		err = database.Migrate(ctx, migPool, migs, log)
+		if migPool != pool {
+			migPool.Close() // the owner connection is not kept for the API's lifetime
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -130,6 +143,16 @@ func run() error {
 		log.Info("investigation model enabled", "model", m.Name(), "remote_allowed", cfg.AI.AllowRemote)
 	}
 
+	signer := signing.Ephemeral()
+	if cfg.SigningKey != "" {
+		if signer, err = signing.FromSeed(cfg.SigningKey); err != nil {
+			return fmt.Errorf("AEGIS_SIGNING_KEY: %w", err)
+		}
+	} else {
+		log.Warn("AEGIS_SIGNING_KEY not set: using a throwaway signing key; signatures will not verify after a restart")
+	}
+	log.Info("signing key", "key_id", signer.KeyID)
+
 	roles := &access.Store{Pool: pool}
 	if len(cfg.BootstrapAdmins) > 0 {
 		if err := roles.Bootstrap(ctx, cfg.BootstrapTenant, cfg.BootstrapAdmins); err != nil {
@@ -162,7 +185,8 @@ func run() error {
 			return outbox.RequeueParked(ctx, pool, tenant, 0)
 		},
 		RateLimit:   &api.RateLimit{PerMinute: cfg.RateLimitPerMinute, ExpensivePerMinute: cfg.RateLimitExpensivePerMinute},
-		Remediation: &remediation.Service{Pool: pool, OPA: opaClient},
+		Remediation: &remediation.Service{Pool: pool, OPA: opaClient, Signer: signer},
+		Signer:      signer,
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
 		Version:                  version,

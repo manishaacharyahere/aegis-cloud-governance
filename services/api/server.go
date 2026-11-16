@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 )
@@ -39,6 +40,8 @@ type Deps struct {
 	Auth Auth
 	// RateLimit limits requests per caller; nil disables it.
 	RateLimit *RateLimit
+	// Signer signs released change sets and audit heads.
+	Signer *signing.Signer
 	// OutboxRequeue re-queues parked outbox events (admin endpoint).
 	OutboxRequeue OutboxRequeuer
 	Remediation   RemediationService
@@ -89,7 +92,16 @@ func NewHandler(d Deps) http.Handler {
 	scans := iacHandlers{svc: d.IaC}
 	handle("POST /api/v1/iac/scans", d.MaxBodyBytes, scans.createScan)
 	handle("GET /api/v1/iac/scans/{id}", d.MaxBodyBytes, scans.getScan)
-	comp := complianceHandlers{svc: d.Compliance, catalog: d.Catalog}
+	comp := complianceHandlers{svc: d.Compliance, catalog: d.Catalog, signer: d.Signer}
+	handle("GET /api/v1/audit/head", d.MaxBodyBytes, comp.auditHead)
+	handle("POST /api/v1/audit/anchors/verify", d.MaxBodyBytes, comp.verifyAnchor)
+	handle("GET /api/v1/signing-key", d.MaxBodyBytes, func(w http.ResponseWriter, _ *http.Request) {
+		if d.Signer == nil {
+			writeError(w, http.StatusServiceUnavailable, "signing_unavailable", "no signing key is configured")
+			return
+		}
+		writeJSON(w, http.StatusOK, d.Signer.Public())
+	})
 	handle("GET /api/v1/compliance/frameworks", d.MaxBodyBytes, comp.frameworks)
 	handle("POST /api/v1/compliance/evaluations", d.MaxBodyBytes, comp.evaluate)
 	handle("GET /api/v1/compliance/coverage", d.MaxBodyBytes, comp.coverage)

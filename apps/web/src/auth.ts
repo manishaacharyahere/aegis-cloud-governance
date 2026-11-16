@@ -19,6 +19,8 @@ export interface Session {
   actor?: string // dev mode identity
   subject: string
   expiresAt?: number // epoch ms
+  refreshToken?: string // used to renew the ID token silently
+  tokenEndpoint?: string
 }
 
 const TOKEN_KEY = 'aegis.session'
@@ -83,7 +85,7 @@ export async function beginLogin(cfg: Extract<AuthConfig, { mode: 'oidc' }>, ori
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', cfg.client_id)
   u.searchParams.set('redirect_uri', redirectURI(origin))
-  u.searchParams.set('scope', 'openid email profile')
+  u.searchParams.set('scope', 'openid email profile offline_access')
   u.searchParams.set('state', state)
   u.searchParams.set('nonce', nonce)
   u.searchParams.set('code_challenge', await codeChallenge(verifier))
@@ -118,7 +120,7 @@ export async function completeLogin(params: URLSearchParams, cfg: Extract<AuthCo
     }),
   })
   if (!res.ok) throw new Error(`token exchange failed: HTTP ${res.status}`)
-  const body = (await res.json()) as { id_token?: string }
+  const body = (await res.json()) as { id_token?: string; refresh_token?: string }
   if (!body.id_token) throw new Error('no ID token returned')
   const claims = decodeJWT(body.id_token)
   if (claims.nonce !== pending.nonce) throw new Error('sign-in nonce mismatch')
@@ -126,9 +128,39 @@ export async function completeLogin(params: URLSearchParams, cfg: Extract<AuthCo
     mode: 'oidc', token: body.id_token,
     subject: String(claims.email ?? claims.sub ?? ''),
     expiresAt: typeof claims.exp === 'number' ? claims.exp * 1000 : undefined,
+    refreshToken: body.refresh_token, tokenEndpoint: pending.token_endpoint,
   }
   store.setItem(TOKEN_KEY, JSON.stringify(session))
   return session
+}
+
+/** Renews the ID token with the refresh token. The new token must be for the
+ * same person; otherwise the renewal is refused. */
+export async function renew(s: Session, clientID: string, store: Storage = sessionStorage, fetchFn: typeof fetch = fetch): Promise<Session> {
+  if (s.mode !== 'oidc' || !s.refreshToken || !s.tokenEndpoint) throw new Error('this session cannot be renewed')
+  const res = await fetchFn(s.tokenEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: s.refreshToken, client_id: clientID }),
+  })
+  if (!res.ok) throw new Error(`renewal failed: HTTP ${res.status}`)
+  const body = (await res.json()) as { id_token?: string; refresh_token?: string }
+  if (!body.id_token) throw new Error('renewal returned no ID token')
+  const claims = decodeJWT(body.id_token)
+  const subject = String(claims.email ?? claims.sub ?? '')
+  if (subject !== s.subject) throw new Error('renewal returned a different identity')
+  const next: Session = {
+    ...s, token: body.id_token, refreshToken: body.refresh_token ?? s.refreshToken,
+    expiresAt: typeof claims.exp === 'number' ? claims.exp * 1000 : undefined,
+  }
+  store.setItem(TOKEN_KEY, JSON.stringify(next))
+  return next
+}
+
+/** Milliseconds until a session should be renewed (two minutes early). */
+export function renewIn(s: Session, now = Date.now()): number | null {
+  if (s.mode !== 'oidc' || !s.refreshToken || !s.expiresAt) return null
+  return Math.max(5_000, s.expiresAt - now - 120_000)
 }
 
 export function devSession(actor: string, store: Storage = sessionStorage): Session {

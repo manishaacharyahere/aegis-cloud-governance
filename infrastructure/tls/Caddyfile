@@ -1,0 +1,12 @@
+# TLS front end for the API (docker compose --profile tls). Caddy issues a
+# certificate from its own local CA; trust it once (see docs/getting-started.md).
+{
+	local_certs
+	skip_install_trust
+	admin off
+}
+
+https://localhost:8443 {
+	reverse_proxy api:8080
+	header Strict-Transport-Security "max-age=31536000"
+}

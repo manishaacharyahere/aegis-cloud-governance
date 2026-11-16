@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 )
 
@@ -52,9 +53,10 @@ type Policy interface {
 
 // Service is Module H.
 type Service struct {
-	Pool *pgxpool.Pool
-	OPA  Policy
-	Now  func() time.Time
+	Pool   *pgxpool.Pool
+	OPA    Policy
+	Now    func() time.Time
+	Signer *signing.Signer // signs released change sets (nil: unsigned)
 }
 
 func (s *Service) now() time.Time {
@@ -131,6 +133,25 @@ type ChangeSet struct {
 	Operations   []Op     `json:"operations"`
 	Diff         []Change `json:"diff"`
 	Instructions string   `json:"instructions"`
+	// Signed is the Ed25519-signed change-set payload; verify it with
+	// GET /api/v1/signing-key and `go run ./cmd/aegis-verify`.
+	Signed *signing.Signed `json:"signed,omitempty"`
+}
+
+// signedChangeSet is what a pipeline verifies before applying a change.
+type signedChangeSet struct {
+	Type          string   `json:"type"`
+	RemediationID string   `json:"remediation_id"`
+	PlanSHA256    string   `json:"plan_sha256"`
+	RuleID        string   `json:"rule_id,omitempty"`
+	ResourceID    string   `json:"resource_id"`
+	AccountID     string   `json:"account_id"`
+	NativeType    string   `json:"native_type"`
+	Operations    []Op     `json:"operations"`
+	RequestedBy   string   `json:"requested_by"`
+	ApprovedBy    []string `json:"approved_by"`
+	ReleasedBy    string   `json:"released_by"`
+	ReleasedAt    string   `json:"released_at"`
 }
 
 const releaseInstructions = "Apply this change through your normal change pipeline (update the Terraform " +
@@ -440,18 +461,20 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 type row struct {
 	View
 	tenantID, resourcePK, resourceSHA string
+	signed                            *signing.Signed
 }
 
 const viewCols = `id, tenant_id, source, rule_id, resource_pk, resource_id, account_id, operations, justification, requested_by,
 	status, required_approvals, disruptive, simulation, plan_sha256, resource_version, resource_sha256, policy_bundle_sha,
-	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason`
+	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason, change_set_signed`
 
 func scanRow(r pgx.Row) (row, error) {
 	var x row
 	var ops, sim, ver []byte
+	var signedText *string
 	err := r.Scan(&x.ID, &x.tenantID, &x.Source, &x.RuleID, &x.resourcePK, &x.ResourceID, &x.AccountID, &ops, &x.Justification,
 		&x.RequestedBy, &x.Status, &x.RequiredApprovals, &x.Disruptive, &sim, &x.PlanSHA256, &x.ResourceVersion, &x.resourceSHA,
-		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason)
+		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason, &signedText)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row{}, ErrNotFound
 	}
@@ -460,6 +483,13 @@ func scanRow(r pgx.Row) (row, error) {
 	}
 	if len(ver) > 0 {
 		x.Verification = ver
+	}
+	if signedText != nil {
+		var sig signing.Signed
+		if err := json.Unmarshal([]byte(*signedText), &sig); err != nil {
+			return row{}, err
+		}
+		x.signed = &sig
 	}
 	return x, errors.Join(json.Unmarshal(ops, &x.Operations), json.Unmarshal(sim, &x.Simulation))
 }
@@ -484,7 +514,7 @@ func (s *Service) approvals(ctx context.Context, q querier, id string) ([]Approv
 
 func (x row) changeSet(nativeType string) *ChangeSet {
 	return &ChangeSet{PlanSHA256: x.PlanSHA256, ResourceID: x.ResourceID, AccountID: x.AccountID, NativeType: nativeType,
-		Operations: x.Operations, Diff: x.Simulation.Diff, Instructions: releaseInstructions}
+		Operations: x.Operations, Diff: x.Simulation.Diff, Instructions: releaseInstructions, Signed: x.signed}
 }
 
 // Get returns one remediation with its approvals (and change set once released).
@@ -683,8 +713,30 @@ func (s *Service) Release(ctx context.Context, tenant, actor, id string) (View, 
 		native = cur.nativeType
 		now := s.now().UTC()
 		x.Status, x.ReleasedAt, x.ReleasedBy = StatusReleased, &now, actor
-		if _, err := tx.Exec(ctx, `UPDATE remediations SET status = 'released', released_at = $2, released_by = $3 WHERE id = $1`,
-			x.ID, now, actor); err != nil {
+		var signedJSON any // NULL when unsigned
+		if s.Signer != nil {
+			approvals, err := s.approvals(ctx, tx, x.ID)
+			if err != nil {
+				return err
+			}
+			approvers := []string{}
+			for _, a := range approvals {
+				if a.Decision == "approve" {
+					approvers = append(approvers, a.Actor)
+				}
+			}
+			sig, err := s.Signer.Sign(signedChangeSet{Type: "aegis.changeset/v1", RemediationID: x.ID, PlanSHA256: x.PlanSHA256,
+				RuleID: x.RuleID, ResourceID: x.ResourceID, AccountID: x.AccountID, NativeType: native, Operations: x.Operations,
+				RequestedBy: x.RequestedBy, ApprovedBy: approvers, ReleasedBy: actor, ReleasedAt: now.Format(time.RFC3339)})
+			if err != nil {
+				return err
+			}
+			x.signed = &sig
+			raw, _ := json.Marshal(sig)
+			signedJSON = string(raw)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE remediations SET status = 'released', released_at = $2, released_by = $3,
+			change_set_signed = $4 WHERE id = $1`, x.ID, now, actor, signedJSON); err != nil {
 			return err
 		}
 		x.ChangeSet = x.changeSet(native)

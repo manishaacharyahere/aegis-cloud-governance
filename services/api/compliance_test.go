@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 )
@@ -50,6 +52,12 @@ func (f *fakeCompliance) ListExceptions(context.Context, string) ([]compliance.E
 }
 func (f *fakeCompliance) AuditEvents(context.Context, string, int) ([]audit.Record, error) {
 	return nil, f.err
+}
+func (f *fakeCompliance) AuditHashAt(_ context.Context, _ string, seq int64) (string, error) {
+	if seq == 3 {
+		return "h3", nil
+	}
+	return "", compliance.ErrNotFound
 }
 func (f *fakeCompliance) VerifyAudit(context.Context, string) (audit.Verification, error) {
 	return audit.Verification{Valid: true}, f.err
@@ -146,4 +154,34 @@ func TestActorValidation(t *testing.T) {
 			t.Errorf("actor %q accepted (%d)", a, rec.Code)
 		}
 	}
+}
+
+func TestAuditHeadAndAnchor(t *testing.T) {
+	signer := signing.Ephemeral()
+	h := NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, MaxBodyBytes: 4096,
+		Compliance: &fakeCompliance{}, Catalog: mustCatalog(t), Signer: signer})
+	rec := do(h, "GET", "/api/v1/audit/head", nil, tenantHdr)
+	var head signing.Signed
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &head) != nil || signing.Verify(signer.Public().PublicKey, head) != nil ||
+		!strings.Contains(string(head.Payload), `"type":"aegis.audit-head/v1"`) {
+		t.Fatalf("head = %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", "/api/v1/signing-key", nil, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), signer.KeyID) {
+		t.Errorf("signing key = %d %s", rec.Code, rec.Body)
+	}
+	for body, want := range map[string]string{`{"seq":3,"hash":"h3"}`: `"matches":true`, `{"seq":3,"hash":"rewritten"}`: `"matches":false`,
+		`{"seq":99,"hash":"h3"}`: `"event_exists":false`} {
+		if rec := do(h, "POST", "/api/v1/audit/anchors/verify", strings.NewReader(body), tenantHdr); rec.Code != 200 || !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("%s -> %d %s", body, rec.Code, rec.Body)
+		}
+	}
+}
+
+func mustCatalog(t *testing.T) *compliance.Catalog {
+	t.Helper()
+	c, err := compliance.LoadCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }

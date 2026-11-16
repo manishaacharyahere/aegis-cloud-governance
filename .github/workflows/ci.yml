@@ -105,4 +105,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f infrastructure/docker/api.Dockerfile -t aegis-api:ci .
       - name: compose config
-        run: POSTGRES_PASSWORD=ci AEGIS_OPA_TOKEN=ci AEGIS_NATS_PASSWORD=ci docker compose --profile core config --quiet
+        run: POSTGRES_PASSWORD=ci AEGIS_OPA_TOKEN=ci AEGIS_NATS_PASSWORD=ci AEGIS_APP_DB_PASSWORD=ci docker compose --profile core config --quiet

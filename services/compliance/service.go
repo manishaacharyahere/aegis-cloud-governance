@@ -785,6 +785,19 @@ func (s *Service) VerifyAudit(ctx context.Context, tenant string) (audit.Verific
 	return audit.Verify(ctx, s.Pool, tenantID)
 }
 
+// AuditHashAt returns the stored hash of one audit event.
+func (s *Service) AuditHashAt(ctx context.Context, tenant string, seq int64) (string, error) {
+	tenantID, err := s.tenantID(ctx, tenant)
+	if err != nil {
+		return "", err
+	}
+	h, err := audit.HashAt(ctx, s.Pool, tenantID, seq)
+	if errors.Is(err, audit.ErrNoEvent) {
+		return "", ErrNotFound
+	}
+	return h, err
+}
+
 func mustJSON(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {

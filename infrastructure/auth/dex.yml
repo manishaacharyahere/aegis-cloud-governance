@@ -9,11 +9,19 @@
 # browser and the API see the same issuer URL.
 issuer: http://dex.localhost:5556/dex
 
-# SQLite on a volume: signing keys (and sessions) survive a Dex restart.
+# PostgreSQL (database "dex", created by infrastructure/postgres/init/20-dex-db.sh):
+# signing keys, sessions and refresh tokens survive a Dex restart. SQLite was
+# tried first and deadlocked on the first refresh-token grant.
 storage:
-  type: sqlite3
+  type: postgres
   config:
-    file: /var/dex/dex.db
+    host: postgres
+    port: 5432
+    database: dex
+    user: {{ getenv "DEX_DB_USER" }}
+    password: {{ getenv "DEX_DB_PASSWORD" }}
+    ssl:
+      mode: disable
 
 web:
   http: 0.0.0.0:5556

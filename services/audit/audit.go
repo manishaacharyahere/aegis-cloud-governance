@@ -128,6 +128,21 @@ type Verification struct {
 	HeadHash    string `json:"head_hash,omitempty"`
 }
 
+// HashAt returns the stored hash of event seq (ErrNoEvent if absent).
+func HashAt(ctx context.Context, q interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}, tenantID string, seq int64) (string, error) {
+	var h string
+	err := q.QueryRow(ctx, `SELECT hash FROM audit_events WHERE tenant_id = $1 AND seq = $2`, tenantID, seq).Scan(&h)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNoEvent
+	}
+	return h, err
+}
+
+// ErrNoEvent means the requested audit event does not exist.
+var ErrNoEvent = errors.New("no such audit event")
+
 // Verify recomputes the chain for a tenant from the first event.
 func Verify(ctx context.Context, q interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)

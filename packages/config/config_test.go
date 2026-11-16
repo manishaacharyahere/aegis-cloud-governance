@@ -40,6 +40,7 @@ func TestLoadProductionDefaults(t *testing.T) {
 		"AEGIS_OIDC_ISSUER":    "https://idp.example",
 		"AEGIS_OIDC_CLIENT_ID": "aegis-web",
 		"AEGIS_OPA_TOKEN":      "0123456789abcdef0123456789abcdef",
+		"AEGIS_SIGNING_KEY":    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
@@ -270,8 +271,19 @@ func TestRemediationControls(t *testing.T) {
 	if _, err := svc.Decide(ctx, "demo", "bob", v.ID, "approve", "again"); !errors.Is(err, remediation.ErrConflict) {
 		t.Errorf("second decision: %v", err)
 	}
-	if _, err := svc.Release(ctx, "demo", "carol", v.ID); err != nil {
+	svc.Signer = signing.Ephemeral()
+	rel, err := svc.Release(ctx, "demo", "carol", v.ID)
+	if err != nil {
 		t.Fatal(err)
+	}
+	// The released change set is signed: a pipeline can verify who approved it.
+	if rel.ChangeSet == nil || rel.ChangeSet.Signed == nil || signing.Verify(svc.Signer.Public().PublicKey, *rel.ChangeSet.Signed) != nil ||
+		!strings.Contains(string(rel.ChangeSet.Signed.Payload), `"approved_by":["bob"]`) {
+		t.Fatalf("change set signature: %+v", rel.ChangeSet)
+	}
+	if got, _ := svc.Get(ctx, "demo", v.ID); got.ChangeSet == nil || got.ChangeSet.Signed == nil ||
+		string(got.ChangeSet.Signed.Payload) != string(rel.ChangeSet.Signed.Payload) {
+		t.Error("stored signature differs from the released one")
 	}
 	if _, err := inv.Import(ctx, "demo", bucket(false, map[string]string{"owner": "c", "environment": "development", "cost_center": "c"})); err != nil {
 		t.Fatal(err)

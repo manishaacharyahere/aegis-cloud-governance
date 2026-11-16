@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { can, type PageProps } from '../nav'
 import type { ControlDetail, Coverage, ExceptionView, Framework } from '../types'
 import { Badge, Empty, ErrorBox, Panel } from '../ui'
-import { useAction, useLoad, when } from '../hooks'
+import { useAction, useLoad, when, useDraft } from '../hooks'
 
 export default function Compliance({ api, me, go }: PageProps) {
   const fw = useLoad(() => api<{ frameworks: Framework[]; catalog_version: string }>('GET', '/api/v1/compliance/frameworks'), [api])
@@ -99,7 +99,7 @@ function ControlPanel({ api, me, go, framework, control }: Pick<PageProps, 'api'
 }
 
 function RequestException({ api, rule, subject, onDone }: { api: PageProps['api']; rule: string; subject: string; onDone: () => void }) {
-  const [just, setJust] = useState('')
+  const [just, setJust, clearJust] = useDraft(`exception.${rule}.${subject}`, '')
   const [days, setDays] = useState(30)
   const act = useAction()
   return (
@@ -107,7 +107,10 @@ function RequestException({ api, rule, subject, onDone }: { api: PageProps['api'
       e.preventDefault()
       const expires = new Date(Date.now() + days * 86400_000).toISOString()
       const r = await act.run(() => api('POST', '/api/v1/compliance/exceptions', { rule_id: rule, subject, justification: just, expires_at: expires }))
-      if (r !== undefined) onDone()
+      if (r !== undefined) {
+        clearJust()
+        onDone()
+      }
     }}>
       <h3>Request an exception for {rule} on <span className="mono">{subject}</span></h3>
       <textarea aria-label="Justification" required minLength={20} placeholder="Why is this risk accepted, and what compensates for it? (20+ characters)"

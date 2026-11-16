@@ -120,6 +120,7 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
   await page.getByRole('button', { name: 'Release change set' }).click()
   await expect(page.getByRole('heading', { name: 'Change set' })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByText(/Aegis has not changed any cloud resource/)).toBeVisible()
+  await expect(page.getByText(/Signed \(Ed25519, key/)).toBeVisible()
   await shot(page, '08-remediation-released')
 
   // Verifying needs the operate permission (an analyst), and it refuses to

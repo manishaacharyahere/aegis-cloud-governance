@@ -40,6 +40,25 @@ curl -s -H "Authorization: Bearer $AEGIS_OPA_TOKEN" http://127.0.0.1:8181/v1/dat
   -d '{"input":{"resources":[{"id":"b1","type":"storage.bucket","configuration":{"public_access_block":false}}]}}'
 ```
 
+### HTTPS (optional)
+
+```bash
+docker compose --profile core --profile tls up -d
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./aegis-local-root.crt
+curl --cacert aegis-local-root.crt https://localhost:8443/readyz
+```
+
+On Windows, the bundled `curl` (Schannel) ignores `--cacert`. Import the
+certificate into the Windows trust store, or check with Python:
+`python -c "import ssl,urllib.request as u; print(u.urlopen('https://localhost:8443/readyz', context=ssl.create_default_context(cafile='aegis-local-root.crt')).status)"`.
+
+Import `aegis-local-root.crt` into your browser or OS trust store to browse
+`https://localhost:8443` without warnings. For a real deployment, also:
+
+- connect to PostgreSQL with `sslmode=verify-full`. Production refuses `sslmode=disable`.
+- give NATS a `tls {}` block and use a `tls://` URL in `AEGIS_NATS_URL`.
+- give OPA `--tls-cert-file` and `--tls-private-key-file`.
+
 ## 2. Run the worker (IaC scans)
 
 The worker runs on the host because it starts the sandboxed Terraform,

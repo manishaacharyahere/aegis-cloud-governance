@@ -42,10 +42,13 @@ type Auth struct {
 // routePermissions is the single table of what each route requires.
 // NewHandler refuses to register a route that is missing here.
 var routePermissions = map[string]access.Permission{
-	"GET /healthz":            access.Public,
-	"GET /readyz":             access.Public,
-	"GET /api/v1/version":     access.Public,
-	"GET /api/v1/auth/config": access.Public,
+	"GET /healthz":                      access.Public,
+	"GET /readyz":                       access.Public,
+	"GET /api/v1/version":               access.Public,
+	"GET /api/v1/auth/config":           access.Public,
+	"GET /api/v1/signing-key":           access.Public,
+	"GET /api/v1/audit/head":            access.Read,
+	"POST /api/v1/audit/anchors/verify": access.Read,
 
 	"GET /api/v1/me":                     access.Signed,
 	"GET /api/v1/compliance/frameworks":  access.Signed,

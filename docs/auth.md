@@ -79,8 +79,10 @@ not always for programs on the host (Go on Windows, for example). When running
 file (`C:\Windows\System32\drivers\etc\hosts` or `/etc/hosts`). Otherwise
 every request is refused with `identity_provider_unavailable`.
 
-Dex keeps its signing keys in SQLite on the `dexdata` volume, so sign-ins
-survive a Dex restart. `docker compose down -v` resets them.
+Dex keeps its signing keys, sessions and refresh tokens in PostgreSQL
+(database `dex`), so sign-ins survive a Dex restart. (SQLite was tried first;
+it deadlocked on the first refresh-token grant.) `docker compose down -v`
+resets everything.
 
 ## Verified
 
