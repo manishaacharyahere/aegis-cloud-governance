@@ -11,8 +11,10 @@ tfplan*.json
 .terraform/
 .terraform.lock.hcl.bak
 
-# Private research notes (contain personal/employer context)
+# Private notes and personal working instructions (never publish)
 research/refrence/
+research/MASTER_BUILD_PROMPT.md
+CLAUDE.md
 
 # Go
 /bin/
