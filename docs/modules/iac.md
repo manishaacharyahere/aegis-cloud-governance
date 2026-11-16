@@ -75,6 +75,20 @@ positive. Recorded plans and scanner outputs live in
 [services/iac/testdata](../../services/iac/testdata) so unit tests do not need
 Docker.
 
+## Offline scans
+
+`terraform init` normally downloads providers, which is the only network
+access a scan has. To scan with no network at all:
+
+```bash
+scripts/seed-terraform-mirror.sh                      # once, with network: fills the aegis-tf-mirror volume
+AEGIS_TF_MIRROR_VOLUME=aegis-tf-mirror go run ./cmd/aegis-worker
+```
+
+With a mirror, `init` installs providers only from the read-only mirror
+(`provider_installation { filesystem_mirror }`) and runs with `--network none`
+like every other step. This was verified with a real scan.
+
 ## Reliability
 
 | Property | Mechanism | Test |

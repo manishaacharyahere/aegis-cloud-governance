@@ -26,6 +26,7 @@ type Worker struct {
 	OPAToken     string
 	FixturesDir  string
 	PluginVolume string
+	MirrorVolume string
 	Docker       string
 }
 
@@ -55,6 +56,7 @@ func LoadWorker(lookup LookupFunc) (Worker, error) {
 		OPAToken:     get("AEGIS_OPA_TOKEN", ""),
 		FixturesDir:  get("AEGIS_FIXTURES_DIR", "datasets/terraform-fixtures"),
 		PluginVolume: get("AEGIS_TF_PLUGIN_VOLUME", "aegis-tf-plugins"),
+		MirrorVolume: get("AEGIS_TF_MIRROR_VOLUME", ""),
 		Docker:       get("AEGIS_DOCKER", "docker"),
 		PollInterval: dur("AEGIS_WORKER_POLL", "2s", 100*time.Millisecond, time.Minute),
 		Lease:        dur("AEGIS_WORKER_LEASE", "2m", 10*time.Second, time.Hour),

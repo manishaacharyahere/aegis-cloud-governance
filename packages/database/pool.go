@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,6 +40,10 @@ func OpenWith(ctx context.Context, url string, o Options) (*pgxpool.Pool, error)
 	if o.AppName != "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = o.AppName
 	}
+	// One span per SQL statement under the request span (uses the global
+	// tracer provider; a no-op unless tracing is configured). Query arguments
+	// are not recorded.
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer(otelpgx.WithTrimSQLInSpanName())
 	if o.StatementTimeout > 0 {
 		cfg.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(o.StatementTimeout.Milliseconds())
 	}

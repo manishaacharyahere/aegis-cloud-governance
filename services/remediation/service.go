@@ -101,25 +101,29 @@ type Approval struct {
 
 // View is a stored remediation.
 type View struct {
-	ID                string          `json:"id"`
-	Source            string          `json:"source"`
-	RuleID            string          `json:"rule_id,omitempty"`
-	ResourceID        string          `json:"resource_id"`
-	AccountID         string          `json:"account_id"`
-	Operations        []Op            `json:"operations"`
-	Justification     string          `json:"justification"`
-	RequestedBy       string          `json:"requested_by"`
-	Status            string          `json:"status"`
-	RequiredApprovals int             `json:"required_approvals"`
-	Disruptive        bool            `json:"disruptive"`
-	Simulation        Simulation      `json:"simulation"`
-	PlanSHA256        string          `json:"plan_sha256"`
-	ResourceVersion   int             `json:"resource_version"`
-	PolicyBundleSHA   string          `json:"policy_bundle_sha256"`
-	CreatedAt         time.Time       `json:"created_at"`
-	ReleasedAt        *time.Time      `json:"released_at,omitempty"`
-	ReleasedBy        string          `json:"released_by,omitempty"`
-	StaleReason       string          `json:"stale_reason,omitempty"`
+	ID                string     `json:"id"`
+	Source            string     `json:"source"`
+	RuleID            string     `json:"rule_id,omitempty"`
+	ResourceID        string     `json:"resource_id"`
+	AccountID         string     `json:"account_id"`
+	Operations        []Op       `json:"operations"`
+	Justification     string     `json:"justification"`
+	RequestedBy       string     `json:"requested_by"`
+	Status            string     `json:"status"`
+	RequiredApprovals int        `json:"required_approvals"`
+	Disruptive        bool       `json:"disruptive"`
+	Simulation        Simulation `json:"simulation"`
+	PlanSHA256        string     `json:"plan_sha256"`
+	ResourceVersion   int        `json:"resource_version"`
+	PolicyBundleSHA   string     `json:"policy_bundle_sha256"`
+	CreatedAt         time.Time  `json:"created_at"`
+	ReleasedAt        *time.Time `json:"released_at,omitempty"`
+	ReleasedBy        string     `json:"released_by,omitempty"`
+	StaleReason       string     `json:"stale_reason,omitempty"`
+	// The resource as the latest inventory import shows it, so a reader can
+	// tell whether verification has anything new to check.
+	ObservedVersion   int             `json:"observed_version,omitempty"`
+	ObservedUpdatedAt *time.Time      `json:"observed_updated_at,omitempty"`
 	VerifiedAt        *time.Time      `json:"verified_at,omitempty"`
 	Verification      json.RawMessage `json:"verification,omitempty"`
 	Approvals         []Approval      `json:"approvals"`
@@ -538,6 +542,10 @@ func (s *Service) Get(ctx context.Context, tenant, id string) (View, error) {
 	}
 	if x.Approvals, err = s.approvals(ctx, s.Pool, id); err != nil {
 		return View{}, err
+	}
+	var upd time.Time
+	if err := s.Pool.QueryRow(ctx, `SELECT current_version, updated_at FROM resources WHERE id = $1`, x.resourcePK).Scan(&x.ObservedVersion, &upd); err == nil {
+		x.ObservedUpdatedAt = &upd
 	}
 	if x.ReleasedAt != nil {
 		var native string

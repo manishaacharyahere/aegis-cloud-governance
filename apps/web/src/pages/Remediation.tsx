@@ -159,9 +159,19 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
                 </div>
               )
         )}
+        {(x.status === 'released' || x.status === 'verification_failed') && !can(me, 'operate') && (
+          <p className="muted small">Verification needs the analyst role.</p>
+        )}
         {x.status === 'approved' && can(me, 'approve') && <button className="primary" disabled={act.busy} onClick={() => step('release')}>Release change set</button>}
         {(x.status === 'released' || x.status === 'verification_failed') && can(me, 'operate') && (
-          <button disabled={act.busy} onClick={() => step('verify')}>Verify against latest inventory</button>
+          <>
+            <p className="small muted">
+              Plan pinned to inventory version {x.resource_version}; the latest import shows version {x.observed_version ?? '?'}
+              {x.observed_updated_at && <> (updated {when(x.observed_updated_at)})</>}.
+              {x.observed_version === x.resource_version && ' Import the inventory again after the change is applied, then verify.'}
+            </p>
+            <button disabled={act.busy} onClick={() => step('verify')}>Verify against latest inventory</button>
+          </>
         )}
         <ErrorBox error={act.error} />
       </Panel>

@@ -24,6 +24,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/automation"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/finops"
@@ -68,7 +69,7 @@ func run() error {
 	}()
 	log.Info("telemetry", "traces_exported", tel.TracesExported, "metrics_addr", cfg.MetricsAddr)
 	if cfg.MetricsAddr != "" {
-		go serveMetrics(ctx, cfg.MetricsAddr, tel.MetricsHandler, log)
+		go telemetry.ServeMetrics(ctx, cfg.MetricsAddr, tel.MetricsHandler, log)
 	}
 
 	pool, err := database.OpenWith(ctx, cfg.DatabaseURL, database.Options{MaxConns: cfg.DBMaxConns,
@@ -169,16 +170,24 @@ func run() error {
 		log.Warn("authentication is in dev-headers mode: X-Aegis-Actor is trusted and every caller has every permission; never expose this API")
 	}
 
+	complianceSvc := &compliance.Service{Pool: pool, Catalog: catalog, OPA: opaClient}
+	driftSvc := &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(), RuleSeverity: catalog.RuleSeverities()}
+	riskSvc := &risk.Service{Pool: pool, Rules: ruleInfo}
+	var notifier automation.Notifier = automation.LogNotifier{Log: log}
+	if cfg.NotifyWebhookURL != "" {
+		notifier = automation.Webhook{URL: cfg.NotifyWebhookURL}
+	}
+	auto := &automation.Automation{Pool: bg, Compliance: complianceSvc, Risk: riskSvc, Drift: driftSvc, Notify: notifier, Log: log}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
-		Logger:     log,
-		DB:         pool,
-		Inventory:  inventory.NewService(inventory.NewStore(pool)),
-		IaC:        iac.NewStore(pool),
-		Compliance: &compliance.Service{Pool: pool, Catalog: catalog, OPA: opaClient},
-		Catalog:    catalog,
-		Drift: &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(),
-			RuleSeverity: catalog.RuleSeverities()},
-		Risk:         &risk.Service{Pool: pool, Rules: ruleInfo},
+		Logger:       log,
+		DB:           pool,
+		Inventory:    inventory.NewService(inventory.NewStore(pool)),
+		IaC:          iac.NewStore(pool),
+		Compliance:   complianceSvc,
+		Catalog:      catalog,
+		Drift:        driftSvc,
+		Risk:         riskSvc,
 		FinOps:       &finops.Service{Pool: pool},
 		Investigator: inv,
 		Auth:         auth,
@@ -198,11 +207,14 @@ func run() error {
 		MaxCostImportBytes:       cfg.MaxCostImportBytes,
 	}), log)
 
+	if cfg.ScheduleEvery > 0 {
+		go auto.RunScheduler(ctx, cfg.ScheduleEvery)
+	}
 	if cfg.RetentionEvery > 0 {
 		go retention.Run(ctx, bg, retention.DefaultPolicy(), cfg.RetentionEvery, log)
 	}
 	if cfg.NATSURL != "" {
-		go runRelay(ctx, cfg.NATSURL, natsbus.Credentials{User: cfg.NATSUser, Password: cfg.NATSPassword}, bg, log, tel)
+		go runBus(ctx, cfg.NATSURL, natsbus.Credentials{User: cfg.NATSUser, Password: cfg.NATSPassword}, bg, log, tel, auto)
 	} else {
 		log.Warn("AEGIS_NATS_URL not set; outbox events are stored but not published")
 	}
@@ -233,9 +245,10 @@ func run() error {
 	return nil
 }
 
-// runRelay connects to NATS (retrying until it is reachable) and publishes
-// outbox events until ctx is cancelled.
-func runRelay(ctx context.Context, url string, creds natsbus.Credentials, pool *pgxpool.Pool, log *slog.Logger, tel *telemetry.Telemetry) {
+// runBus connects to NATS (retrying until it is reachable), then publishes
+// outbox events and runs the import reactor until ctx is cancelled.
+func runBus(ctx context.Context, url string, creds natsbus.Credentials, pool *pgxpool.Pool, log *slog.Logger,
+	tel *telemetry.Telemetry, auto *automation.Automation) {
 	wait := time.Second
 	for {
 		bus, err := natsbus.Connect(ctx, url, "aegis-api", creds)
@@ -246,6 +259,11 @@ func runRelay(ctx context.Context, url string, creds natsbus.Credentials, pool *
 			if m, err := outbox.NewOTelMetrics(tel.Meter); err == nil {
 				r.Metrics = m
 			}
+			go func() {
+				if err := auto.RunReactor(ctx, bus.JetStream(), 10*time.Second); err != nil {
+					log.Warn("import reactor stopped", "error", err)
+				}
+			}()
 			_ = r.Run(ctx)
 			return
 		}
@@ -256,22 +274,5 @@ func runRelay(ctx context.Context, url string, creds natsbus.Credentials, pool *
 		case <-time.After(wait):
 		}
 		wait = min(wait*2, 30*time.Second)
-	}
-}
-
-// serveMetrics exposes Prometheus metrics on an internal address, separate
-// from the public API port.
-func serveMetrics(ctx context.Context, addr string, h http.Handler, log *slog.Logger) {
-	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", h)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second}
-	go func() {
-		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(sctx)
-	}()
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("metrics server stopped", "error", err)
 	}
 }

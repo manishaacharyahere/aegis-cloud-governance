@@ -17,6 +17,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/config"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 )
 
@@ -37,7 +38,25 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.Open(ctx, cfg.DatabaseURL)
+	tel, err := telemetry.Setup(ctx, "aegis-worker", "dev")
+	if err != nil {
+		return fmt.Errorf("telemetry: %w", err)
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tel.Shutdown(sctx)
+	}()
+	if addr := os.Getenv("AEGIS_WORKER_METRICS_ADDR"); addr != "" {
+		go telemetry.ServeMetrics(ctx, addr, tel.MetricsHandler, log)
+		log.Info("worker metrics", "addr", addr)
+	}
+	metrics, err := iac.NewMetrics(tel.Meter)
+	if err != nil {
+		return err
+	}
+
+	pool, err := database.OpenWith(ctx, cfg.DatabaseURL, database.Options{AppName: "aegis-worker"})
 	if err != nil {
 		return err
 	}
@@ -58,7 +77,7 @@ func run() error {
 		Scanner: &iac.Pipeline{
 			Tools: &iac.DockerRunner{
 				Docker: cfg.Docker, Images: iac.DefaultImages,
-				PluginVolume: cfg.PluginVolume, StepTimeout: cfg.StepTimeout,
+				PluginVolume: cfg.PluginVolume, MirrorVolume: cfg.MirrorVolume, StepTimeout: cfg.StepTimeout,
 			},
 			Policy:      policy,
 			FixturesDir: cfg.FixturesDir,
@@ -70,6 +89,7 @@ func run() error {
 		Lease:        cfg.Lease,
 		JobTimeout:   cfg.JobTimeout,
 		DrainTimeout: cfg.DrainTimeout,
+		Metrics:      metrics,
 	}
 	return w.Run(ctx)
 }

@@ -1,6 +1,12 @@
 package iac
 
 import (
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+
 	"context"
 	"errors"
 	"fmt"
@@ -40,6 +46,32 @@ type Worker struct {
 	DrainTimeout time.Duration
 	BackoffBase  time.Duration
 	BackoffMax   time.Duration
+	Metrics      *Metrics // nil: no metrics
+}
+
+// Metrics records scan outcomes as OpenTelemetry instruments.
+type Metrics struct {
+	scans    metric.Int64Counter
+	duration metric.Float64Histogram
+}
+
+// NewMetrics creates the worker instruments.
+func NewMetrics(m metric.Meter) (*Metrics, error) {
+	c, err1 := m.Int64Counter("aegis.iac.scans", metric.WithDescription("IaC scans by outcome (succeeded, failed, retry)"))
+	h, err2 := m.Float64Histogram("aegis.iac.scan.duration", metric.WithUnit("s"), metric.WithDescription("IaC scan duration"))
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, err
+	}
+	return &Metrics{scans: c, duration: h}, nil
+}
+
+func (m *Metrics) done(outcome string, d time.Duration) {
+	if m == nil {
+		return
+	}
+	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
+	m.scans.Add(context.Background(), 1, attrs)
+	m.duration.Record(context.Background(), d.Seconds(), attrs)
 }
 
 func (w *Worker) defaults() {
@@ -127,6 +159,10 @@ func (w *Worker) process(parent context.Context, j *Job) {
 		return
 	}
 
+	parent, span := otel.Tracer("aegis-worker").Start(parent, "iac.scan",
+		trace.WithAttributes(attribute.String("aegis.scan_id", j.ScanID), attribute.String("aegis.fixture", j.SourceRef),
+			attribute.Int("aegis.attempt", j.Attempt)))
+	defer span.End()
 	ctx, cancel := context.WithTimeout(parent, w.JobTimeout)
 	defer cancel()
 
@@ -163,6 +199,13 @@ func (w *Worker) process(parent context.Context, j *Job) {
 		if errors.Is(err, context.Canceled) {
 			err = Retryable(fmt.Errorf("interrupted: %w", err))
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "scan failed")
+		outcome := "failed"
+		if IsRetryable(err) && j.Attempt < j.MaxAttempts {
+			outcome = "retry"
+		}
+		w.Metrics.done(outcome, time.Since(start))
 		w.fail(bg, log, j, err)
 		return
 	}
@@ -173,6 +216,7 @@ func (w *Worker) process(parent context.Context, j *Job) {
 		}
 		return
 	}
+	w.Metrics.done("succeeded", time.Since(start))
 	log.Info("scan succeeded", "findings", len(res.Findings), "duration", time.Since(start))
 }
 

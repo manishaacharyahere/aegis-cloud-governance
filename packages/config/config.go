@@ -48,6 +48,10 @@ type Config struct {
 	// such as the relay and retention uses a separate small pool).
 	DBMaxConns         int32
 	DBStatementTimeout time.Duration
+	// ScheduleEvery re-evaluates every tenant periodically (0 disables).
+	ScheduleEvery time.Duration
+	// NotifyWebhookURL receives alerts and reminders ({"text": ...}); empty logs them.
+	NotifyWebhookURL string
 	// Retention runs every RetentionEvery (0 disables it).
 	RetentionEvery time.Duration
 	// Requests per caller per minute (0 disables), ordinary and expensive routes.
@@ -179,6 +183,17 @@ func Load(lookup LookupFunc) (Config, error) {
 			errs = append(errs, fmt.Errorf("%s: must be an integer between 0 and 100000", rl.key))
 		}
 		*rl.dst = n
+	}
+	if d, err := time.ParseDuration(get("AEGIS_SCHEDULE_EVERY", "6h")); err != nil || d < 0 || (d > 0 && d < time.Minute) {
+		errs = append(errs, errors.New("AEGIS_SCHEDULE_EVERY: must be 0 (off) or at least 1m"))
+	} else {
+		cfg.ScheduleEvery = d
+	}
+	cfg.NotifyWebhookURL = get("AEGIS_NOTIFY_WEBHOOK_URL", "")
+	if u, err := url.Parse(cfg.NotifyWebhookURL); cfg.NotifyWebhookURL != "" && (err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "") {
+		errs = append(errs, errors.New("AEGIS_NOTIFY_WEBHOOK_URL: must be an http(s) URL"))
+	} else if cfg.NotifyWebhookURL != "" && cfg.Environment == EnvProduction && u.Scheme != "https" {
+		errs = append(errs, errors.New("AEGIS_NOTIFY_WEBHOOK_URL: must use https in production"))
 	}
 	if d, err := time.ParseDuration(get("AEGIS_RETENTION_INTERVAL", "1h")); err != nil || d < 0 {
 		errs = append(errs, errors.New("AEGIS_RETENTION_INTERVAL: must be a duration such as 1h (0 disables retention)"))

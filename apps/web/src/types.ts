@@ -189,6 +189,9 @@ export interface Remediation {
   requested_by: string
   status: string
   stale_reason?: string
+  resource_version: number
+  observed_version?: number
+  observed_updated_at?: string
   required_approvals: number
   disruptive: boolean
   simulation: {

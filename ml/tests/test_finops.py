@@ -224,3 +224,14 @@ def test_worker_pure_functions():
     assert all(f["predicted"] >= 0 for f in fc)
     with pytest.raises(ValueError):
         worker.daily_frame([])
+
+
+def test_parse_every():
+    from aegis_ml.worker import parse_every
+
+    assert parse_every("30m") == 1800
+    assert parse_every("6h") == 21600
+    assert parse_every("1d") == 86400
+    for bad in ["", "6", "h", "10s", "1.5h", "-1h"]:
+        with pytest.raises(ValueError):
+            parse_every(bad)

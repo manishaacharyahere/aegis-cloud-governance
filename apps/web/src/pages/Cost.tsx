@@ -15,6 +15,7 @@ const orNull = async <T,>(p: Promise<T>): Promise<T | null> => {
 }
 
 export default function Cost({ api, me }: PageProps) {
+  const [now] = useState(() => Date.now()) // read once per visit, not on every render
   const [groupBy, setGroupBy] = useState('team')
   const sum = useLoad(() => orNull(api<CostSummary>('GET', `/api/v1/cost/summary?group_by=${groupBy}`)), [api, groupBy])
   const anomalies = useLoad(() => orNull(api<MLResult>('GET', '/api/v1/cost/anomalies')), [api])
@@ -32,6 +33,12 @@ export default function Cost({ api, me }: PageProps) {
       }>
         <ErrorBox error={sum.error} />
         {sum.data === null && <Empty>No cost data imported yet (POST /api/v1/cost/import).</Empty>}
+        {anomalies.data && now - new Date(anomalies.data.created_at).getTime() > 2 * 86400_000 && (
+          <p className="notice small">
+            Anomaly and forecast results are from {when(anomalies.data.created_at)}, more than two days ago. Is the ML worker
+            running? (<code>docker compose --profile core --profile ml up -d</code>)
+          </p>
+        )}
         {sum.data && (
           <>
             <div className="stats">

@@ -80,6 +80,8 @@ func TestLoadErrors(t *testing.T) {
 		{"NATS credentials in URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "nats://u:p@nats:4222"}, "not in the URL"},
 		{"local IdP in production", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "https://dex.localhost/dex", "AEGIS_OIDC_CLIENT_ID": "c"}, "not allowed in production"},
 		{"bad pool size", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_DB_MAX_CONNS": "1"}, "AEGIS_DB_MAX_CONNS"},
+		{"too frequent schedule", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_SCHEDULE_EVERY": "5s"}, "AEGIS_SCHEDULE_EVERY"},
+		{"bad webhook", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NOTIFY_WEBHOOK_URL": "ftp://x"}, "AEGIS_NOTIFY_WEBHOOK_URL"},
 		{"bad NATS URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "http://nats:4222"}, "AEGIS_NATS_URL"},
 		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},

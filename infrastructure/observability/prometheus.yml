@@ -6,3 +6,7 @@ scrape_configs:
   - job_name: aegis-api
     static_configs:
       - targets: ["api:9464"]
+  # The IaC worker runs on the host (AEGIS_WORKER_METRICS_ADDR=:9465).
+  - job_name: aegis-worker
+    static_configs:
+      - targets: ["host.docker.internal:9465"]

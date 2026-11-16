@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import sys
+import threading
 from typing import Any
 
 import numpy as np
@@ -138,6 +140,17 @@ def run(dsn: str, tenant: str, model: str, horizon: int, lookback: int, threshol
     }
 
 
+def parse_every(text: str) -> float:
+    """Parse an interval such as "30m", "6h" or "1d" into seconds (minimum 1 minute)."""
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    if len(text) < 2 or text[-1] not in units or not text[:-1].isdigit():
+        raise ValueError(f"interval must look like 30m, 6h or 1d, got {text!r}")
+    seconds = int(text[:-1]) * units[text[-1]]
+    if seconds < 60:
+        raise ValueError("interval must be at least 1m")
+    return float(seconds)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tenant", required=True)
@@ -145,13 +158,30 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--horizon", type=int, default=30)
     ap.add_argument("--lookback", type=int, default=90, help="report anomalies from the last N days")
     ap.add_argument("--threshold", type=float, default=3.5)
+    ap.add_argument("--every", default="", help="repeat at this interval (e.g. 6h) until stopped; default: run once")
     args = ap.parse_args(argv)
     dsn = os.environ.get("AEGIS_DATABASE_URL")
     if not dsn:
         sys.exit("AEGIS_DATABASE_URL is required")
     if not 1 <= args.horizon <= 365 or not 1 <= args.lookback <= 3650:
         sys.exit("horizon must be 1-365 and lookback 1-3650 days")
-    print(json.dumps(run(dsn, args.tenant, args.model, args.horizon, args.lookback, args.threshold)))
+    if not args.every:
+        print(json.dumps(run(dsn, args.tenant, args.model, args.horizon, args.lookback, args.threshold)))
+        return
+    try:
+        every = parse_every(args.every)
+    except ValueError as e:
+        sys.exit(str(e))
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    while not stop.is_set():
+        try:
+            result = run(dsn, args.tenant, args.model, args.horizon, args.lookback, args.threshold)
+            print(json.dumps({"level": "info", "msg": "ml run done", **result}), flush=True)
+        except Exception as e:  # keep the schedule alive; the next run retries
+            print(json.dumps({"level": "error", "msg": "ml run failed", "error": str(e)}), flush=True)
+        stop.wait(every)
 
 
 if __name__ == "__main__":

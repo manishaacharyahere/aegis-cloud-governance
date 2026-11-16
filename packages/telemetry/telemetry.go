@@ -7,8 +7,10 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -76,6 +78,23 @@ func Setup(ctx context.Context, service, version string) (*Telemetry, error) {
 	t.Meter = mp.Meter("github.com/manishaacharyahere/aegis-cloud-governance")
 	t.MetricsHandler = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	return t, nil
+}
+
+// ServeMetrics exposes Prometheus metrics on an internal address (separate
+// from any public port) until ctx is cancelled.
+func ServeMetrics(ctx context.Context, addr string, h http.Handler, log *slog.Logger) {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", h)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second}
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(sctx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error("metrics server stopped", "error", err)
+	}
 }
 
 // Shutdown flushes and stops the providers.

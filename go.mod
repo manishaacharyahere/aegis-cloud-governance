@@ -6,6 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/exaring/otelpgx v0.13.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/nats-io/nats.go v1.55.0

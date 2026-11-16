@@ -44,7 +44,11 @@ var DefaultImages = Images{
 type DockerRunner struct {
 	Docker       string // docker CLI path; default "docker"
 	Images       Images
-	PluginVolume string        // named volume caching Terraform providers
+	PluginVolume string // named volume caching Terraform providers
+	// MirrorVolume, if set, is a provider filesystem mirror (filled by
+	// scripts/seed-terraform-mirror.sh). init then installs only from the
+	// mirror and runs without network, so scans work offline.
+	MirrorVolume string
 	StepTimeout  time.Duration // per tool invocation
 	WorkRoot     string        // parent for temporary work dirs ("" = OS temp)
 }
@@ -73,10 +77,23 @@ func (d *DockerRunner) Plan(ctx context.Context, dir string) ([]byte, error) {
 		if d.PluginVolume != "" {
 			mounts = append(mounts, "type=volume,source="+d.PluginVolume+",target=/plugin-cache")
 		}
+		if d.MirrorVolume != "" {
+			mounts = append(mounts, "type=volume,source="+d.MirrorVolume+",target=/mirror,readonly")
+			env = append(env, "TF_CLI_CONFIG_FILE=/work/.aegis-terraformrc")
+		}
 		return d.run(ctx, network, mounts, env, d.Images.Terraform, args...)
 	}
 
-	if _, err := tf(true, "init", "-input=false", "-no-color"); err != nil {
+	initNetwork := true
+	if d.MirrorVolume != "" {
+		// Providers come only from the read-only mirror: no registry access at all.
+		rc := "provider_installation {\n  filesystem_mirror {\n    path = \"/mirror\"\n  }\n}\n"
+		if err := os.WriteFile(filepath.Join(work, ".aegis-terraformrc"), []byte(rc), 0o644); err != nil {
+			return nil, fmt.Errorf("write terraform config: %w", err)
+		}
+		initNetwork = false
+	}
+	if _, err := tf(initNetwork, "init", "-input=false", "-no-color"); err != nil {
 		return nil, Retryable(fmt.Errorf("terraform init: %w", err)) // usually a network problem
 	}
 	if _, err := tf(false, "validate", "-no-color"); err != nil {

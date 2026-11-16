@@ -57,8 +57,18 @@ These checks were made with the profile running and traffic sent to three routes
 - Jaeger listed the service `aegis-api` with operations `GET /api/v1/remediations`,
   `GET /api/v1/resources` and `GET /api/v1/version`.
 
+## Database and worker telemetry
+
+- **SQL spans.** Every statement is a child span of the request that issued
+  it (otelpgx), with the statement text but **not** its arguments.
+  `TestDatabaseSpans` checks both.
+- **IaC worker.** Each scan is a span `iac.scan` (scan ID, fixture, attempt),
+  with `aegis_iac_scans_total{outcome="succeeded|failed|retry"}` and the
+  `aegis_iac_scan_duration_seconds` histogram. Set
+  `AEGIS_WORKER_METRICS_ADDR=:9465` to expose `/metrics`. The worker runs on the
+  host, and Prometheus scrapes it at `host.docker.internal:9465` (job
+  `aegis-worker`; the target is down while the worker is not running).
+
 ## Not yet instrumented
 
-- The IaC worker and the Python ML worker (they log in structured JSON but
-  export no metrics or traces).
-- Database spans: SQL statements are not traced individually.
+- The Python ML worker logs JSON but exports no metrics or traces.

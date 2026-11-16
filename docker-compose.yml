@@ -3,6 +3,7 @@
 #   docker compose --profile core up -d --build     # postgres, nats, opa, api
 #   docker compose --profile core --profile ai up -d # + optional local model (Module G)
 #   docker compose --profile core --profile auth up -d   # + Dex (local OIDC), see docs/auth.md
+#   docker compose --profile core --profile ml up -d     # + scheduled ML worker (anomalies, forecasts)
 #   docker compose --profile core --profile tls up -d    # + HTTPS on https://localhost:8443 (local CA)
 #   docker compose --profile core --profile observability up -d
 #                                       # + Prometheus :9090, Grafana :3000, Jaeger :16686
@@ -146,6 +147,24 @@ services:
     deploy:
       resources:
         limits: { memory: 128m }
+
+  ml-worker:
+    <<: *hardening
+    profiles: ["ml"]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/ml.Dockerfile
+    # Anomaly detection and forecasting for one tenant, repeated on a schedule.
+    command: ["--tenant", "${AEGIS_ML_TENANT:-demo}", "--every", "${AEGIS_ML_EVERY:-6h}"]
+    environment:
+      AEGIS_DATABASE_URL: postgresql://aegis_app:${AEGIS_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}
+    read_only: true
+    tmpfs: ["/tmp"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 1g }
 
   caddy:
     <<: *hardening
