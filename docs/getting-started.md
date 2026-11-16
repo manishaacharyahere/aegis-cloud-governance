@@ -4,7 +4,7 @@
 
 | Tool | Version used | Needed for |
 |---|---|---|
-| Go | 1.23+ | API and workers |
+| Go | 1.27+ (go.mod pins toolchain go1.27.4; older Go downloads it automatically) | API and workers |
 | Node.js | 24+ | Dashboard |
 | Python | 3.12+ | ML package |
 | Docker Desktop | with Compose v2 | PostgreSQL, NATS, OPA, policy tests |

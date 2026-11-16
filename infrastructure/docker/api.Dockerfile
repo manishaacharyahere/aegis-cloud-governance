@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build: static Go binary on a distroless, non-root base image.
 
-FROM golang:1.23.5-alpine3.21 AS build
+FROM golang:1.27.4-alpine3.24 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
