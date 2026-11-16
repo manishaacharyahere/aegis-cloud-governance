@@ -93,6 +93,27 @@ func (c *Client) Query(ctx context.Context, path string, input any, out any) err
 	return json.Unmarshal(resp.Result, out)
 }
 
+// ChunkSize is how many resources are evaluated per OPA request. The
+// inventory rules judge one resource at a time, so chunking does not change
+// results; it bounds request size and memory at large inventory sizes.
+const ChunkSize = 2000
+
+// Chunks splits items into consecutive slices of at most n.
+func Chunks[T any](items []T, n int) [][]T {
+	if n <= 0 {
+		n = ChunkSize
+	}
+	var out [][]T
+	for len(items) > n {
+		out = append(out, items[:n])
+		items = items[n:]
+	}
+	if len(items) > 0 {
+		out = append(out, items)
+	}
+	return out
+}
+
 // Bundle identifies the exact policy text OPA is serving.
 type Bundle struct {
 	SHA256  string            `json:"sha256"`

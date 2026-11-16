@@ -26,8 +26,8 @@ func (f *fakeRemediation) Propose(_ context.Context, _, _ string, req remediatio
 func (f *fakeRemediation) Get(context.Context, string, string) (remediation.View, error) {
 	return remediation.View{}, f.err
 }
-func (f *fakeRemediation) List(context.Context, string, string) ([]remediation.View, error) {
-	return nil, f.err
+func (f *fakeRemediation) List(context.Context, string, string, string, int) ([]remediation.View, string, error) {
+	return nil, "", f.err
 }
 func (f *fakeRemediation) Decide(_ context.Context, _, _, _, d, c string) (remediation.View, error) {
 	f.gotAction, f.gotComment = d, c

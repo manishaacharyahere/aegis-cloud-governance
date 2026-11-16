@@ -114,7 +114,7 @@ services:
       opa: { condition: service_started }
     deploy:
       resources:
-        limits: { memory: 256m }
+        limits: { memory: 768m } # cost imports up to 64 MiB are parsed in memory
 
   ollama:
     <<: *hardening

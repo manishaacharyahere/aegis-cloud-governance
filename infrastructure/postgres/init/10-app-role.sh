@@ -21,6 +21,9 @@ BEGIN
         REVOKE UPDATE ON compliance_evaluations, drift_items, drift_baseline_resources, risk_assessments FROM aegis_app;
         REVOKE INSERT, UPDATE, DELETE ON schema_migrations FROM aegis_app;
     END IF;
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'aegis_analyze') THEN
+        GRANT EXECUTE ON FUNCTION aegis_analyze(text) TO aegis_app;
+    END IF;
 END
 $$;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aegis_app;

@@ -199,12 +199,12 @@ func Verify(ctx context.Context, q interface {
 // List returns the most recent events for a tenant.
 func List(ctx context.Context, q interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-}, tenantID string, limit int) ([]Record, error) {
+}, tenantID string, limit int, beforeSeq int64) ([]Record, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
 	rows, err := q.Query(ctx, `SELECT seq, occurred_at, actor, action, target_type, target_id, outcome, details, encode(hash, 'hex')
-		FROM audit_events WHERE tenant_id = $1 ORDER BY seq DESC LIMIT $2`, tenantID, limit)
+		FROM audit_events WHERE tenant_id = $1 AND ($3 <= 0 OR seq < $3) ORDER BY seq DESC LIMIT $2`, tenantID, limit, beforeSeq)
 	if err != nil {
 		return nil, err
 	}

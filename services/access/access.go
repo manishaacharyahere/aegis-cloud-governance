@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,17 +101,61 @@ var subjectRe = regexp.MustCompile(`^([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|sub:
 // ValidSubject reports whether s is an email address or "sub:<id>".
 func ValidSubject(s string) bool { return len(s) <= 320 && subjectRe.MatchString(s) }
 
-// Store holds role bindings.
-type Store struct{ Pool *pgxpool.Pool }
+// Store holds role bindings. Role lookups are cached briefly (every
+// authorized request needs one); grants and revokes through this Store
+// invalidate the cache at once, and other replicas see changes within CacheTTL.
+type Store struct {
+	Pool     *pgxpool.Pool
+	CacheTTL time.Duration // default 30s; negative disables caching
+
+	mu    sync.Mutex
+	cache map[string]cachedRoles
+}
+
+type cachedRoles struct {
+	roles []string
+	until time.Time
+}
+
+func (s *Store) ttl() time.Duration {
+	if s.CacheTTL == 0 {
+		return 30 * time.Second
+	}
+	return s.CacheTTL
+}
 
 // RolesFor returns subject's roles in the tenant (none if the tenant does not exist).
 func (s *Store) RolesFor(ctx context.Context, tenant, subject string) ([]string, error) {
+	key := tenant + "|" + subject
+	if s.ttl() > 0 {
+		s.mu.Lock()
+		c, ok := s.cache[key]
+		s.mu.Unlock()
+		if ok && time.Now().Before(c.until) {
+			return c.roles, nil
+		}
+	}
 	rows, err := s.Pool.Query(ctx, `SELECT b.role FROM role_bindings b JOIN tenants t ON t.id = b.tenant_id
 		WHERE t.slug = $1 AND b.subject = $2 ORDER BY b.role`, tenant, subject)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowTo[string])
+	roles, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err == nil && s.ttl() > 0 {
+		s.mu.Lock()
+		if s.cache == nil || len(s.cache) > 10000 {
+			s.cache = map[string]cachedRoles{}
+		}
+		s.cache[key] = cachedRoles{roles: roles, until: time.Now().Add(s.ttl())}
+		s.mu.Unlock()
+	}
+	return roles, err
+}
+
+func (s *Store) invalidate() {
+	s.mu.Lock()
+	s.cache = nil
+	s.mu.Unlock()
 }
 
 // Binding is one role grant.
@@ -180,6 +226,7 @@ func (s *Store) Grant(ctx context.Context, tenant, actor, subject, role string) 
 		if tag.RowsAffected() == 0 {
 			return nil
 		}
+		defer s.invalidate()
 		return audit.Append(ctx, tx, tid, audit.Event{Actor: actor, Action: "access.granted", TargetType: "role_binding",
 			TargetID: subject, Outcome: "success", Details: map[string]any{"role": role}})
 	})
@@ -216,6 +263,7 @@ func (s *Store) Revoke(ctx context.Context, tenant, actor, subject, role string)
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
+		defer s.invalidate()
 		return audit.Append(ctx, tx, tid, audit.Event{Actor: actor, Action: "access.revoked", TargetType: "role_binding",
 			TargetID: subject, Outcome: "success", Details: map[string]any{"role": role}})
 	})

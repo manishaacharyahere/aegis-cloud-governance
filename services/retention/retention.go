@@ -58,6 +58,9 @@ func RunOnce(ctx context.Context, pool *pgxpool.Pool, p Policy) (Result, error) 
 				return err
 			}
 		}
+		if err := del("idempotency_keys", `DELETE FROM idempotency_keys WHERE created_at < now() - interval '24 hours'`); err != nil {
+			return err
+		}
 		if p.InvestigationsFor > 0 {
 			if err := del("investigations", `DELETE FROM investigations WHERE created_at < now() - $1::interval`, interval(p.InvestigationsFor)); err != nil {
 				return err

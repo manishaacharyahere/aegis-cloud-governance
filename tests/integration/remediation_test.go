@@ -337,3 +337,55 @@ func (c *changingPolicy) Bundle(ctx context.Context) (opa.Bundle, error) {
 	}
 	return b, err
 }
+
+// Lists page with opaque cursors, newest first, without gaps or repeats.
+func TestRemediationPaging(t *testing.T) {
+	opaURL := os.Getenv("AEGIS_TEST_OPA_URL")
+	if opaURL == "" {
+		t.Skip("AEGIS_TEST_OPA_URL not set")
+	}
+	pool, inv := migratedPool(t)
+	ctx := context.Background()
+	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 300, CapturedAt: base})
+	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+		t.Fatal(err)
+	}
+	svc := &remediation.Service{Pool: pool, OPA: testOPA(opaURL)}
+	var made []string
+	for _, r := range ds.Snapshot.Resources {
+		if len(made) == 7 {
+			break
+		}
+		v, err := svc.Propose(ctx, "demo", "alice", remediation.ProposeRequest{Source: "manual", ResourceID: r.ResourceID,
+			Justification: "paging test change", Operations: []remediation.Op{{Op: "set", Path: "tags.paging", Value: "x"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		made = append(made, v.ID)
+	}
+	seen := map[string]bool{}
+	after, pages := "", 0
+	for {
+		items, next, err := svc.List(ctx, "demo", "", after, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages++
+		for _, it := range items {
+			if seen[it.ID] {
+				t.Fatalf("%s returned twice", it.ID)
+			}
+			seen[it.ID] = true
+		}
+		if next == "" {
+			break
+		}
+		after = next
+	}
+	if len(seen) != 7 || pages != 3 {
+		t.Errorf("paged %d items in %d pages, want 7 in 3", len(seen), pages)
+	}
+	if _, _, err := svc.List(ctx, "demo", "", "not-a-cursor", 3); !errors.Is(err, remediation.ErrInvalid) {
+		t.Errorf("bad cursor: %v", err)
+	}
+}

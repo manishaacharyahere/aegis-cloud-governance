@@ -155,7 +155,7 @@ func TestSimulateGate(t *testing.T) {
 		{"no change", []Op{{Op: "set", Path: "configuration.public_access_block", Value: true}}, "", false, "do not change"},
 		{"manual, harmless", []Op{{Op: "set", Path: "tags.owner", Value: "x"}}, "", true, ""},
 	} {
-		sim, err := s.simulate(context.Background(), r, tc.ops, tc.target)
+		sim, err := s.simulate(context.Background(), r, tc.ops, tc.target, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -31,29 +31,26 @@ single-run, indicative numbers, not capacity guarantees.
 | | 104 | 1 002 | 5 004 | 10 005 |
 |---|---|---|---|---|
 | Failing findings | 22 | 221 | 1 151 | 2 295 |
-| Inventory import (new) | 74 ms | 558 ms | 2 363 ms | 4 814 ms |
-| Re-import, unchanged | 9.6 ms | 33 ms | 128 ms | 241 ms |
-| Import with ~2 % changed | 32 ms | 253 ms | 1 145 ms | 2 328 ms |
-| Approve drift baseline | 27 ms | 75 ms | 212 ms | 395 ms |
-| Drift comparison | 61 ms | 212 ms | 922 ms | 1 861 ms |
-| Compliance evaluation (OPA) | 62 ms | 281 ms | 1 041 ms | 2 117 ms |
-| Risk assessment | 24 ms | 58 ms | 370 ms | 1 225 ms |
-| Investigation p50 / p95 (50) | 15.8 / 20.5 ms | 15.0 / 20.2 ms | 16.6 / 19.4 ms | 17.6 / 20.5 ms |
-| Remediation proposal p50 / p95 | 29.3 / 32.8 ms | 28.6 / 34.4 ms | 28.8 / 45.9 ms | 29.5 / 33.3 ms |
-| List resources, 1 client (p50 / p95) | 3.7 / 5.2 ms, 259 req/s | 4.2 / 5.4 ms, 237 req/s | 4.1 / 5.3 ms, 238 req/s | 4.2 / 5.4 ms, 234 req/s |
-| List resources, 16 clients (p50 / p95) | 10.4 / 17.7 ms, 1351 req/s | 11.0 / 18.5 ms, 1258 req/s | 11.4 / 18.8 ms, 1267 req/s | 10.9 / 17.9 ms, 1334 req/s |
-| Inventory tables on disk | 0.4 MB | 2.8 MB | 13.3 MB | 26.3 MB |
+| Inventory import (new) | 82 ms | 535 ms | 2 482 ms | 4 861 ms |
+| Re-import, unchanged | 9.9 ms | 29 ms | 124 ms | 261 ms |
+| Import with ~2 % changed | 39 ms | 268 ms | 1 132 ms | 2 151 ms |
+| Approve drift baseline | 29 ms | 74 ms | 247 ms | 458 ms |
+| Drift comparison | 72 ms | 249 ms | 1 103 ms | 2 116 ms |
+| Compliance evaluation (OPA) | 75 ms | 306 ms | 1 359 ms | 2 510 ms |
+| Risk assessment | 29 ms | 51 ms | 174 ms | 412 ms |
+| Investigation p50 / p95 (50) | 15.1 / 18.1 ms | 17.3 / 19.7 ms | 16.7 / 22.5 ms | 18.7 / 25.6 ms |
+| Remediation proposal p50 / p95 | 33.4 / 39.2 ms | 34.4 / 39.5 ms | 34.5 / 48.7 ms | 36.0 / 41.1 ms |
+| List resources, 1 client (p50 / p95) | 4.2 / 5.3 ms, 235 req/s | 4.1 / 5.4 ms, 233 req/s | 4.3 / 5.3 ms, 226 req/s | 4.3 / 5.5 ms, 224 req/s |
+| List resources, 16 clients (p50 / p95) | 10.8 / 16.7 ms, 1336 req/s | 10.9 / 17.3 ms, 1349 req/s | 11.1 / 32.4 ms, 1137 req/s | 11.6 / 20.8 ms, 1207 req/s |
+| Inventory tables on disk | 0.4 MB | 2.8 MB | 13.2 MB | 26.3 MB |
 
 **Per-request work does not grow with the estate.** Investigations,
 remediation proposals and paginated reads take the same time at 100 and at
 10 000 resources. **Batch work grows roughly linearly**: import, drift and
-compliance take about twice as long when the estate doubles. The exception is
-**risk assessment**, which grows faster: 3.3× for 5 000 → 10 000 resources,
-because of the graph traversal and the sensitivity analysis. At 1.2 s for 10 000
-resources it is acceptable, but it is the first thing to optimise for larger
-estates.
+compliance take about twice as long when the estate doubles, and so does risk
+assessment since the third fix below.
 
-### Two problems the scale test found, and fixed
+### Three problems the scale test found, and fixed
 
 1. **Imports at 5 000 resources were rejected.** The importer capped each
    resource at 100 relationships, and a KMS key in the larger synthetic estate has 340
@@ -71,6 +68,23 @@ estates.
    table above was measured after that fix: 4.2 ms and 1 334 req/s at 10 000
    resources. The results file also records the same requests after an explicit
    `ANALYZE` (`*_settled`) for comparison.
+3. **Risk assessment grew faster than linearly.** It took 1 225 ms at 10 000
+   resources, 3.3× the time at 5 000. Profiling showed three things:
+   - the scoring itself takes 38 ms;
+   - the history query takes 30 ms on settled data;
+   - the full assessment takes 361 ms on a settled database.
+
+   The cost was the same stale-statistics effect, this time on
+   `compliance_evaluations` right after a compliance run had written about
+   27 000 rows. Large compliance runs now refresh statistics through
+   `aegis_analyze()`, an owner-defined function the least-privilege
+   `aegis_app` role may call for a fixed list of tables. Risk assessment
+   at 10 000 resources dropped to the time shown above.
+
+   One attempt made it worse and was reverted: computing every node's blast
+   radius at once with bitsets was slower (232 ms vs 38 ms) than the
+   per-finding search it replaced. An index on `(tenant_id, rule_id, subject)`
+   was kept for the history query.
 
 ## Resilience
 

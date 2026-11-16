@@ -47,10 +47,10 @@ func (f *fakeCompliance) DecideException(_ context.Context, _, a, _, d string) (
 	f.gotActor, f.gotDecided = a, d
 	return compliance.ExceptionView{}, f.err
 }
-func (f *fakeCompliance) ListExceptions(context.Context, string) ([]compliance.ExceptionView, error) {
-	return nil, f.err
+func (f *fakeCompliance) ListExceptions(context.Context, string, string, int) ([]compliance.ExceptionView, string, error) {
+	return nil, "", f.err
 }
-func (f *fakeCompliance) AuditEvents(context.Context, string, int) ([]audit.Record, error) {
+func (f *fakeCompliance) AuditEvents(context.Context, string, int, int64) ([]audit.Record, error) {
 	return nil, f.err
 }
 func (f *fakeCompliance) AuditHashAt(_ context.Context, _ string, seq int64) (string, error) {

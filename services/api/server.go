@@ -40,6 +40,10 @@ type Deps struct {
 	Auth Auth
 	// RateLimit limits requests per caller; nil disables it.
 	RateLimit *RateLimit
+	// Idempotency stores Idempotency-Key responses for POST routes (nil disables).
+	Idempotency IdempotencyStore
+	// Settings stores per-tenant policy configuration.
+	Settings SettingsStore
 	// Signer signs released change sets and audit heads.
 	Signer *signing.Signer
 	// OutboxRequeue re-queues parked outbox events (admin endpoint).
@@ -51,6 +55,7 @@ type Deps struct {
 	Version                  string
 	MaxBodyBytes             int64 // default per-request body limit
 	MaxImportBytes           int64 // body limit for inventory imports
+	MaxCostImportBytes       int64 // body limit for cost imports (CUR exports are large)
 }
 
 // NewHandler builds the routed, middleware-wrapped API handler. Every route
@@ -66,17 +71,27 @@ func NewHandler(d Deps) http.Handler {
 		if !ok {
 			panic("api: route " + pattern + " has no entry in routePermissions")
 		}
+		var inner http.Handler = h
+		if strings.HasPrefix(pattern, "POST ") {
+			inner = idempotent(d.Idempotency, pattern, inner)
+		}
 		// Rate limiting runs after authentication, so it is per user.
-		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.RateLimit.limit(lim, pattern, d.Auth.authorize(perm, h)))))
+		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.RateLimit.limit(lim, pattern, d.Auth.authorize(perm, inner)))))
 	}
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
+	}
+	if d.MaxCostImportBytes == 0 {
+		d.MaxCostImportBytes = d.MaxImportBytes
 	}
 
 	handle("GET /healthz", d.MaxBodyBytes, handleLiveness)
 	handle("GET /readyz", d.MaxBodyBytes, handleReadiness(d.DB))
 	handle("GET /api/v1/version", d.MaxBodyBytes, handleVersion(d.Version))
 	ac := accessHandlers{auth: d.Auth}
+	th := tenantHandlers{svc: d.Settings}
+	handle("GET /api/v1/tenant/policy-config", d.MaxBodyBytes, th.getPolicyConfig)
+	handle("PUT /api/v1/tenant/policy-config", d.MaxBodyBytes, th.putPolicyConfig)
 	handle("POST /api/v1/admin/outbox/requeue", d.MaxBodyBytes, opsHandlers{requeue: d.OutboxRequeue}.requeueOutbox)
 	handle("GET /api/v1/auth/config", d.MaxBodyBytes, ac.config)
 	handle("GET /api/v1/me", d.MaxBodyBytes, ac.me)
@@ -123,7 +138,7 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/risk/assessments/{id}", d.MaxBodyBytes, rk.getRun)
 	handle("GET /api/v1/risk/attack-paths", d.MaxBodyBytes, rk.attackPaths)
 	fo := finopsHandlers{svc: d.FinOps}
-	handle("POST /api/v1/cost/import", d.MaxImportBytes, fo.importCost)
+	handle("POST /api/v1/cost/import", d.MaxCostImportBytes, fo.importCost)
 	handle("GET /api/v1/cost/summary", d.MaxBodyBytes, fo.summary)
 	handle("GET /api/v1/cost/tag-coverage", d.MaxBodyBytes, fo.tagCoverage)
 	handle("GET /api/v1/cost/forecast", d.MaxBodyBytes, fo.ml("forecast"))

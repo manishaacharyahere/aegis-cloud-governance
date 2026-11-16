@@ -142,7 +142,7 @@ func (s *Service) Assess(ctx context.Context, tenant, actor string, w Weights) (
 			SELECT e.rule_id, e.subject, e.result, r.evaluated_at
 			FROM compliance_evaluations e JOIN compliance_runs r ON r.id = e.run_id
 			JOIN fails f ON f.rule_id = e.rule_id AND f.subject = e.subject
-			WHERE r.tenant_id = $1 AND r.source = 'inventory'
+			WHERE e.tenant_id = $1 AND r.tenant_id = $1 AND r.source = 'inventory'
 		), last_ok AS (
 			SELECT rule_id, subject, max(evaluated_at) AS at FROM hist WHERE result <> 'fail' GROUP BY rule_id, subject
 		)

@@ -307,7 +307,7 @@ func (s *Store) Import(ctx context.Context, tenantSlug string, ns NormalizedSnap
 	// estate size until statistics caught up. Best effort, outside the import
 	// transaction.
 	if created+updated+deleted >= analyzeAfterChanges {
-		if _, err := s.pool.Exec(ctx, `ANALYZE resources, resource_versions, resource_relationships`); err != nil {
+		if _, err := s.pool.Exec(ctx, `SELECT aegis_analyze('resources'), aegis_analyze('resource_versions'), aegis_analyze('resource_relationships')`); err != nil {
 			logging.FromContext(ctx).Warn("analyze after import failed", "error", err)
 		}
 	}

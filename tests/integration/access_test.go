@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 )
 
 func TestRoleBindings(t *testing.T) {
@@ -52,11 +53,53 @@ func TestRoleBindings(t *testing.T) {
 	if err := s.Revoke(ctx, "demo", "second@example.com", "alice@example.com", access.RoleViewer); !errors.Is(err, access.ErrNotFound) {
 		t.Errorf("revoking a missing binding: %v", err)
 	}
+	// The cache never outlives a grant or revoke made through the store.
+	_, _ = s.RolesFor(ctx, "demo", "alice@example.com")
+	if err := s.Revoke(ctx, "demo", "second@example.com", "alice@example.com", access.RoleAnalyst); err != nil {
+		t.Fatal(err)
+	}
+	if roles, _ := s.RolesFor(ctx, "demo", "alice@example.com"); len(roles) != 0 {
+		t.Errorf("revoked role still cached: %v", roles)
+	}
+	if err := s.Grant(ctx, "demo", "second@example.com", "alice@example.com", access.RoleAnalyst); err != nil {
+		t.Fatal(err)
+	}
+	if roles, _ := s.RolesFor(ctx, "demo", "alice@example.com"); len(roles) != 1 {
+		t.Errorf("new grant not visible: %v", roles)
+	}
 	bs, err := s.List(ctx, "demo")
 	if err != nil || len(bs) != 2 {
 		t.Fatalf("list: %+v %v", bs, err)
 	}
-	if n := count(t, pool, `SELECT count(*) FROM audit_events WHERE action IN ('access.granted', 'access.revoked')`); n != 4 {
-		t.Errorf("audit events = %d, want 4 (bootstrap, alice, second, revoke)", n)
+	if n := count(t, pool, `SELECT count(*) FROM audit_events WHERE action IN ('access.granted', 'access.revoked')`); n != 6 {
+		t.Errorf("audit events = %d, want 6 (bootstrap, alice, second, revoke root, revoke and re-grant alice)", n)
+	}
+}
+
+func TestIdempotencyStore(t *testing.T) {
+	pool, _ := migratedPool(t)
+	ctx := context.Background()
+	s := &api.PGIdempotency{Pool: pool}
+	k := api.IdemKey{Tenant: "demo", Actor: "alice", Key: "k1", Route: "POST /x", RequestSHA: "h"}
+	if prev, err := s.Begin(ctx, k); prev != nil || err != nil {
+		t.Fatalf("first begin: %+v %v", prev, err)
+	}
+	if prev, _ := s.Begin(ctx, k); prev == nil || prev.Status != 0 {
+		t.Fatalf("in progress: %+v", prev)
+	}
+	if err := s.Complete(ctx, k, 201, "application/json", []byte(`{"id":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if prev, _ := s.Begin(ctx, k); prev == nil || prev.Status != 201 || string(prev.Body) != `{"id":1}` {
+		t.Fatalf("completed: %+v", prev)
+	}
+	k2 := k
+	k2.Key = "k2"
+	_, _ = s.Begin(ctx, k2)
+	if err := s.Abort(ctx, k2); err != nil {
+		t.Fatal(err)
+	}
+	if prev, _ := s.Begin(ctx, k2); prev != nil {
+		t.Error("an aborted key must be free again")
 	}
 }

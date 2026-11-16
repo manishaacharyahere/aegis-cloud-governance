@@ -36,6 +36,7 @@ type Config struct {
 	ShutdownTimeout      time.Duration
 	MaxBodyBytes         int64
 	MaxImportBytes       int64
+	MaxCostImportBytes   int64
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
@@ -149,6 +150,14 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, fmt.Errorf("AEGIS_MAX_IMPORT_BYTES: must be between 1KiB and 256MiB, got %d", maxImport))
 	}
 	cfg.MaxImportBytes = maxImport
+	maxCost, err := strconv.ParseInt(get("AEGIS_MAX_COST_IMPORT_BYTES", "67108864"), 10, 64)
+	switch {
+	case err != nil:
+		errs = append(errs, fmt.Errorf("AEGIS_MAX_COST_IMPORT_BYTES: %w", err))
+	case maxCost < 1024 || maxCost > 512<<20:
+		errs = append(errs, fmt.Errorf("AEGIS_MAX_COST_IMPORT_BYTES: must be between 1KiB and 512MiB, got %d", maxCost))
+	}
+	cfg.MaxCostImportBytes = maxCost
 
 	defTenant := "demo"
 	if cfg.Environment == EnvProduction {

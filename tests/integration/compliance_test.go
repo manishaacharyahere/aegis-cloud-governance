@@ -234,7 +234,7 @@ func TestExceptionWorkflowAndAudit(t *testing.T) {
 	}
 
 	// The audit trail records every step, including the refused self-approval.
-	recs, _ := svc.AuditEvents(ctx, "demo", 100)
+	recs, _ := svc.AuditEvents(ctx, "demo", 100, 0)
 	seen := map[string]int{}
 	for _, r := range recs {
 		seen[r.Action+"/"+r.Outcome]++

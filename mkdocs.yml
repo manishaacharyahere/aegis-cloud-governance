@@ -47,6 +47,7 @@ nav:
       - G. Investigation assistant: modules/investigator.md
       - H. Controlled remediation: modules/remediation.md
   - Platform:
+      - API conventions: api.md
       - Authentication and RBAC: auth.md
       - Domain events: events.md
       - Observability: observability.md

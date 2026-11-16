@@ -13,8 +13,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
 
 // Errors returned by the service.
@@ -121,16 +124,22 @@ func (s *Service) EvaluateInventory(ctx context.Context, tenant, actor string) (
 	if err != nil {
 		return RunSummary{}, fmt.Errorf("policy bundle: %w", err)
 	}
-	var res struct {
-		Deny []opaFinding `json:"deny"`
-		Warn []opaFinding `json:"warn"`
-	}
-	if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": docs}, &res); err != nil {
-		return RunSummary{}, fmt.Errorf("evaluate inventory policies: %w", err)
+	pcfg, err := tenancy.Load(ctx, s.Pool, tenantID)
+	if err != nil {
+		return RunSummary{}, err
 	}
 	var findings []PolicyFinding
-	for _, f := range append(res.Deny, res.Warn...) {
-		findings = append(findings, PolicyFinding{RuleID: f.RuleID, Subject: f.Address, Message: f.Message})
+	for _, chunk := range opa.Chunks(docs, opa.ChunkSize) {
+		var res struct {
+			Deny []opaFinding `json:"deny"`
+			Warn []opaFinding `json:"warn"`
+		}
+		if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": chunk, "config": pcfg.Input()}, &res); err != nil {
+			return RunSummary{}, fmt.Errorf("evaluate inventory policies: %w", err)
+		}
+		for _, f := range append(res.Deny, res.Warn...) {
+			findings = append(findings, PolicyFinding{RuleID: f.RuleID, Subject: f.Address, Message: f.Message})
+		}
 	}
 	ref := make([]string, 0, len(accounts))
 	for a := range accounts {
@@ -259,6 +268,13 @@ func (s *Service) saveRun(ctx context.Context, tenantID, source, key, ref, bundl
 			CatalogSHA256: s.Catalog.SHA256, EvaluatedAt: now, Pass: pass, Fail: fail, Excepted: exc}
 		return nil
 	})
+	// A large run changes the table enough that the planner's statistics go
+	// stale; refresh them now (risk assessment queries this table next).
+	if err == nil && sum.Pass+sum.Fail+sum.Excepted >= 1000 {
+		if _, aerr := s.Pool.Exec(ctx, `SELECT aegis_analyze('compliance_evaluations')`); aerr != nil {
+			logging.FromContext(ctx).Warn("analyze after compliance run failed", "error", aerr)
+		}
+	}
 	return sum, err
 }
 
@@ -724,12 +740,43 @@ func (s *Service) DecideException(ctx context.Context, tenant, actor, id, decisi
 }
 
 // ListExceptions lists a tenant's exceptions, newest first.
-func (s *Service) ListExceptions(ctx context.Context, tenant string) ([]ExceptionView, error) {
+// ListExceptions returns one page of the tenant's exceptions, newest first,
+// and the cursor of the next page ("" at the end).
+func (s *Service) ListExceptions(ctx context.Context, tenant, after string, limit int) ([]ExceptionView, string, error) {
 	tenantID, err := s.tenantID(ctx, tenant)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return s.listExceptions(ctx, tenantID, nil)
+	at, id, hasCursor, err := paging.Decode(after)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+	}
+	if hasCursor && !uuidRe.MatchString(id) {
+		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+	}
+	if !hasCursor {
+		id = "00000000-0000-0000-0000-000000000000"
+	}
+	limit = paging.Limit(limit)
+	rows, err := s.Pool.Query(ctx, `SELECT `+exceptionCols+` FROM policy_exceptions
+		WHERE tenant_id = $1 AND (NOT $2 OR (created_at, id) < ($3, $4::uuid))
+		ORDER BY created_at DESC, id DESC LIMIT $5`, tenantID, hasCursor, at, id, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[ExceptionView])
+	if err != nil {
+		return nil, "", err
+	}
+	if out == nil {
+		out = []ExceptionView{}
+	}
+	next := ""
+	if len(out) > limit {
+		out = out[:limit]
+		next = paging.Encode(out[len(out)-1].CreatedAt, out[len(out)-1].ID)
+	}
+	return out, next, nil
 }
 
 const exceptionCols = `id, rule_id, subject, justification, status,
@@ -764,12 +811,12 @@ func (s *Service) getException(ctx context.Context, tenantID, id string) (Except
 // ------------------------------------------------------------------- audit
 
 // AuditEvents lists recent audit events for a tenant.
-func (s *Service) AuditEvents(ctx context.Context, tenant string, limit int) ([]audit.Record, error) {
+func (s *Service) AuditEvents(ctx context.Context, tenant string, limit int, beforeSeq int64) ([]audit.Record, error) {
 	tenantID, err := s.tenantID(ctx, tenant)
 	if err != nil {
 		return nil, err
 	}
-	recs, err := audit.List(ctx, s.Pool, tenantID, limit)
+	recs, err := audit.List(ctx, s.Pool, tenantID, limit, beforeSeq)
 	if recs == nil {
 		recs = []audit.Record{}
 	}

@@ -18,8 +18,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
 
 // Errors.
@@ -240,7 +242,7 @@ func loadByPKLock(ctx context.Context, q querier, tenantID, pk, lock string) (re
 
 // failing evaluates the inventory policies on one state and returns the
 // sorted IDs of rules it fails (deny and warn).
-func (s *Service) failing(ctx context.Context, st State) ([]string, error) {
+func (s *Service) failing(ctx context.Context, st State, policyConfig map[string]any) ([]string, error) {
 	var res struct {
 		Deny []struct {
 			RuleID string `json:"rule_id"`
@@ -249,7 +251,7 @@ func (s *Service) failing(ctx context.Context, st State) ([]string, error) {
 			RuleID string `json:"rule_id"`
 		} `json:"warn"`
 	}
-	if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": []State{st}}, &res); err != nil {
+	if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": []State{st}, "config": policyConfig}, &res); err != nil {
 		return nil, fmt.Errorf("evaluate policies: %w", err)
 	}
 	set := map[string]bool{}
@@ -275,16 +277,16 @@ func minus(a, b []string) []string {
 }
 
 // simulate applies ops to a copy and compares policy results before and after.
-func (s *Service) simulate(ctx context.Context, r resource, ops []Op, target string) (Simulation, error) {
+func (s *Service) simulate(ctx context.Context, r resource, ops []Op, target string, policyConfig map[string]any) (Simulation, error) {
 	after, diff, err := Apply(r.state, ops)
 	if err != nil {
 		return Simulation{}, err
 	}
-	before, err := s.failing(ctx, r.state)
+	before, err := s.failing(ctx, r.state, policyConfig)
 	if err != nil {
 		return Simulation{}, err
 	}
-	afterFail, err := s.failing(ctx, after)
+	afterFail, err := s.failing(ctx, after, policyConfig)
 	if err != nil {
 		return Simulation{}, err
 	}
@@ -401,7 +403,11 @@ func (s *Service) Propose(ctx context.Context, tenant, actor string, req Propose
 	if err != nil {
 		return View{}, fmt.Errorf("policy bundle: %w", err)
 	}
-	sim, err := s.simulate(ctx, r, ops, req.RuleID)
+	pcfg, err := tenancy.Load(ctx, s.Pool, tenantID)
+	if err != nil {
+		return View{}, err
+	}
+	sim, err := s.simulate(ctx, r, ops, req.RuleID, pcfg.Input())
 	if err != nil {
 		return View{}, err
 	}
@@ -541,28 +547,51 @@ func (s *Service) Get(ctx context.Context, tenant, id string) (View, error) {
 	return x.View, nil
 }
 
-// List returns the tenant's remediations, newest first, optionally by status.
-func (s *Service) List(ctx context.Context, tenant, status string) ([]View, error) {
+// List returns one page of the tenant's remediations, newest first,
+// optionally by status, and the cursor of the next page ("" at the end).
+func (s *Service) List(ctx context.Context, tenant, status, after string, limit int) ([]View, string, error) {
 	tenantID, err := s.tenantID(ctx, tenant)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	at, id, hasCursor, err := paging.Decode(after)
+	if err != nil || (hasCursor && !uuidRe.MatchString(id)) {
+		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+	}
+	limit = paging.Limit(limit)
 	rows, err := s.Pool.Query(ctx, `SELECT `+viewCols+` FROM remediations WHERE tenant_id = $1 AND ($2 = '' OR status = $2)
-		ORDER BY created_at DESC, id LIMIT 200`, tenantID, status)
+		AND (NOT $3 OR (created_at, id) < ($4, $5::uuid))
+		ORDER BY created_at DESC, id DESC LIMIT $6`, tenantID, status, hasCursor, at, nullUUID(id), limit+1)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer rows.Close()
 	out := []View{}
 	for rows.Next() {
 		x, err := scanRow(rows)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		x.Approvals = []Approval{} // details are on GET /remediations/{id}
 		out = append(out, x.View)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(out) > limit {
+		out = out[:limit]
+		last := out[len(out)-1]
+		next = paging.Encode(last.CreatedAt, last.ID)
+	}
+	return out, next, nil
+}
+
+func nullUUID(id string) string {
+	if id == "" {
+		return "00000000-0000-0000-0000-000000000000"
+	}
+	return id
 }
 
 // withLocked runs fn on the locked remediation row in one transaction. If
@@ -778,7 +807,11 @@ func (s *Service) Verify(ctx context.Context, tenant, actor, id string) (View, e
 			if ver.Mismatched == nil {
 				ver.Mismatched = []string{}
 			}
-			if ver.FailingNow, err = s.failing(ctx, cur.state); err != nil {
+			pcfg, err := tenancy.Load(ctx, tx, x.tenantID)
+			if err != nil {
+				return err
+			}
+			if ver.FailingNow, err = s.failing(ctx, cur.state, pcfg.Input()); err != nil {
 				return err
 			}
 			ver.TargetResolved = x.RuleID == "" || !slices.Contains(ver.FailingNow, x.RuleID)

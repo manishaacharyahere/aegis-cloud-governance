@@ -39,7 +39,7 @@ also limits what they prove (see *Threats to validity*).
 | Assistant: validator | 43 hand-labelled claims | 14/14 supported accepted, 25/25 checkable errors rejected, 4/4 meaning-only contradictions accepted (known blind spot) |
 | Assistant: live model | qwen2.5:3b, 20 investigations, 68 claims | 59 accepted, of which 48 correct and 11 wrong on manual review; no accepted claim contained an unsupported number or identifier |
 | Remediation | every templated finding of the estate (121) | 121 simulated, approved, released, applied, verified; next compliance run: exactly those 121 resolved, 0 new failures |
-| Scale | 100 → 10 000 resources | per-request latency flat (investigation p50 ≈ 15–18 ms, list p50 ≈ 4 ms); batch work roughly linear; risk assessment super-linear (1.2 s at 10 000) |
+| Scale | 100 → 10 000 resources | per-request latency flat (investigation p50 ≈ 15–18 ms, list p50 ≈ 4 ms); batch work roughly linear (risk assessment 0.4 s at 10 000, after a statistics fix) |
 | Resilience | database cut mid-import; OPA, NATS and identity provider down | atomic rollback and recovery; every decision path fails closed |
 
 ## 1. Method
@@ -180,13 +180,14 @@ verification before the change arrives.
 ## 8. Scale and resilience
 
 At 10 005 resources on one laptop:
-- import takes 4.8 s, compliance 2.1 s, drift 1.9 s and risk 1.2 s;
+- import takes 4.9 s, compliance 2.5 s, drift 2.1 s and risk 0.4 s;
 - an investigation takes 17.6 ms (p50) and a remediation proposal 29.5 ms (p50);
 - a list page takes 4.2 ms with 1 client, or 10.9 ms with 16 clients at 1 334 req/s.
 
-The scale test found and fixed two defects:
+The scale test found and fixed three defects:
 - a per-resource relationship cap rejected real hub resources;
-- reads slowed after bulk imports until statistics were refreshed (now `ANALYZE` after large imports).
+- reads slowed after bulk imports until statistics were refreshed (now `ANALYZE` after large imports);
+- risk assessment slowed after large compliance runs for the same reason (now refreshed through a restricted `aegis_analyze()` function, 1.2 s to 0.4 s at 10 000).
 
 Fault injection showed:
 - **Database lost mid-import:** the import rolls back completely, readiness reports the outage, and the retry succeeds.

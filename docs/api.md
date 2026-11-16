@@ -1,0 +1,95 @@
+# API conventions
+
+All endpoints live under `/api/v1`. Requests and responses are JSON, except cost
+import, which takes `text/csv`. The full contract is published as OpenAPI (see below).
+
+## Identity and tenant
+
+| Header | Meaning |
+|---|---|
+| `Authorization: Bearer <OIDC ID token>` | the caller ([auth](auth.md)); not needed for public routes |
+| `X-Aegis-Tenant: <slug>` | the tenant; the caller must hold a role in it |
+| `X-Aegis-Actor` | development header mode only |
+
+## Errors
+
+Every error has the same shape:
+
+```json
+{"error": {"code": "invalid_transition", "message": "remediation is released; only approved remediations can be released"}}
+```
+
+`code` is stable and meant for programs; `message` is for people. Common codes:
+
+| Status | Codes |
+|---|---|
+| 400 | `invalid_json`, `invalid_tenant`, `invalid_query`, `invalid_idempotency_key` |
+| 401 | `unauthenticated` (with `WWW-Authenticate: Bearer`) |
+| 403 | `forbidden`, `separation_of_duties`, `dev_mode_local_only` |
+| 404 | `not_found`, `tenant_not_found` |
+| 409 | `invalid_transition`, `stale`, `not_observed`, `ambiguous_resource`, `request_in_progress` |
+| 413 | `body_too_large` |
+| 422 | `invalid_request`, `validation_failed`, `idempotency_key_reused` |
+| 429 | `rate_limited` (with `Retry-After` in seconds) |
+| 503 | `identity_provider_unavailable`, `*_unavailable` |
+
+## Pagination
+
+Lists that can grow without bound return a page and an opaque cursor:
+
+```text
+GET /api/v1/remediations?limit=50                 → {"items": [...], "next_cursor": "MTc2..."}
+GET /api/v1/remediations?limit=50&after=MTc2...   → the next, older page; "next_cursor": "" at the end
+```
+
+- `limit` defaults to 50, with a maximum of 500.
+- Cursors are keyset positions `(created_at, id)`, so pages never repeat or skip
+  items when new rows arrive.
+- These routes page this way: `/remediations` and `/compliance/exceptions`.
+  `/audit/events` pages by sequence number instead: use `?before_seq=<next_before_seq>`.
+- `/resources` uses `after=<resource id>` (`next_cursor` in the response).
+
+## Idempotent retries
+
+Any `POST` may carry `Idempotency-Key: <1-128 of A-Z a-z 0-9 . _ : ->`.
+
+- The first response is stored for 24 hours.
+- A retry with the same key, from the same caller in the same tenant, gets the
+  stored response with `Idempotent-Replayed: true`, and the work is not done twice.
+- The same key with a different body gets `422 idempotency_key_reused`.
+- While the first request is still running, a retry gets `409 request_in_progress`.
+- Server errors (5xx) are not stored, so the retry runs again.
+
+## Rate limits
+
+Each caller has two budgets per minute (per user, or per IP address when anonymous):
+
+- `AEGIS_RATE_LIMIT_PER_MINUTE` (default 600) for ordinary routes;
+- `AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE` (default 20) for routes that start heavy
+  work: imports, scans, evaluations, drift, risk, recommendations, investigations
+  and remediation proposals.
+
+Over budget, the API returns `429` with `Retry-After`.
+
+## Tenant policy settings
+
+```text
+GET /api/v1/tenant/policy-config            (any role)
+PUT /api/v1/tenant/policy-config            (admin)
+{"approved_regions": ["eu-west-1"], "required_tags": ["owner", "cost_center"], "admin_ports": [22, 3389], "approved_encryption": ["aws:kms"]}
+```
+
+Empty fields keep the policy defaults. A change applies to the next compliance
+evaluation, drift comparison and remediation simulation; stored results are
+not rewritten. Changes are audited.
+
+## Signatures
+
+| Route | Purpose |
+|---|---|
+| `GET /api/v1/signing-key` | Ed25519 public key and key ID (public) |
+| `GET /api/v1/remediations/{id}` | once released: `change_set.signed` |
+| `GET /api/v1/audit/head` | signed head of the tenant's audit chain |
+| `POST /api/v1/audit/anchors/verify` `{"seq": n, "hash": "..."}` | checks a stored head against the live chain |
+
+Verify outside Aegis with `go run ./cmd/aegis-verify -key <public key> file.json`.

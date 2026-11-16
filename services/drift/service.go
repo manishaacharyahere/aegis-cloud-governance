@@ -17,6 +17,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
 
 // Errors.
@@ -252,11 +253,15 @@ func (s *Service) Compare(ctx context.Context, tenant, accountID, actor string) 
 	if err != nil {
 		return Report{}, fmt.Errorf("policy bundle: %w", err)
 	}
-	approvedFail, err := s.failures(ctx, approved)
+	pcfg, err := tenancy.Load(ctx, s.Pool, tenantID)
 	if err != nil {
 		return Report{}, err
 	}
-	observedFail, err := s.failures(ctx, observed)
+	approvedFail, err := s.failures(ctx, approved, pcfg.Input())
+	if err != nil {
+		return Report{}, err
+	}
+	observedFail, err := s.failures(ctx, observed, pcfg.Input())
 	if err != nil {
 		return Report{}, err
 	}
@@ -302,7 +307,7 @@ func (s *Service) Compare(ctx context.Context, tenant, accountID, actor string) 
 
 // failures evaluates states with the inventory policies and returns the
 // failing rule IDs per resource.
-func (s *Service) failures(ctx context.Context, states map[string]State) (map[string][]string, error) {
+func (s *Service) failures(ctx context.Context, states map[string]State, policyConfig map[string]any) (map[string][]string, error) {
 	docs := make([]map[string]any, 0, len(states))
 	for _, st := range states {
 		docs = append(docs, map[string]any{"id": st.ResourceID, "type": st.Type, "region": st.Region,
@@ -312,19 +317,21 @@ func (s *Service) failures(ctx context.Context, states map[string]State) (map[st
 		RuleID  string `json:"rule_id"`
 		Address string `json:"address"`
 	}
-	var res struct {
-		Deny []finding `json:"deny"`
-		Warn []finding `json:"warn"`
-	}
-	if len(docs) == 0 {
-		return map[string][]string{}, nil
-	}
-	if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": docs}, &res); err != nil {
-		return nil, fmt.Errorf("evaluate policies: %w", err)
-	}
 	out := map[string][]string{}
-	for _, f := range append(res.Deny, res.Warn...) {
-		out[f.Address] = append(out[f.Address], f.RuleID)
+	if len(docs) == 0 {
+		return out, nil
+	}
+	for _, chunk := range opa.Chunks(docs, opa.ChunkSize) {
+		var res struct {
+			Deny []finding `json:"deny"`
+			Warn []finding `json:"warn"`
+		}
+		if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": chunk, "config": policyConfig}, &res); err != nil {
+			return nil, fmt.Errorf("evaluate policies: %w", err)
+		}
+		for _, f := range append(res.Deny, res.Warn...) {
+			out[f.Address] = append(out[f.Address], f.RuleID)
+		}
 	}
 	return out, nil
 }

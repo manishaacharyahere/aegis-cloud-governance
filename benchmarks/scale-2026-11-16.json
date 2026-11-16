@@ -7,248 +7,248 @@
       "api_list_c16_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.398,
-          "p95_ms": 17.743,
-          "max_ms": 39.869
+          "p50_ms": 10.819,
+          "p95_ms": 16.657,
+          "max_ms": 36.412
         },
-        "requests_per_second": 1351
+        "requests_per_second": 1336
       },
       "api_list_c16_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.692,
-          "p95_ms": 15.863,
-          "max_ms": 20.53
+          "p50_ms": 10.459,
+          "p95_ms": 18.73,
+          "max_ms": 28.551
         },
-        "requests_per_second": 1420
+        "requests_per_second": 1383
       },
       "api_list_c1_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 3.695,
-          "p95_ms": 5.244,
-          "max_ms": 8.722
+          "p50_ms": 4.204,
+          "p95_ms": 5.271,
+          "max_ms": 7.491
         },
-        "requests_per_second": 259
+        "requests_per_second": 235
       },
       "api_list_c1_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 4.035,
-          "p95_ms": 5.605,
-          "max_ms": 10.133
+          "p50_ms": 3.709,
+          "p95_ms": 4.841,
+          "max_ms": 7.529
         },
-        "requests_per_second": 234
+        "requests_per_second": 259
       },
-      "compliance_evaluate_ms": 62.135,
-      "drift_baseline_ms": 26.902,
-      "drift_compare_ms": 61.237,
+      "compliance_evaluate_ms": 75.038,
+      "drift_baseline_ms": 28.722,
+      "drift_compare_ms": 72.319,
       "findings": 22,
-      "go_heap_inuse_mb": 13,
-      "import_2pct_changed_ms": 32.393,
-      "import_ms": 74.291,
+      "go_heap_inuse_mb": 12,
+      "import_2pct_changed_ms": 38.93,
+      "import_ms": 81.69,
       "inventory_tables_mb": 0.4296875,
       "investigation": {
         "n": 50,
-        "p50_ms": 15.785,
-        "p95_ms": 20.545,
-        "max_ms": 29.242
+        "p50_ms": 15.149,
+        "p95_ms": 18.136,
+        "max_ms": 34.105
       },
-      "reimport_unchanged_ms": 9.582,
+      "reimport_unchanged_ms": 9.914,
       "remediation_propose": {
         "n": 13,
-        "p50_ms": 29.265,
-        "p95_ms": 32.832,
-        "max_ms": 32.832
+        "p50_ms": 33.417,
+        "p95_ms": 39.221,
+        "max_ms": 39.221
       },
       "resources": 104,
-      "risk_assess_ms": 24.371,
+      "risk_assess_ms": 29.197,
       "target_resources": 100
     },
     {
       "api_list_c16_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.991,
-          "p95_ms": 18.52,
-          "max_ms": 52.453
+          "p50_ms": 10.864,
+          "p95_ms": 17.323,
+          "max_ms": 35.055
         },
-        "requests_per_second": 1258
+        "requests_per_second": 1349
       },
       "api_list_c16_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.879,
-          "p95_ms": 16.037,
-          "max_ms": 19.249
+          "p50_ms": 11.679,
+          "p95_ms": 17.499,
+          "max_ms": 24.006
         },
-        "requests_per_second": 1368
+        "requests_per_second": 1298
       },
       "api_list_c1_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 4.177,
-          "p95_ms": 5.351,
-          "max_ms": 6.468
+          "p50_ms": 4.073,
+          "p95_ms": 5.424,
+          "max_ms": 13.354
         },
-        "requests_per_second": 237
+        "requests_per_second": 233
       },
       "api_list_c1_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 3.903,
-          "p95_ms": 5.326,
-          "max_ms": 9.815
+          "p50_ms": 4.045,
+          "p95_ms": 5.351,
+          "max_ms": 9.149
         },
-        "requests_per_second": 241
+        "requests_per_second": 237
       },
-      "compliance_evaluate_ms": 280.824,
-      "drift_baseline_ms": 75.309,
-      "drift_compare_ms": 211.89,
+      "compliance_evaluate_ms": 305.798,
+      "drift_baseline_ms": 73.891,
+      "drift_compare_ms": 249.36,
       "findings": 221,
-      "go_heap_inuse_mb": 11,
-      "import_2pct_changed_ms": 253.275,
-      "import_ms": 557.862,
-      "inventory_tables_mb": 2.84375,
+      "go_heap_inuse_mb": 10,
+      "import_2pct_changed_ms": 267.529,
+      "import_ms": 534.571,
+      "inventory_tables_mb": 2.8046875,
       "investigation": {
         "n": 50,
-        "p50_ms": 14.97,
-        "p95_ms": 20.172,
-        "max_ms": 28.315
+        "p50_ms": 17.343,
+        "p95_ms": 19.682,
+        "max_ms": 33.578
       },
-      "reimport_unchanged_ms": 32.73,
+      "reimport_unchanged_ms": 28.592,
       "remediation_propose": {
         "n": 20,
-        "p50_ms": 28.613,
-        "p95_ms": 34.357,
-        "max_ms": 34.357
+        "p50_ms": 34.443,
+        "p95_ms": 39.456,
+        "max_ms": 39.456
       },
       "resources": 1002,
-      "risk_assess_ms": 57.98,
+      "risk_assess_ms": 50.97,
       "target_resources": 1000
     },
     {
       "api_list_c16_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 11.366,
-          "p95_ms": 18.789,
-          "max_ms": 40.963
+          "p50_ms": 11.145,
+          "p95_ms": 32.364,
+          "max_ms": 87.635
         },
-        "requests_per_second": 1267
+        "requests_per_second": 1137
       },
       "api_list_c16_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.802,
-          "p95_ms": 16.381,
-          "max_ms": 24.769
+          "p50_ms": 11.27,
+          "p95_ms": 16.545,
+          "max_ms": 24.378
         },
-        "requests_per_second": 1381
+        "requests_per_second": 1321
       },
       "api_list_c1_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 4.109,
-          "p95_ms": 5.307,
-          "max_ms": 7.944
+          "p50_ms": 4.267,
+          "p95_ms": 5.333,
+          "max_ms": 8.046
         },
-        "requests_per_second": 238
+        "requests_per_second": 226
       },
       "api_list_c1_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 3.779,
-          "p95_ms": 5.003,
-          "max_ms": 8.381
+          "p50_ms": 3.769,
+          "p95_ms": 4.92,
+          "max_ms": 10.411
         },
-        "requests_per_second": 245
+        "requests_per_second": 251
       },
-      "compliance_evaluate_ms": 1041.113,
-      "drift_baseline_ms": 211.79,
-      "drift_compare_ms": 922.112,
+      "compliance_evaluate_ms": 1358.595,
+      "drift_baseline_ms": 246.968,
+      "drift_compare_ms": 1103.255,
       "findings": 1151,
-      "go_heap_inuse_mb": 10,
-      "import_2pct_changed_ms": 1145.394,
-      "import_ms": 2363.427,
-      "inventory_tables_mb": 13.265625,
+      "go_heap_inuse_mb": 9,
+      "import_2pct_changed_ms": 1132.379,
+      "import_ms": 2482.262,
+      "inventory_tables_mb": 13.25,
       "investigation": {
         "n": 50,
-        "p50_ms": 16.582,
-        "p95_ms": 19.435,
-        "max_ms": 34.512
+        "p50_ms": 16.679,
+        "p95_ms": 22.522,
+        "max_ms": 34.884
       },
-      "reimport_unchanged_ms": 128.118,
+      "reimport_unchanged_ms": 124.029,
       "remediation_propose": {
         "n": 20,
-        "p50_ms": 28.814,
-        "p95_ms": 45.852,
-        "max_ms": 45.852
+        "p50_ms": 34.462,
+        "p95_ms": 48.672,
+        "max_ms": 48.672
       },
       "resources": 5004,
-      "risk_assess_ms": 370.194,
+      "risk_assess_ms": 174.026,
       "target_resources": 5000
     },
     {
       "api_list_c16_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.941,
-          "p95_ms": 17.883,
-          "max_ms": 36.258
+          "p50_ms": 11.586,
+          "p95_ms": 20.801,
+          "max_ms": 40.677
         },
-        "requests_per_second": 1334
+        "requests_per_second": 1207
       },
       "api_list_c16_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 10.793,
-          "p95_ms": 20.593,
-          "max_ms": 26.56
+          "p50_ms": 11.378,
+          "p95_ms": 15.809,
+          "max_ms": 26.164
         },
-        "requests_per_second": 1288
+        "requests_per_second": 1337
       },
       "api_list_c1_after_bulk": {
         "latency": {
           "n": 400,
-          "p50_ms": 4.195,
-          "p95_ms": 5.388,
-          "max_ms": 8.466
+          "p50_ms": 4.265,
+          "p95_ms": 5.489,
+          "max_ms": 7.727
         },
-        "requests_per_second": 234
+        "requests_per_second": 224
       },
       "api_list_c1_settled": {
         "latency": {
           "n": 400,
-          "p50_ms": 3.757,
-          "p95_ms": 5.26,
-          "max_ms": 7.991
+          "p50_ms": 3.866,
+          "p95_ms": 5.111,
+          "max_ms": 7.549
         },
-        "requests_per_second": 247
+        "requests_per_second": 243
       },
-      "compliance_evaluate_ms": 2116.74,
-      "drift_baseline_ms": 395.068,
-      "drift_compare_ms": 1860.891,
+      "compliance_evaluate_ms": 2509.941,
+      "drift_baseline_ms": 458.074,
+      "drift_compare_ms": 2115.981,
       "findings": 2295,
-      "go_heap_inuse_mb": 15,
-      "import_2pct_changed_ms": 2328.376,
-      "import_ms": 4814.003,
-      "inventory_tables_mb": 26.28125,
+      "go_heap_inuse_mb": 11,
+      "import_2pct_changed_ms": 2150.549,
+      "import_ms": 4861.275,
+      "inventory_tables_mb": 26.2734375,
       "investigation": {
         "n": 50,
-        "p50_ms": 17.6,
-        "p95_ms": 20.506,
-        "max_ms": 32.856
+        "p50_ms": 18.731,
+        "p95_ms": 25.622,
+        "max_ms": 35.818
       },
-      "reimport_unchanged_ms": 240.898,
+      "reimport_unchanged_ms": 261.368,
       "remediation_propose": {
         "n": 20,
-        "p50_ms": 29.516,
-        "p95_ms": 33.319,
-        "max_ms": 33.319
+        "p50_ms": 36.038,
+        "p95_ms": 41.115,
+        "max_ms": 41.115
       },
       "resources": 10005,
-      "risk_assess_ms": 1225.259,
+      "risk_assess_ms": 412.121,
       "target_resources": 10000
     }
   ]

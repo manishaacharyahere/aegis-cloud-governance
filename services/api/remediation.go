@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
@@ -15,7 +16,7 @@ import (
 type RemediationService interface {
 	Propose(ctx context.Context, tenant, actor string, req remediation.ProposeRequest) (remediation.View, error)
 	Get(ctx context.Context, tenant, id string) (remediation.View, error)
-	List(ctx context.Context, tenant, status string) ([]remediation.View, error)
+	List(ctx context.Context, tenant, status, after string, limit int) ([]remediation.View, string, error)
 	Decide(ctx context.Context, tenant, actor, id, decision, comment string) (remediation.View, error)
 	Release(ctx context.Context, tenant, actor, id string) (remediation.View, error)
 	Verify(ctx context.Context, tenant, actor, id string) (remediation.View, error)
@@ -80,12 +81,14 @@ func (h remediationHandlers) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	vs, err := h.svc.List(r.Context(), tenant, r.URL.Query().Get("status"))
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	vs, next, err := h.svc.List(r.Context(), tenant, q.Get("status"), q.Get("after"), limit)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": vs})
+	writeJSON(w, http.StatusOK, map[string]any{"items": vs, "next_cursor": next})
 }
 
 func (h remediationHandlers) decide(decision string) http.HandlerFunc {

@@ -25,8 +25,8 @@ type ComplianceService interface {
 	Control(ctx context.Context, tenant, framework, control, scope string, staleAfter time.Duration) (compliance.ControlDetail, error)
 	RequestException(ctx context.Context, tenant, actor string, req compliance.ExceptionRequest) (compliance.ExceptionView, error)
 	DecideException(ctx context.Context, tenant, actor, id, decision string) (compliance.ExceptionView, error)
-	ListExceptions(ctx context.Context, tenant string) ([]compliance.ExceptionView, error)
-	AuditEvents(ctx context.Context, tenant string, limit int) ([]audit.Record, error)
+	ListExceptions(ctx context.Context, tenant, after string, limit int) ([]compliance.ExceptionView, string, error)
+	AuditEvents(ctx context.Context, tenant string, limit int, beforeSeq int64) ([]audit.Record, error)
 	VerifyAudit(ctx context.Context, tenant string) (audit.Verification, error)
 	AuditHashAt(ctx context.Context, tenant string, seq int64) (string, error)
 }
@@ -287,12 +287,13 @@ func (h complianceHandlers) listExceptions(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	list, err := h.svc.ListExceptions(r.Context(), tenant)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, next, err := h.svc.ListExceptions(r.Context(), tenant, r.URL.Query().Get("after"), limit)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+	writeJSON(w, http.StatusOK, map[string]any{"items": list, "next_cursor": next})
 }
 
 func (h complianceHandlers) auditEvents(w http.ResponseWriter, r *http.Request) {
@@ -309,12 +310,25 @@ func (h complianceHandlers) auditEvents(w http.ResponseWriter, r *http.Request) 
 		}
 		limit = n
 	}
-	recs, err := h.svc.AuditEvents(r.Context(), tenant, limit)
+	var before int64
+	if v := r.URL.Query().Get("before_seq"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_query", "before_seq must be a positive integer")
+			return
+		}
+		before = n
+	}
+	recs, err := h.svc.AuditEvents(r.Context(), tenant, limit, before)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": recs})
+	out := map[string]any{"items": recs}
+	if len(recs) == limit && len(recs) > 0 {
+		out["next_before_seq"] = recs[len(recs)-1].Seq // older events: ?before_seq=<this>
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h complianceHandlers) verifyAudit(w http.ResponseWriter, r *http.Request) {

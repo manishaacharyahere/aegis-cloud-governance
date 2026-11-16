@@ -34,6 +34,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/retention"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -187,11 +188,14 @@ func run() error {
 		RateLimit:   &api.RateLimit{PerMinute: cfg.RateLimitPerMinute, ExpensivePerMinute: cfg.RateLimitExpensivePerMinute},
 		Remediation: &remediation.Service{Pool: pool, OPA: opaClient, Signer: signer},
 		Signer:      signer,
+		Settings:    &tenancy.Store{Pool: pool},
+		Idempotency: &api.PGIdempotency{Pool: pool},
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
 		Version:                  version,
 		MaxBodyBytes:             cfg.MaxBodyBytes,
 		MaxImportBytes:           cfg.MaxImportBytes,
+		MaxCostImportBytes:       cfg.MaxCostImportBytes,
 	}), log)
 
 	if cfg.RetentionEvery > 0 {
