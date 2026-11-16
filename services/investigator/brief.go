@@ -29,9 +29,9 @@ func MakeBrief(b Bundle) Brief {
 			if e.Facts["result"] != "fail" || excepted[rule] {
 				continue
 			}
-			text := fmt.Sprintf("Fix %s on %s, or request a time-limited exception (POST /api/v1/compliance/exceptions); an exception needs approval by someone other than the requester.", rule, b.Subject)
+			text := fmt.Sprintf("Fix %s on %s, propose an approval-gated remediation (POST /api/v1/remediations), or request a time-limited exception (POST /api/v1/compliance/exceptions); both need approval by someone other than the requester.", rule, b.Subject)
 			if rem, _ := e.Facts["remediation"].(string); rem != "" {
-				text = fmt.Sprintf("Fix %s on %s (%s), or request a time-limited exception (POST /api/v1/compliance/exceptions); an exception needs approval by someone other than the requester.", rule, b.Subject, rem)
+				text = fmt.Sprintf("Fix %s on %s (%s), propose an approval-gated remediation (POST /api/v1/remediations), or request a time-limited exception (POST /api/v1/compliance/exceptions); both need approval by someone other than the requester.", rule, b.Subject, rem)
 			}
 			br.NextSteps = append(br.NextSteps, Claim{Text: text, Citations: []string{e.ID}})
 		case "recommendation":

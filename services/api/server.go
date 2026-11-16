@@ -10,6 +10,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool satisfies it.
@@ -29,6 +30,7 @@ type Deps struct {
 	Risk         RiskService
 	FinOps       FinOpsService
 	Investigator InvestigatorService
+	Remediation  RemediationService
 	// InvestigationWriteBudget is the write deadline for creating an
 	// investigation (it may wait on a local model); 0 keeps the server default.
 	InvestigationWriteBudget time.Duration
@@ -96,6 +98,19 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/assistant/status", d.MaxBodyBytes, ig.status)
 	handle("POST /api/v1/investigations", d.MaxBodyBytes, ig.create)
 	handle("GET /api/v1/investigations/{id}", d.MaxBodyBytes, ig.get)
+	rm := remediationHandlers{svc: d.Remediation}
+	handle("GET /api/v1/remediation/templates", d.MaxBodyBytes, rm.templates)
+	handle("POST /api/v1/remediations", d.MaxBodyBytes, rm.propose)
+	handle("GET /api/v1/remediations", d.MaxBodyBytes, rm.list)
+	handle("GET /api/v1/remediations/{id}", d.MaxBodyBytes, rm.get)
+	handle("POST /api/v1/remediations/{id}/approve", d.MaxBodyBytes, rm.decide("approve"))
+	handle("POST /api/v1/remediations/{id}/reject", d.MaxBodyBytes, rm.decide("reject"))
+	handle("POST /api/v1/remediations/{id}/release", d.MaxBodyBytes, rm.step(func(s RemediationService) func(context.Context, string, string, string) (remediation.View, error) {
+		return s.Release
+	}))
+	handle("POST /api/v1/remediations/{id}/verify", d.MaxBodyBytes, rm.step(func(s RemediationService) func(context.Context, string, string, string) (remediation.View, error) {
+		return s.Verify
+	}))
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

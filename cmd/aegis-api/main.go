@@ -23,6 +23,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/investigator"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
 )
 
@@ -109,6 +110,7 @@ func run() error {
 		Risk:         &risk.Service{Pool: pool, Rules: ruleInfo},
 		FinOps:       &finops.Service{Pool: pool},
 		Investigator: inv,
+		Remediation:  &remediation.Service{Pool: pool, OPA: opaClient},
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
 		Version:                  version,

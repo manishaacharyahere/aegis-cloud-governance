@@ -28,7 +28,7 @@ machine with no paid cloud services or mandatory AI API.
 | E. Risk intelligence - explainable 6-factor contextual score with sensitivity analysis, attack paths from the internet to sensitive data over the relationship graph ([docs](docs/modules/risk.md)) | ✅ implemented; ranking stable under ±20% weight changes |
 | F. FinOps intelligence - validated idempotent cost import, tag allocation, reports, rule-based recommendations with projected vs measured savings; Python anomaly detection and forecasting benchmarked against baselines ([docs](docs/modules/finops.md)) | ✅ implemented; seasonal-naive baseline beat Holt-Winters and SARIMAX on this data |
 | G. Evidence-grounded investigation assistant (optional) - read-only evidence collection, cited deterministic brief, optional local model (Ollama) with no tools whose every claim is validated against the cited evidence ([docs](docs/modules/investigator.md)) | ✅ implemented; every brief for 1 014 synthetic resources self-validates; with qwen2.5:3b, 48 of 59 accepted model claims were correct on manual review (meaning errors are not caught; documented) |
-| H. Approval-gated remediation simulation | ⏳ next |
+| H. Controlled remediation - template or manual patches simulated against the same OPA policies, pinned to the resource version, separation-of-duties approvals (extra for production/disruptive), export-only change sets, verification after re-import ([docs](docs/modules/remediation.md)) | ✅ implemented; 121 synthetic findings remediated in a closed loop, all verified, 0 new failures |
 
 ## Architecture
 
