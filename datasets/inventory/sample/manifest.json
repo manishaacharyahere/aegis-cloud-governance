@@ -14,7 +14,7 @@
     "snapshot-v1.json": "d71487866424e455cf1d428eef8c455a98725b4631c8399abfce6429f974ad24",
     "snapshot-v2.json": "7901ac4b0ad15b880df0ac37036ca809d53fdd470245d92d1e0026b60138a66d"
   },
-  "generator_version": "1.0.0",
+  "generator_version": "1.1.0",
   "note": "Synthetic, fictional data. Contains deliberately insecure configurations for testing.",
   "parameters": {
     "add": 3,

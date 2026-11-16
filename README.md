@@ -24,8 +24,8 @@ machine with no paid cloud services or mandatory AI API.
 | A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
 | B. Terraform / IaC analysis — sandboxed offline plan, redacted plan analysis, 11 Aegis OPA rules, Trivy + Checkov, unified report, durable job queue with leases/retries ([docs](docs/modules/iac.md)) | ✅ implemented; 6/6 fixtures match ground truth |
 | C. Policy & compliance engine — NIST CSF 2.0 / CIS AWS 3.0.0 / internal baseline catalog, reproducible evaluations (policy text + snapshot pointers), expiring exceptions with separation of duties, coverage with evidence freshness, hash-chained audit log ([docs](docs/modules/compliance.md)) | ✅ implemented; inventory ground truth 132/132, 0 false positives |
-| D. Drift detection | ⏳ next |
-| E. Risk intelligence | ⏳ planned |
+| D. Drift detection - approved baselines vs observed inventory, canonical comparison (defaults, volatile fields, unordered lists), six drift categories, policy-delta severity ([docs](docs/modules/drift.md)) | ✅ implemented; seeded drift detected exactly over 200 seeds |
+| E. Risk intelligence | ⏳ next |
 | F. FinOps intelligence | ⏳ planned |
 | G. Evidence-grounded AI assistant (optional) | ⏳ planned |
 | H. Approval-gated remediation simulation | ⏳ planned |

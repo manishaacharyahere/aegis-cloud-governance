@@ -25,6 +25,7 @@ type Deps struct {
 	IaC            IaCService       // nil disables IaC routes (503)
 	Compliance     ComplianceService
 	Catalog        *compliance.Catalog
+	Drift          DriftService
 	Version        string
 	MaxBodyBytes   int64 // default per-request body limit
 	MaxImportBytes int64 // body limit for inventory imports
@@ -65,6 +66,11 @@ func NewHandler(d Deps) http.Handler {
 	handle("POST /api/v1/compliance/exceptions/{id}/revoke", d.MaxBodyBytes, comp.decide(compliance.DecisionRevoke))
 	handle("GET /api/v1/audit/events", d.MaxBodyBytes, comp.auditEvents)
 	handle("GET /api/v1/audit/verify", d.MaxBodyBytes, comp.verifyAudit)
+	dr := driftHandlers{svc: d.Drift}
+	handle("POST /api/v1/drift/baselines", d.MaxBodyBytes, dr.approveBaseline)
+	handle("GET /api/v1/drift/baselines", d.MaxBodyBytes, dr.listBaselines)
+	handle("POST /api/v1/drift/compare", d.MaxBodyBytes, dr.compare)
+	handle("GET /api/v1/drift/reports/{id}", d.MaxBodyBytes, dr.getReport)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

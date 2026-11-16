@@ -16,7 +16,7 @@ import (
 )
 
 // GeneratorVersion changes whenever output for a given seed changes.
-const GeneratorVersion = "1.0.0"
+const GeneratorVersion = "1.1.0"
 
 // Ground-truth issue labels.
 const (
@@ -313,9 +313,19 @@ func Mutate(base Dataset, o MutateOptions) (Dataset, Mutation) {
 		r := &out.Snapshot.Resources[idx]
 		switch r.ResourceType {
 		case "aws_s3_bucket":
+			// Every reported modification must be a real change, so fall back
+			// to another attribute when the bucket is already public/unencrypted.
+			if r.Configuration["public_access_block"] == false {
+				if _, encrypted := r.Configuration["encryption"]; encrypted {
+					delete(r.Configuration, "encryption")
+					out.Labels[r.ResourceID] = dedupeSorted(append(out.Labels[r.ResourceID], IssueUnencryptedStorage))
+				} else {
+					r.Configuration["versioning"] = r.Configuration["versioning"] != true
+				}
+				break
+			}
 			r.Configuration["public_access_block"] = false
-			lbl := append(out.Labels[r.ResourceID], IssuePublicBucket)
-			out.Labels[r.ResourceID] = dedupeSorted(lbl)
+			out.Labels[r.ResourceID] = dedupeSorted(append(out.Labels[r.ResourceID], IssuePublicBucket))
 		case "aws_instance":
 			r.Configuration["instance_type"] = "m6i.4xlarge" // cost-related drift
 		case "aws_security_group":

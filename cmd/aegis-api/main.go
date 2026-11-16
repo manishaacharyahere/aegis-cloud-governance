@@ -18,6 +18,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 )
@@ -73,12 +74,14 @@ func run() error {
 	opaClient := &opa.Client{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}}
 
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
-		Logger:         log,
-		DB:             pool,
-		Inventory:      inventory.NewService(inventory.NewStore(pool)),
-		IaC:            iac.NewStore(pool),
-		Compliance:     &compliance.Service{Pool: pool, Catalog: catalog, OPA: opaClient},
-		Catalog:        catalog,
+		Logger:     log,
+		DB:         pool,
+		Inventory:  inventory.NewService(inventory.NewStore(pool)),
+		IaC:        iac.NewStore(pool),
+		Compliance: &compliance.Service{Pool: pool, Catalog: catalog, OPA: opaClient},
+		Catalog:    catalog,
+		Drift: &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(),
+			RuleSeverity: catalog.RuleSeverities()},
 		Version:        version,
 		MaxBodyBytes:   cfg.MaxBodyBytes,
 		MaxImportBytes: cfg.MaxImportBytes,

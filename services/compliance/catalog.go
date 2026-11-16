@@ -158,6 +158,15 @@ func (c *Catalog) RuleIDs() []string {
 	return ids
 }
 
+// RuleSeverities maps rule IDs to severities.
+func (c *Catalog) RuleSeverities() map[string]string {
+	out := make(map[string]string, len(c.rules))
+	for id, r := range c.rules {
+		out[id] = r.Severity
+	}
+	return out
+}
+
 // Framework returns a framework by ID.
 func (c *Catalog) Framework(id string) (Framework, bool) {
 	for _, f := range c.Frameworks {
