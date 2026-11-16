@@ -1,0 +1,13 @@
+{
+  "must_fire": [
+    {"rule_id": "AEGIS-S3-001", "address": "aws_s3_bucket.public_assets"},
+    {"rule_id": "AEGIS-S3-001", "address": "aws_s3_bucket.exports"},
+    {"rule_id": "AEGIS-ENC-001", "address": "aws_s3_bucket.public_assets"},
+    {"rule_id": "AEGIS-ENC-001", "address": "aws_s3_bucket.exports"},
+    {"rule_id": "AEGIS-S3-002", "address": "aws_s3_bucket.public_assets"},
+    {"rule_id": "AEGIS-S3-002", "address": "aws_s3_bucket.exports"},
+    {"rule_id": "AEGIS-DB-001", "address": "aws_db_instance.legacy"},
+    {"rule_id": "AEGIS-DB-002", "address": "aws_db_instance.legacy"}
+  ],
+  "must_not_fire": ["AEGIS-IAM-001", "AEGIS-NET-001", "AEGIS-TAG-001", "AEGIS-REG-001", "AEGIS-TF-001"]
+}

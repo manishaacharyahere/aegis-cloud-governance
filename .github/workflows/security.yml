@@ -49,4 +49,4 @@ jobs:
         run: >
           docker run --rm -v "$PWD:/src:ro" aquasec/trivy:0.58.1
           fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL
-          --skip-dirs /src/datasets/terraform-fixtures --exit-code 1 /src
+          --skip-dirs /src/datasets/terraform-fixtures --skip-dirs /src/services/iac/testdata --exit-code 1 /src

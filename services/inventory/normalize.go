@@ -4,9 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/redact"
 )
 
 // typeMap maps provider-native (Terraform) types to Aegis normalised types.
@@ -46,11 +47,8 @@ var environmentAliases = map[string]string{
 // allocation. Missing tags produce warnings, not rejections.
 var RequiredTags = []string{"owner", "environment", "cost_center"}
 
-// sensitiveKey matches configuration keys whose values must never be stored.
-var sensitiveKey = regexp.MustCompile(`(?i)(password|passwd|secret|private_key|access_key|api_key|token|credential)`)
-
 // Redacted replaces sensitive configuration values.
-const Redacted = "[REDACTED]"
+const Redacted = redact.Placeholder
 
 // Warning is a non-fatal data-quality observation about an import.
 type Warning struct {
@@ -128,7 +126,7 @@ func Normalize(s Snapshot) NormalizedSnapshot {
 		}
 
 		var redacted []string
-		n.Configuration = redact(r.Configuration, "", &redacted)
+		n.Configuration = redactMap(r.Configuration, "", &redacted)
 		for _, p := range redacted {
 			out.Warnings = append(out.Warnings, Warning{r.ResourceID, "sensitive_attribute_redacted", p})
 		}
@@ -161,9 +159,9 @@ func Normalize(s Snapshot) NormalizedSnapshot {
 	return out
 }
 
-// redact returns a deep copy of cfg with sensitive values replaced, recording
+// redactMap returns a deep copy of cfg with sensitive values replaced, recording
 // the redacted paths. Nil maps become empty maps so hashes are stable.
-func redact(cfg map[string]any, prefix string, paths *[]string) map[string]any {
+func redactMap(cfg map[string]any, prefix string, paths *[]string) map[string]any {
 	out := make(map[string]any, len(cfg))
 	keys := make([]string, 0, len(cfg))
 	for k := range cfg {
@@ -175,7 +173,7 @@ func redact(cfg map[string]any, prefix string, paths *[]string) map[string]any {
 		if prefix != "" {
 			p = prefix + "." + k
 		}
-		if sensitiveKey.MatchString(k) {
+		if redact.IsSensitiveKey(k) {
 			if cfg[k] != nil {
 				*paths = append(*paths, p)
 				out[k] = Redacted
@@ -192,7 +190,7 @@ func redact(cfg map[string]any, prefix string, paths *[]string) map[string]any {
 func redactValue(v any, path string, paths *[]string) any {
 	switch t := v.(type) {
 	case map[string]any:
-		return redact(t, path, paths)
+		return redactMap(t, path, paths)
 	case []any:
 		cp := make([]any, len(t))
 		for i, e := range t {

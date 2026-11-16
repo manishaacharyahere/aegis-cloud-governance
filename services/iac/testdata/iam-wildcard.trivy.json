@@ -1,0 +1,29 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-11-16T09:40:51.556237271Z",
+  "ArtifactName": "/src",
+  "ArtifactType": "filesystem",
+  "Metadata": {
+    "ImageConfig": {
+      "architecture": "",
+      "created": "0001-01-01T00:00:00Z",
+      "os": "",
+      "rootfs": {
+        "type": "",
+        "diff_ids": null
+      },
+      "config": {}
+    }
+  },
+  "Results": [
+    {
+      "Target": ".",
+      "Class": "config",
+      "Type": "terraform",
+      "MisconfSummary": {
+        "Successes": 36,
+        "Failures": 0
+      }
+    }
+  ]
+}

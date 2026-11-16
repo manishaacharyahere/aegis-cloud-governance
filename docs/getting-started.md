@@ -39,7 +39,18 @@ curl -s http://127.0.0.1:8181/v1/data/aegis/aws/storage/deny \
   -d '{"input":{"resource_id":"b1","resource_type":"storage.bucket","configuration":{"public_access_block":false}}}'
 ```
 
-## 2. Run the dashboard
+## 2. Run the worker (IaC scans)
+
+The worker runs on the host because it starts the sandboxed Terraform,
+Trivy and Checkov containers:
+
+```bash
+AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:<port>/aegis?sslmode=disable" go run ./cmd/aegis-worker
+```
+
+See [docs/modules/iac.md](modules/iac.md).
+
+## 2b. Run the dashboard
 
 ```bash
 cd apps/web

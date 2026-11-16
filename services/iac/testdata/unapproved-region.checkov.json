@@ -1,0 +1,150 @@
+{
+    "check_type": "terraform",
+    "results": {
+        "failed_checks": [
+            {
+                "check_id": "CKV2_AWS_12",
+                "bc_check_id": null,
+                "check_name": "Ensure the default security group of every VPC restricts all traffic",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "shadow": {
+                                "__end_line__": 5,
+                                "__start_line__": 3,
+                                "cidr_block": [
+                                    "10.99.0.0/16"
+                                ],
+                                "__address__": "aws_vpc.shadow"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "ingress/from_port",
+                        "egress/cidr_blocks",
+                        "ingress/to_port",
+                        "egress/from_port",
+                        "resource_type",
+                        "ingress/protocol",
+                        "ingress/self",
+                        "egress/protocol",
+                        "egress/to_port"
+                    ]
+                },
+                "code_block": [
+                    [
+                        3,
+                        "resource \"aws_vpc\" \"shadow\" {\n"
+                    ],
+                    [
+                        4,
+                        "  cidr_block = \"10.99.0.0/16\"\n"
+                    ],
+                    [
+                        5,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    3,
+                    5
+                ],
+                "resource": "aws_vpc.shadow",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_11",
+                "bc_check_id": null,
+                "check_name": "Ensure VPC flow logging is enabled in all VPCs",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "shadow": {
+                                "__end_line__": 5,
+                                "__start_line__": 3,
+                                "cidr_block": [
+                                    "10.99.0.0/16"
+                                ],
+                                "__address__": "aws_vpc.shadow"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "resource_type",
+                        "networking"
+                    ]
+                },
+                "code_block": [
+                    [
+                        3,
+                        "resource \"aws_vpc\" \"shadow\" {\n"
+                    ],
+                    [
+                        4,
+                        "  cidr_block = \"10.99.0.0/16\"\n"
+                    ],
+                    [
+                        5,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    3,
+                    5
+                ],
+                "resource": "aws_vpc.shadow",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            }
+        ]
+    },
+    "summary": {
+        "passed": 1,
+        "failed": 2,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 1,
+        "checkov_version": "3.2.334"
+    }
+}

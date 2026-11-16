@@ -1,0 +1,2016 @@
+{
+    "check_type": "terraform",
+    "results": {
+        "failed_checks": [
+            {
+                "check_id": "CKV_AWS_129",
+                "bc_check_id": null,
+                "check_name": "Ensure that respective logs of Amazon Relational Database Service (Amazon RDS) are enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "enabled_cloudwatch_logs_exports/[0]"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.DBInstanceLogging",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_157",
+                "bc_check_id": null,
+                "check_name": "Ensure that RDS instances have Multi-AZ enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "multi_az"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSMultiAZEnabled",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_226",
+                "bc_check_id": null,
+                "check_name": "Ensure DB instance gets all minor upgrades automatically",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "auto_minor_version_upgrade"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.DBInstanceMinorUpgrade",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_118",
+                "bc_check_id": null,
+                "check_name": "Ensure that enhanced monitoring is enabled for Amazon RDS instances",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "monitoring_interval"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSEnhancedMonitorEnabled",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_354",
+                "bc_check_id": null,
+                "check_name": "Ensure RDS Performance Insights are encrypted using KMS CMKs",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "performance_insights_kms_key_id"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSInstancePerfInsightsEncryptionWithCMK",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_353",
+                "bc_check_id": null,
+                "check_name": "Ensure that RDS instances have performance insights enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "performance_insights_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSInstancePerformanceInsights",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_293",
+                "bc_check_id": null,
+                "check_name": "Ensure that AWS database instances have deletion protection enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "deletion_protection"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSInstanceDeletionProtection",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_161",
+                "bc_check_id": null,
+                "check_name": "Ensure RDS database has IAM authentication enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "iam_database_authentication_enabled"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.RDSIAMAuthentication",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_252",
+                "bc_check_id": null,
+                "check_name": "Ensure CloudTrail defines an SNS Topic",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "sns_topic_name"
+                    ]
+                },
+                "code_block": [
+                    [
+                        83,
+                        "resource \"aws_cloudtrail\" \"main\" {\n"
+                    ],
+                    [
+                        84,
+                        "  name                       = \"main\"\n"
+                    ],
+                    [
+                        85,
+                        "  s3_bucket_name             = aws_s3_bucket.customer_data.id\n"
+                    ],
+                    [
+                        86,
+                        "  is_multi_region_trail      = true\n"
+                    ],
+                    [
+                        87,
+                        "  enable_log_file_validation = true\n"
+                    ],
+                    [
+                        88,
+                        "  enable_logging             = true\n"
+                    ],
+                    [
+                        89,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    83,
+                    89
+                ],
+                "resource": "aws_cloudtrail.main",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.CloudtrailDefinesSNSTopic",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_35",
+                "bc_check_id": null,
+                "check_name": "Ensure CloudTrail logs are encrypted at rest using KMS CMKs",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "kms_key_id"
+                    ]
+                },
+                "code_block": [
+                    [
+                        83,
+                        "resource \"aws_cloudtrail\" \"main\" {\n"
+                    ],
+                    [
+                        84,
+                        "  name                       = \"main\"\n"
+                    ],
+                    [
+                        85,
+                        "  s3_bucket_name             = aws_s3_bucket.customer_data.id\n"
+                    ],
+                    [
+                        86,
+                        "  is_multi_region_trail      = true\n"
+                    ],
+                    [
+                        87,
+                        "  enable_log_file_validation = true\n"
+                    ],
+                    [
+                        88,
+                        "  enable_logging             = true\n"
+                    ],
+                    [
+                        89,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    83,
+                    89
+                ],
+                "resource": "aws_cloudtrail.main",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.CloudtrailEncryptionWithCMK",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_61",
+                "bc_check_id": null,
+                "check_name": "Ensure that an S3 bucket has a lifecycle configuration",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_s3_bucket": {
+                            "customer_data": {
+                                "__end_line__": 11,
+                                "__start_line__": 9,
+                                "bucket": [
+                                    "aegis-fixture-secure-customer-data"
+                                ],
+                                "__address__": "aws_s3_bucket.customer_data"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "lifecycle_rule",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        9,
+                        "resource \"aws_s3_bucket\" \"customer_data\" {\n"
+                    ],
+                    [
+                        10,
+                        "  bucket = \"aegis-fixture-secure-customer-data\"\n"
+                    ],
+                    [
+                        11,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    9,
+                    11
+                ],
+                "resource": "aws_s3_bucket.customer_data",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": {
+                    "code_block": [
+                        [
+                            21,
+                            "resource \"aws_s3_bucket_server_side_encryption_configuration\" \"customer_data\" {\n"
+                        ],
+                        [
+                            22,
+                            "  bucket = aws_s3_bucket.customer_data.id\n"
+                        ],
+                        [
+                            23,
+                            "  rule {\n"
+                        ],
+                        [
+                            24,
+                            "    apply_server_side_encryption_by_default {\n"
+                        ],
+                        [
+                            25,
+                            "      sse_algorithm     = \"aws:kms\"\n"
+                        ],
+                        [
+                            26,
+                            "      kms_master_key_id = aws_kms_key.data.arn\n"
+                        ],
+                        [
+                            27,
+                            "    }\n"
+                        ],
+                        [
+                            28,
+                            "  }\n"
+                        ],
+                        [
+                            29,
+                            "}\n"
+                        ]
+                    ],
+                    "file_path": "/main.tf",
+                    "file_line_range": [
+                        21,
+                        29
+                    ],
+                    "resource": "aws_s3_bucket_server_side_encryption_configuration.customer_data",
+                    "entity_tags": {},
+                    "evaluations": null,
+                    "file_abs_path": "/src/main.tf",
+                    "resource_address": null
+                },
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_18",
+                "bc_check_id": null,
+                "check_name": "Ensure the S3 bucket has access logging enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_s3_bucket": {
+                            "customer_data": {
+                                "__end_line__": 11,
+                                "__start_line__": 9,
+                                "bucket": [
+                                    "aegis-fixture-secure-customer-data"
+                                ],
+                                "__address__": "aws_s3_bucket.customer_data"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "logging",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        9,
+                        "resource \"aws_s3_bucket\" \"customer_data\" {\n"
+                    ],
+                    [
+                        10,
+                        "  bucket = \"aegis-fixture-secure-customer-data\"\n"
+                    ],
+                    [
+                        11,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    9,
+                    11
+                ],
+                "resource": "aws_s3_bucket.customer_data",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": {
+                    "code_block": [
+                        [
+                            21,
+                            "resource \"aws_s3_bucket_server_side_encryption_configuration\" \"customer_data\" {\n"
+                        ],
+                        [
+                            22,
+                            "  bucket = aws_s3_bucket.customer_data.id\n"
+                        ],
+                        [
+                            23,
+                            "  rule {\n"
+                        ],
+                        [
+                            24,
+                            "    apply_server_side_encryption_by_default {\n"
+                        ],
+                        [
+                            25,
+                            "      sse_algorithm     = \"aws:kms\"\n"
+                        ],
+                        [
+                            26,
+                            "      kms_master_key_id = aws_kms_key.data.arn\n"
+                        ],
+                        [
+                            27,
+                            "    }\n"
+                        ],
+                        [
+                            28,
+                            "  }\n"
+                        ],
+                        [
+                            29,
+                            "}\n"
+                        ]
+                    ],
+                    "file_path": "/main.tf",
+                    "file_line_range": [
+                        21,
+                        29
+                    ],
+                    "resource": "aws_s3_bucket_server_side_encryption_configuration.customer_data",
+                    "entity_tags": {},
+                    "evaluations": null,
+                    "file_abs_path": "/src/main.tf",
+                    "resource_address": null
+                },
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV_AWS_144",
+                "bc_check_id": null,
+                "check_name": "Ensure that S3 bucket has cross-region replication enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_s3_bucket": {
+                            "customer_data": {
+                                "__end_line__": 11,
+                                "__start_line__": 9,
+                                "bucket": [
+                                    "aegis-fixture-secure-customer-data"
+                                ],
+                                "__address__": "aws_s3_bucket.customer_data"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "replication_configuration/rules/*/status",
+                        "resource_type",
+                        "rule/*/status"
+                    ]
+                },
+                "code_block": [
+                    [
+                        9,
+                        "resource \"aws_s3_bucket\" \"customer_data\" {\n"
+                    ],
+                    [
+                        10,
+                        "  bucket = \"aegis-fixture-secure-customer-data\"\n"
+                    ],
+                    [
+                        11,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    9,
+                    11
+                ],
+                "resource": "aws_s3_bucket.customer_data",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": {
+                    "code_block": [
+                        [
+                            21,
+                            "resource \"aws_s3_bucket_server_side_encryption_configuration\" \"customer_data\" {\n"
+                        ],
+                        [
+                            22,
+                            "  bucket = aws_s3_bucket.customer_data.id\n"
+                        ],
+                        [
+                            23,
+                            "  rule {\n"
+                        ],
+                        [
+                            24,
+                            "    apply_server_side_encryption_by_default {\n"
+                        ],
+                        [
+                            25,
+                            "      sse_algorithm     = \"aws:kms\"\n"
+                        ],
+                        [
+                            26,
+                            "      kms_master_key_id = aws_kms_key.data.arn\n"
+                        ],
+                        [
+                            27,
+                            "    }\n"
+                        ],
+                        [
+                            28,
+                            "  }\n"
+                        ],
+                        [
+                            29,
+                            "}\n"
+                        ]
+                    ],
+                    "file_path": "/main.tf",
+                    "file_line_range": [
+                        21,
+                        29
+                    ],
+                    "resource": "aws_s3_bucket_server_side_encryption_configuration.customer_data",
+                    "entity_tags": {},
+                    "evaluations": null,
+                    "file_abs_path": "/src/main.tf",
+                    "resource_address": null
+                },
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_12",
+                "bc_check_id": null,
+                "check_name": "Ensure the default security group of every VPC restricts all traffic",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "main": {
+                                "__end_line__": 42,
+                                "__start_line__": 38,
+                                "cidr_block": [
+                                    "10.0.0.0/16"
+                                ],
+                                "enable_dns_hostnames": [
+                                    true
+                                ],
+                                "enable_dns_support": [
+                                    true
+                                ],
+                                "__address__": "aws_vpc.main"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "egress/cidr_blocks",
+                        "ingress/to_port",
+                        "egress/from_port",
+                        "resource_type",
+                        "ingress/self",
+                        "egress/protocol",
+                        "ingress/protocol",
+                        "egress/to_port",
+                        "ingress/from_port"
+                    ]
+                },
+                "code_block": [
+                    [
+                        38,
+                        "resource \"aws_vpc\" \"main\" {\n"
+                    ],
+                    [
+                        39,
+                        "  cidr_block           = \"10.0.0.0/16\"\n"
+                    ],
+                    [
+                        40,
+                        "  enable_dns_support   = true\n"
+                    ],
+                    [
+                        41,
+                        "  enable_dns_hostnames = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    38,
+                    42
+                ],
+                "resource": "aws_vpc.main",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_62",
+                "bc_check_id": null,
+                "check_name": "Ensure S3 buckets should have event notifications enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_s3_bucket": {
+                            "customer_data": {
+                                "__end_line__": 11,
+                                "__start_line__": 9,
+                                "bucket": [
+                                    "aegis-fixture-secure-customer-data"
+                                ],
+                                "__address__": "aws_s3_bucket.customer_data"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        9,
+                        "resource \"aws_s3_bucket\" \"customer_data\" {\n"
+                    ],
+                    [
+                        10,
+                        "  bucket = \"aegis-fixture-secure-customer-data\"\n"
+                    ],
+                    [
+                        11,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    9,
+                    11
+                ],
+                "resource": "aws_s3_bucket.customer_data",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": {
+                    "code_block": [
+                        [
+                            21,
+                            "resource \"aws_s3_bucket_server_side_encryption_configuration\" \"customer_data\" {\n"
+                        ],
+                        [
+                            22,
+                            "  bucket = aws_s3_bucket.customer_data.id\n"
+                        ],
+                        [
+                            23,
+                            "  rule {\n"
+                        ],
+                        [
+                            24,
+                            "    apply_server_side_encryption_by_default {\n"
+                        ],
+                        [
+                            25,
+                            "      sse_algorithm     = \"aws:kms\"\n"
+                        ],
+                        [
+                            26,
+                            "      kms_master_key_id = aws_kms_key.data.arn\n"
+                        ],
+                        [
+                            27,
+                            "    }\n"
+                        ],
+                        [
+                            28,
+                            "  }\n"
+                        ],
+                        [
+                            29,
+                            "}\n"
+                        ]
+                    ],
+                    "file_path": "/main.tf",
+                    "file_line_range": [
+                        21,
+                        29
+                    ],
+                    "resource": "aws_s3_bucket_server_side_encryption_configuration.customer_data",
+                    "entity_tags": {},
+                    "evaluations": null,
+                    "file_abs_path": "/src/main.tf",
+                    "resource_address": null
+                },
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_5",
+                "bc_check_id": null,
+                "check_name": "Ensure that Security Groups are attached to another resource",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_security_group": {
+                            "app": {
+                                "__end_line__": 56,
+                                "__start_line__": 44,
+                                "description": [
+                                    "Application tier"
+                                ],
+                                "ingress": [
+                                    {
+                                        "cidr_blocks": [
+                                            [
+                                                "10.0.0.0/16"
+                                            ]
+                                        ],
+                                        "description": [
+                                            "HTTPS from inside the VPC"
+                                        ],
+                                        "from_port": [
+                                            443
+                                        ],
+                                        "protocol": [
+                                            "tcp"
+                                        ],
+                                        "to_port": [
+                                            443
+                                        ]
+                                    }
+                                ],
+                                "name": [
+                                    "app"
+                                ],
+                                "vpc_id": [
+                                    "aws_vpc.main.id"
+                                ],
+                                "__address__": "aws_security_group.app"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        44,
+                        "resource \"aws_security_group\" \"app\" {\n"
+                    ],
+                    [
+                        45,
+                        "  name        = \"app\"\n"
+                    ],
+                    [
+                        46,
+                        "  description = \"Application tier\"\n"
+                    ],
+                    [
+                        47,
+                        "  vpc_id      = aws_vpc.main.id\n"
+                    ],
+                    [
+                        48,
+                        "\n"
+                    ],
+                    [
+                        49,
+                        "  ingress {\n"
+                    ],
+                    [
+                        50,
+                        "    description = \"HTTPS from inside the VPC\"\n"
+                    ],
+                    [
+                        51,
+                        "    from_port   = 443\n"
+                    ],
+                    [
+                        52,
+                        "    to_port     = 443\n"
+                    ],
+                    [
+                        53,
+                        "    protocol    = \"tcp\"\n"
+                    ],
+                    [
+                        54,
+                        "    cidr_blocks = [\"10.0.0.0/16\"]\n"
+                    ],
+                    [
+                        55,
+                        "  }\n"
+                    ],
+                    [
+                        56,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    44,
+                    56
+                ],
+                "resource": "aws_security_group.app",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_30",
+                "bc_check_id": null,
+                "check_name": "Ensure Postgres RDS as aws_db_instance has Query Logging enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_db_instance": {
+                            "orders": {
+                                "__end_line__": 81,
+                                "__start_line__": 70,
+                                "allocated_storage": [
+                                    20
+                                ],
+                                "engine": [
+                                    "postgres"
+                                ],
+                                "final_snapshot_identifier": [
+                                    "orders-final"
+                                ],
+                                "identifier": [
+                                    "orders"
+                                ],
+                                "instance_class": [
+                                    "db.t3.medium"
+                                ],
+                                "manage_master_user_password": [
+                                    true
+                                ],
+                                "publicly_accessible": [
+                                    false
+                                ],
+                                "skip_final_snapshot": [
+                                    false
+                                ],
+                                "storage_encrypted": [
+                                    true
+                                ],
+                                "username": [
+                                    "orders_admin"
+                                ],
+                                "__address__": "aws_db_instance.orders"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "parameter/*/name",
+                        "engine",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_64",
+                "bc_check_id": null,
+                "check_name": "Ensure KMS key Policy is defined",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_kms_key": {
+                            "data": {
+                                "__end_line__": 7,
+                                "__start_line__": 3,
+                                "deletion_window_in_days": [
+                                    30
+                                ],
+                                "description": [
+                                    "Customer data encryption key"
+                                ],
+                                "enable_key_rotation": [
+                                    true
+                                ],
+                                "__address__": "aws_kms_key.data"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "policy",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        3,
+                        "resource \"aws_kms_key\" \"data\" {\n"
+                    ],
+                    [
+                        4,
+                        "  description             = \"Customer data encryption key\"\n"
+                    ],
+                    [
+                        5,
+                        "  enable_key_rotation     = true\n"
+                    ],
+                    [
+                        6,
+                        "  deletion_window_in_days = 30\n"
+                    ],
+                    [
+                        7,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    3,
+                    7
+                ],
+                "resource": "aws_kms_key.data",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_60",
+                "bc_check_id": null,
+                "check_name": "Ensure RDS instance with copy tags to snapshots is enabled",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_db_instance": {
+                            "orders": {
+                                "__end_line__": 81,
+                                "__start_line__": 70,
+                                "allocated_storage": [
+                                    20
+                                ],
+                                "engine": [
+                                    "postgres"
+                                ],
+                                "final_snapshot_identifier": [
+                                    "orders-final"
+                                ],
+                                "identifier": [
+                                    "orders"
+                                ],
+                                "instance_class": [
+                                    "db.t3.medium"
+                                ],
+                                "manage_master_user_password": [
+                                    true
+                                ],
+                                "publicly_accessible": [
+                                    false
+                                ],
+                                "skip_final_snapshot": [
+                                    false
+                                ],
+                                "storage_encrypted": [
+                                    true
+                                ],
+                                "username": [
+                                    "orders_admin"
+                                ],
+                                "__address__": "aws_db_instance.orders"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "copy_tags_to_snapshot",
+                        "engine"
+                    ]
+                },
+                "code_block": [
+                    [
+                        70,
+                        "resource \"aws_db_instance\" \"orders\" {\n"
+                    ],
+                    [
+                        71,
+                        "  identifier                  = \"orders\"\n"
+                    ],
+                    [
+                        72,
+                        "  engine                      = \"postgres\"\n"
+                    ],
+                    [
+                        73,
+                        "  instance_class              = \"db.t3.medium\"\n"
+                    ],
+                    [
+                        74,
+                        "  allocated_storage           = 20\n"
+                    ],
+                    [
+                        75,
+                        "  username                    = \"orders_admin\"\n"
+                    ],
+                    [
+                        76,
+                        "  manage_master_user_password = true\n"
+                    ],
+                    [
+                        77,
+                        "  storage_encrypted           = true\n"
+                    ],
+                    [
+                        78,
+                        "  publicly_accessible         = false\n"
+                    ],
+                    [
+                        79,
+                        "  skip_final_snapshot         = false\n"
+                    ],
+                    [
+                        80,
+                        "  final_snapshot_identifier   = \"orders-final\"\n"
+                    ],
+                    [
+                        81,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    70,
+                    81
+                ],
+                "resource": "aws_db_instance.orders",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_11",
+                "bc_check_id": null,
+                "check_name": "Ensure VPC flow logging is enabled in all VPCs",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "main": {
+                                "__end_line__": 42,
+                                "__start_line__": 38,
+                                "cidr_block": [
+                                    "10.0.0.0/16"
+                                ],
+                                "enable_dns_hostnames": [
+                                    true
+                                ],
+                                "enable_dns_support": [
+                                    true
+                                ],
+                                "__address__": "aws_vpc.main"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        38,
+                        "resource \"aws_vpc\" \"main\" {\n"
+                    ],
+                    [
+                        39,
+                        "  cidr_block           = \"10.0.0.0/16\"\n"
+                    ],
+                    [
+                        40,
+                        "  enable_dns_support   = true\n"
+                    ],
+                    [
+                        41,
+                        "  enable_dns_hostnames = true\n"
+                    ],
+                    [
+                        42,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    38,
+                    42
+                ],
+                "resource": "aws_vpc.main",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_10",
+                "bc_check_id": null,
+                "check_name": "Ensure CloudTrail trails are integrated with CloudWatch Logs",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_cloudtrail": {
+                            "main": {
+                                "__end_line__": 89,
+                                "__start_line__": 83,
+                                "enable_log_file_validation": [
+                                    true
+                                ],
+                                "enable_logging": [
+                                    true
+                                ],
+                                "is_multi_region_trail": [
+                                    true
+                                ],
+                                "name": [
+                                    "main"
+                                ],
+                                "s3_bucket_name": [
+                                    "aws_s3_bucket.customer_data.id"
+                                ],
+                                "__address__": "aws_cloudtrail.main"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "cloud_watch_logs_group_arn",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        83,
+                        "resource \"aws_cloudtrail\" \"main\" {\n"
+                    ],
+                    [
+                        84,
+                        "  name                       = \"main\"\n"
+                    ],
+                    [
+                        85,
+                        "  s3_bucket_name             = aws_s3_bucket.customer_data.id\n"
+                    ],
+                    [
+                        86,
+                        "  is_multi_region_trail      = true\n"
+                    ],
+                    [
+                        87,
+                        "  enable_log_file_validation = true\n"
+                    ],
+                    [
+                        88,
+                        "  enable_logging             = true\n"
+                    ],
+                    [
+                        89,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    83,
+                    89
+                ],
+                "resource": "aws_cloudtrail.main",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            }
+        ]
+    },
+    "summary": {
+        "passed": 38,
+        "failed": 21,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 10,
+        "checkov_version": "3.2.334"
+    }
+}

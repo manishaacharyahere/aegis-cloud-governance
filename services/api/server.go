@@ -21,6 +21,7 @@ type Deps struct {
 	Logger         *slog.Logger
 	DB             Pinger
 	Inventory      InventoryService // nil disables inventory routes (503)
+	IaC            IaCService       // nil disables IaC routes (503)
 	Version        string
 	MaxBodyBytes   int64 // default per-request body limit
 	MaxImportBytes int64 // body limit for inventory imports
@@ -46,6 +47,9 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/inventory/imports/{id}", d.MaxBodyBytes, inv.getImport)
 	handle("GET /api/v1/resources", d.MaxBodyBytes, inv.listResources)
 	handle("GET /api/v1/resources/{id}", d.MaxBodyBytes, inv.getResource)
+	scans := iacHandlers{svc: d.IaC}
+	handle("POST /api/v1/iac/scans", d.MaxBodyBytes, scans.createScan)
+	handle("GET /api/v1/iac/scans/{id}", d.MaxBodyBytes, scans.getScan)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

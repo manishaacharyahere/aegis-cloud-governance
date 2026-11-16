@@ -1,0 +1,4 @@
+{
+  "must_fire": [],
+  "must_not_fire": ["AEGIS-S3-001", "AEGIS-ENC-001", "AEGIS-S3-002", "AEGIS-DB-001", "AEGIS-DB-002", "AEGIS-IAM-001", "AEGIS-NET-001", "AEGIS-LOG-001", "AEGIS-TAG-001", "AEGIS-REG-001", "AEGIS-TF-001"]
+}

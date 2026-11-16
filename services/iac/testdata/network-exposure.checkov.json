@@ -1,0 +1,584 @@
+{
+    "check_type": "terraform",
+    "results": {
+        "failed_checks": [
+            {
+                "check_id": "CKV_AWS_24",
+                "bc_check_id": null,
+                "check_name": "Ensure no security groups allow ingress from 0.0.0.0:0 to port 22",
+                "check_result": {
+                    "result": "FAILED",
+                    "evaluated_keys": [
+                        "ingress/[0]/from_port",
+                        "ingress/[0]/to_port",
+                        "ingress/[0]/cidr_blocks",
+                        "ingress/[0]/ipv6_cidr_blocks"
+                    ]
+                },
+                "code_block": [
+                    [
+                        7,
+                        "resource \"aws_security_group\" \"bastion\" {\n"
+                    ],
+                    [
+                        8,
+                        "  name        = \"bastion\"\n"
+                    ],
+                    [
+                        9,
+                        "  description = \"SSH open to the internet\"\n"
+                    ],
+                    [
+                        10,
+                        "  vpc_id      = aws_vpc.main.id\n"
+                    ],
+                    [
+                        11,
+                        "\n"
+                    ],
+                    [
+                        12,
+                        "  ingress {\n"
+                    ],
+                    [
+                        13,
+                        "    description = \"SSH from anywhere\"\n"
+                    ],
+                    [
+                        14,
+                        "    from_port   = 22\n"
+                    ],
+                    [
+                        15,
+                        "    to_port     = 22\n"
+                    ],
+                    [
+                        16,
+                        "    protocol    = \"tcp\"\n"
+                    ],
+                    [
+                        17,
+                        "    cidr_blocks = [\"0.0.0.0/0\"]\n"
+                    ],
+                    [
+                        18,
+                        "  }\n"
+                    ],
+                    [
+                        19,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    7,
+                    19
+                ],
+                "resource": "aws_security_group.bastion",
+                "evaluations": null,
+                "check_class": "checkov.terraform.checks.resource.aws.SecurityGroupUnrestrictedIngress22",
+                "fixed_definition": null,
+                "entity_tags": null,
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_12",
+                "bc_check_id": null,
+                "check_name": "Ensure the default security group of every VPC restricts all traffic",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "main": {
+                                "__end_line__": 5,
+                                "__start_line__": 3,
+                                "cidr_block": [
+                                    "10.10.0.0/16"
+                                ],
+                                "__address__": "aws_vpc.main"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "ingress/from_port",
+                        "egress/from_port",
+                        "egress/cidr_blocks",
+                        "ingress/protocol",
+                        "egress/to_port",
+                        "ingress/self",
+                        "ingress/to_port",
+                        "egress/protocol",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        3,
+                        "resource \"aws_vpc\" \"main\" {\n"
+                    ],
+                    [
+                        4,
+                        "  cidr_block = \"10.10.0.0/16\"\n"
+                    ],
+                    [
+                        5,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    3,
+                    5
+                ],
+                "resource": "aws_vpc.main",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_5",
+                "bc_check_id": null,
+                "check_name": "Ensure that Security Groups are attached to another resource",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_security_group": {
+                            "bastion": {
+                                "__end_line__": 19,
+                                "__start_line__": 7,
+                                "description": [
+                                    "SSH open to the internet"
+                                ],
+                                "ingress": [
+                                    {
+                                        "cidr_blocks": [
+                                            [
+                                                "0.0.0.0/0"
+                                            ]
+                                        ],
+                                        "description": [
+                                            "SSH from anywhere"
+                                        ],
+                                        "from_port": [
+                                            22
+                                        ],
+                                        "protocol": [
+                                            "tcp"
+                                        ],
+                                        "to_port": [
+                                            22
+                                        ]
+                                    }
+                                ],
+                                "name": [
+                                    "bastion"
+                                ],
+                                "vpc_id": [
+                                    "aws_vpc.main.id"
+                                ],
+                                "__address__": "aws_security_group.bastion"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        7,
+                        "resource \"aws_security_group\" \"bastion\" {\n"
+                    ],
+                    [
+                        8,
+                        "  name        = \"bastion\"\n"
+                    ],
+                    [
+                        9,
+                        "  description = \"SSH open to the internet\"\n"
+                    ],
+                    [
+                        10,
+                        "  vpc_id      = aws_vpc.main.id\n"
+                    ],
+                    [
+                        11,
+                        "\n"
+                    ],
+                    [
+                        12,
+                        "  ingress {\n"
+                    ],
+                    [
+                        13,
+                        "    description = \"SSH from anywhere\"\n"
+                    ],
+                    [
+                        14,
+                        "    from_port   = 22\n"
+                    ],
+                    [
+                        15,
+                        "    to_port     = 22\n"
+                    ],
+                    [
+                        16,
+                        "    protocol    = \"tcp\"\n"
+                    ],
+                    [
+                        17,
+                        "    cidr_blocks = [\"0.0.0.0/0\"]\n"
+                    ],
+                    [
+                        18,
+                        "  }\n"
+                    ],
+                    [
+                        19,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    7,
+                    19
+                ],
+                "resource": "aws_security_group.bastion",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_5",
+                "bc_check_id": null,
+                "check_name": "Ensure that Security Groups are attached to another resource",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_security_group": {
+                            "windows": {
+                                "__end_line__": 25,
+                                "__start_line__": 21,
+                                "description": [
+                                    "RDP open to the IPv6 internet"
+                                ],
+                                "name": [
+                                    "windows"
+                                ],
+                                "vpc_id": [
+                                    "aws_vpc.main.id"
+                                ],
+                                "__address__": "aws_security_group.windows"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        21,
+                        "resource \"aws_security_group\" \"windows\" {\n"
+                    ],
+                    [
+                        22,
+                        "  name        = \"windows\"\n"
+                    ],
+                    [
+                        23,
+                        "  description = \"RDP open to the IPv6 internet\"\n"
+                    ],
+                    [
+                        24,
+                        "  vpc_id      = aws_vpc.main.id\n"
+                    ],
+                    [
+                        25,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    21,
+                    25
+                ],
+                "resource": "aws_security_group.windows",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_5",
+                "bc_check_id": null,
+                "check_name": "Ensure that Security Groups are attached to another resource",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_security_group": {
+                            "web": {
+                                "__end_line__": 49,
+                                "__start_line__": 37,
+                                "description": [
+                                    "Public HTTPS"
+                                ],
+                                "ingress": [
+                                    {
+                                        "cidr_blocks": [
+                                            [
+                                                "0.0.0.0/0"
+                                            ]
+                                        ],
+                                        "description": [
+                                            "HTTPS from anywhere"
+                                        ],
+                                        "from_port": [
+                                            443
+                                        ],
+                                        "protocol": [
+                                            "tcp"
+                                        ],
+                                        "to_port": [
+                                            443
+                                        ]
+                                    }
+                                ],
+                                "name": [
+                                    "web"
+                                ],
+                                "vpc_id": [
+                                    "aws_vpc.main.id"
+                                ],
+                                "__address__": "aws_security_group.web"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        37,
+                        "resource \"aws_security_group\" \"web\" {\n"
+                    ],
+                    [
+                        38,
+                        "  name        = \"web\"\n"
+                    ],
+                    [
+                        39,
+                        "  description = \"Public HTTPS\"\n"
+                    ],
+                    [
+                        40,
+                        "  vpc_id      = aws_vpc.main.id\n"
+                    ],
+                    [
+                        41,
+                        "\n"
+                    ],
+                    [
+                        42,
+                        "  ingress {\n"
+                    ],
+                    [
+                        43,
+                        "    description = \"HTTPS from anywhere\"\n"
+                    ],
+                    [
+                        44,
+                        "    from_port   = 443\n"
+                    ],
+                    [
+                        45,
+                        "    to_port     = 443\n"
+                    ],
+                    [
+                        46,
+                        "    protocol    = \"tcp\"\n"
+                    ],
+                    [
+                        47,
+                        "    cidr_blocks = [\"0.0.0.0/0\"]\n"
+                    ],
+                    [
+                        48,
+                        "  }\n"
+                    ],
+                    [
+                        49,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    37,
+                    49
+                ],
+                "resource": "aws_security_group.web",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            },
+            {
+                "check_id": "CKV2_AWS_11",
+                "bc_check_id": null,
+                "check_name": "Ensure VPC flow logging is enabled in all VPCs",
+                "check_result": {
+                    "result": "FAILED",
+                    "entity": {
+                        "aws_vpc": {
+                            "main": {
+                                "__end_line__": 5,
+                                "__start_line__": 3,
+                                "cidr_block": [
+                                    "10.10.0.0/16"
+                                ],
+                                "__address__": "aws_vpc.main"
+                            }
+                        }
+                    },
+                    "evaluated_keys": [
+                        "networking",
+                        "resource_type"
+                    ]
+                },
+                "code_block": [
+                    [
+                        3,
+                        "resource \"aws_vpc\" \"main\" {\n"
+                    ],
+                    [
+                        4,
+                        "  cidr_block = \"10.10.0.0/16\"\n"
+                    ],
+                    [
+                        5,
+                        "}\n"
+                    ]
+                ],
+                "file_path": "/main.tf",
+                "file_abs_path": "/src/main.tf",
+                "repo_file_path": "/src/main.tf",
+                "file_line_range": [
+                    3,
+                    5
+                ],
+                "resource": "aws_vpc.main",
+                "evaluations": null,
+                "check_class": "checkov.common.graph.checks_infra.base_check",
+                "fixed_definition": null,
+                "entity_tags": {},
+                "caller_file_path": null,
+                "caller_file_line_range": null,
+                "resource_address": null,
+                "severity": null,
+                "bc_category": null,
+                "benchmarks": {},
+                "description": null,
+                "short_description": null,
+                "vulnerability_details": null,
+                "connected_node": null,
+                "guideline": null,
+                "details": [],
+                "check_len": null,
+                "definition_context_file_path": "/src/main.tf"
+            }
+        ]
+    },
+    "summary": {
+        "passed": 23,
+        "failed": 6,
+        "skipped": 0,
+        "parsing_errors": 0,
+        "resource_count": 5,
+        "checkov_version": "3.2.334"
+    }
+}

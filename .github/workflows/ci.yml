@@ -28,8 +28,13 @@ jobs:
           --health-timeout 3s --health-retries 10
     env:
       AEGIS_TEST_DATABASE_URL: postgres://aegis:ci-only@localhost:5432/aegis_test?sslmode=disable
+      AEGIS_TEST_OPA_URL: http://localhost:8181
     steps:
       - uses: actions/checkout@v4
+      - name: start OPA with the repository policies
+        run: |
+          docker run -d --name opa -p 8181:8181 -v "$PWD/policies:/policies:ro"             openpolicyagent/opa:1.0.0-static run --server --addr=0.0.0.0:8181 /policies
+          for i in $(seq 1 30); do curl -sf localhost:8181/health && break; sleep 1; done
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

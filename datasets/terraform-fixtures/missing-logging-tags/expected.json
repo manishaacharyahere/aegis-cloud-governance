@@ -1,0 +1,8 @@
+{
+  "must_fire": [
+    {"rule_id": "AEGIS-LOG-001", "address": "aws_cloudtrail.disabled"},
+    {"rule_id": "AEGIS-TAG-001", "address": "aws_s3_bucket.trail_logs"},
+    {"rule_id": "AEGIS-TAG-001", "address": "aws_cloudtrail.disabled"}
+  ],
+  "must_not_fire": ["AEGIS-S3-001", "AEGIS-ENC-001", "AEGIS-S3-002", "AEGIS-REG-001"]
+}

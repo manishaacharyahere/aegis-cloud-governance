@@ -15,6 +15,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 )
 
@@ -65,6 +66,7 @@ func run() error {
 		Logger:         log,
 		DB:             pool,
 		Inventory:      inventory.NewService(inventory.NewStore(pool)),
+		IaC:            iac.NewStore(pool),
 		Version:        version,
 		MaxBodyBytes:   cfg.MaxBodyBytes,
 		MaxImportBytes: cfg.MaxImportBytes,
