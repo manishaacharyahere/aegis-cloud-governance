@@ -77,6 +77,8 @@ func TestLoadErrors(t *testing.T) {
 		{"unknown auth mode", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "none"}, "AEGIS_AUTH_MODE"},
 		{"production without OPA token", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "https://idp", "AEGIS_OIDC_CLIENT_ID": "c"}, "AEGIS_OPA_TOKEN"},
 		{"NATS credentials in URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "nats://u:p@nats:4222"}, "not in the URL"},
+		{"local IdP in production", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "https://dex.localhost/dex", "AEGIS_OIDC_CLIENT_ID": "c"}, "not allowed in production"},
+		{"bad pool size", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_DB_MAX_CONNS": "1"}, "AEGIS_DB_MAX_CONNS"},
 		{"bad NATS URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "http://nats:4222"}, "AEGIS_NATS_URL"},
 		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},

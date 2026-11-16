@@ -24,21 +24,39 @@ type Verifier struct {
 	mu       sync.Mutex
 	verifier *oidc.IDTokenVerifier
 	lastTry  time.Time
+	inflight bool
 }
 
 // ErrProviderUnavailable means discovery has not succeeded yet.
 var ErrProviderUnavailable = errors.New("identity provider unavailable")
 
+// get returns the verifier, discovering the provider if needed. Discovery
+// runs outside the lock: while it is in flight, other requests fail fast
+// (503) instead of queueing behind a slow identity provider.
 func (v *Verifier) get(ctx context.Context) (*oidc.IDTokenVerifier, error) {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 	if v.verifier != nil {
+		defer v.mu.Unlock()
 		return v.verifier, nil
 	}
-	if time.Since(v.lastTry) < 2*time.Second {
+	if v.inflight || time.Since(v.lastTry) < 2*time.Second {
+		v.mu.Unlock()
 		return nil, ErrProviderUnavailable
 	}
-	v.lastTry = time.Now()
+	v.inflight, v.lastTry = true, time.Now()
+	v.mu.Unlock()
+	ver, err := v.discover(ctx)
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.inflight = false
+	if err != nil {
+		return nil, err
+	}
+	v.verifier = ver
+	return ver, nil
+}
+
+func (v *Verifier) discover(ctx context.Context) (*oidc.IDTokenVerifier, error) {
 	hc := v.HTTP
 	if hc == nil {
 		hc = &http.Client{Timeout: 10 * time.Second}
@@ -54,8 +72,7 @@ func (v *Verifier) get(ctx context.Context) (*oidc.IDTokenVerifier, error) {
 		cfg.Now = v.Now
 	}
 	// Key fetches must not be bound to the first request's context.
-	v.verifier = p.VerifierContext(oidc.ClientContext(context.Background(), hc), cfg)
-	return v.verifier, nil
+	return p.VerifierContext(oidc.ClientContext(context.Background(), hc), cfg), nil
 }
 
 // Verify validates a raw ID token and returns the caller.

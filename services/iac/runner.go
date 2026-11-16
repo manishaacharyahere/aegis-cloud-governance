@@ -138,7 +138,11 @@ func (d *DockerRunner) run(ctx context.Context, network bool, mounts, env []stri
 	name := "aegis-tool-" + randomHex(6)
 	argv := []string{"run", "--rm", "--name", name,
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-		"--pids-limit", "512", "--memory", "2g", "-w", "/work"}
+		"--pids-limit", "512", "--memory", "2g", "--cpus", "2",
+		// Read-only root filesystem; tools write only to the mounted work
+		// directory, the plugin cache and a size-limited /tmp (also HOME).
+		"--read-only", "--tmpfs", "/tmp:rw,exec,size=1g", "-e", "HOME=/tmp",
+		"-w", "/work"}
 	if !network {
 		argv = append(argv, "--network", "none")
 	}

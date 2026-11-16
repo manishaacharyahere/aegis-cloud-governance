@@ -37,6 +37,10 @@ type Config struct {
 	BootstrapTenant string
 	OPAURL          string
 	OPAToken        string
+	// Database pools: request pool size and statement timeout (background work
+	// such as the relay and retention uses a separate small pool).
+	DBMaxConns         int32
+	DBStatementTimeout time.Duration
 	// Retention runs every RetentionEvery (0 disables it).
 	RetentionEvery time.Duration
 	// Requests per caller per minute (0 disables), ordinary and expensive routes.
@@ -165,6 +169,16 @@ func Load(lookup LookupFunc) (Config, error) {
 	} else {
 		cfg.RetentionEvery = d
 	}
+	if n, err := strconv.Atoi(get("AEGIS_DB_MAX_CONNS", "20")); err != nil || n < 2 || n > 500 {
+		errs = append(errs, errors.New("AEGIS_DB_MAX_CONNS: must be 2-500"))
+	} else {
+		cfg.DBMaxConns = int32(n)
+	}
+	if d, err := time.ParseDuration(get("AEGIS_DB_STATEMENT_TIMEOUT", "60s")); err != nil || d < 0 {
+		errs = append(errs, errors.New("AEGIS_DB_STATEMENT_TIMEOUT: must be a duration (0 disables)"))
+	} else {
+		cfg.DBStatementTimeout = d
+	}
 	cfg.OPAToken = get("AEGIS_OPA_TOKEN", "")
 	if cfg.Environment == EnvProduction && len(cfg.OPAToken) < 32 {
 		errs = append(errs, errors.New("AEGIS_OPA_TOKEN: required in production (at least 32 characters)"))
@@ -193,6 +207,8 @@ func Load(lookup LookupFunc) (Config, error) {
 			errs = append(errs, errors.New("AEGIS_OIDC_ISSUER: required http(s) URL when AEGIS_AUTH_MODE=oidc"))
 		} else if cfg.Environment == EnvProduction && u.Scheme != "https" {
 			errs = append(errs, errors.New("AEGIS_OIDC_ISSUER: must use https in production"))
+		} else if h := u.Hostname(); cfg.Environment == EnvProduction && (h == "localhost" || strings.HasSuffix(h, ".localhost")) {
+			errs = append(errs, errors.New("AEGIS_OIDC_ISSUER: the local development identity provider is not allowed in production"))
 		}
 		if cfg.OIDCClientID == "" {
 			errs = append(errs, errors.New("AEGIS_OIDC_CLIENT_ID: required when AEGIS_AUTH_MODE=oidc"))

@@ -127,7 +127,7 @@ services:
     image: ghcr.io/dexidp/dex:v2.46.1
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     ports: ["127.0.0.1:5556:5556"]
-    volumes: ["./infrastructure/auth/dex.yml:/etc/dex/config.yaml:ro"]
+    volumes: ["./infrastructure/auth/dex.yml:/etc/dex/config.yaml:ro", "dexdata:/var/dex"]
     networks:
       default:
         aliases: ["dex.localhost"]
@@ -179,6 +179,7 @@ services:
         limits: { memory: 512m }
 
 volumes:
+  dexdata:
   pgdata:
   promdata:
   grafanadata:

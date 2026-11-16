@@ -529,7 +529,7 @@ func (s *Service) List(ctx context.Context, tenant, status string) ([]View, erro
 		if err != nil {
 			return nil, err
 		}
-		x.Approvals = nil
+		x.Approvals = []Approval{} // details are on GET /remediations/{id}
 		out = append(out, x.View)
 	}
 	return out, rows.Err()

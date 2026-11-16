@@ -71,6 +71,17 @@ grant so scripts can obtain tokens. The issuer `http://dex.localhost:5556/dex`
 resolves to 127.0.0.1 in browsers and to the Dex container inside Compose,
 so the browser and the API agree on the issuer.
 
+### Running the API from source with Dex
+
+The issuer host `dex.localhost` resolves in browsers and inside Compose, but
+not always for programs on the host (Go on Windows, for example). When running
+`go run ./cmd/aegis-api` on the host, add `127.0.0.1 dex.localhost` to the hosts
+file (`C:\Windows\System32\drivers\etc\hosts` or `/etc/hosts`). Otherwise
+every request is refused with `identity_provider_unavailable`.
+
+Dex keeps its signing keys in SQLite on the `dexdata` volume, so sign-ins
+survive a Dex restart. `docker compose down -v` resets them.
+
 ## Verified
 
 The following was run against the running stack with real Dex tokens:

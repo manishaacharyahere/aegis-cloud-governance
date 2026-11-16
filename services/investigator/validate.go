@@ -152,6 +152,10 @@ func collectSupport(items []Evidence, extra ...string) support {
 	}
 	for _, e := range items {
 		addText(e.Summary)
+		addText(e.Kind) // "compliance_finding", "drift_clear": models name evidence by kind
+		// Fact values are walked, but configuration *keys* are not: a claim
+		// may not introduce a setting name the evidence never states as a
+		// value (this blocked a harmful suggestion in the live-model run).
 		walk(e.Facts)
 	}
 	for _, s := range extra {

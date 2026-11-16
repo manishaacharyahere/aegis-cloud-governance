@@ -216,10 +216,14 @@ func collectCompliance(ctx context.Context, tx pgx.Tx, b *Bundle, tenantID, subj
 		if e.result == "excepted" {
 			verb = "fails but is covered by an approved exception"
 		}
-		b.add("compliance_finding", "compliance_evaluations/"+runID,
-			map[string]any{"rule_id": e.rule, "result": e.result, "message": e.msg, "title": m.Title,
-				"severity": m.Severity, "remediation": m.Remediation},
-			"Rule %s (%s; severity %s) %s: %s", e.rule, m.Title, m.Severity, verb, e.msg)
+		facts := map[string]any{"rule_id": e.rule, "result": e.result, "message": e.msg, "title": m.Title,
+			"severity": m.Severity, "remediation": m.Remediation}
+		if m.Title == "" {
+			b.add("compliance_finding", "compliance_evaluations/"+runID, facts, "Rule %s %s: %s", e.rule, verb, e.msg)
+		} else {
+			b.add("compliance_finding", "compliance_evaluations/"+runID, facts,
+				"Rule %s (%s; severity %s) %s: %s", e.rule, m.Title, m.Severity, verb, e.msg)
+		}
 	}
 
 	exRows, err := tx.Query(ctx, `SELECT id, rule_id, subject, status, requested_by, coalesce(decided_by, ''), expires_at

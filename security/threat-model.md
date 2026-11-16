@@ -32,6 +32,9 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 | Tampering (AI) | Prompt injection through imported tag values or messages | Evidence sent as JSON data; model claims validated against cited evidence; command/action text and echoed instructions rejected; deterministic brief never uses model output | implemented; meaning-level contradictions not detected (documented) |
 | Information disclosure (AI) | Tenant evidence sent to a remote model | Model endpoint must be loopback or a single-label host unless `AEGIS_AI_ALLOW_REMOTE=true`; no redirects; sensitive keys re-redacted; config capped at 4 KiB | implemented |
 
+| Elevation of privilege (IaC tools) | Untrusted Terraform or scanner input escapes the tool container | No network except `terraform init`, all capabilities dropped, `no-new-privileges`, read-only root filesystem with a size-limited `/tmp`, 2 CPUs, 2 GiB memory, 512 processes | implemented |
+| Spoofing (development mode) | A development API (header-trusting) is exposed to a network | `dev-headers` refused in production; it only accepts clients on loopback or private networks; production refuses a `*.localhost` OIDC issuer | implemented |
+
 ## Implemented so far
 - HTTP server timeouts (header/read/write/idle) and max header size.
 - Request body size limit (default 1 MiB).

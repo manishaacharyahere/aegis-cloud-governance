@@ -69,11 +69,20 @@ func run() error {
 		go serveMetrics(ctx, cfg.MetricsAddr, tel.MetricsHandler, log)
 	}
 
-	pool, err := database.Open(ctx, cfg.DatabaseURL)
+	pool, err := database.OpenWith(ctx, cfg.DatabaseURL, database.Options{MaxConns: cfg.DBMaxConns,
+		StatementTimeout: cfg.DBStatementTimeout, AppName: "aegis-api"})
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+	// Background work (relay, retention) gets its own small pool so it can
+	// never starve request handling, and a longer statement timeout.
+	bg, err := database.OpenWith(ctx, cfg.DatabaseURL, database.Options{MaxConns: 4, StatementTimeout: 10 * time.Minute,
+		AppName: "aegis-api-background"})
+	if err != nil {
+		return err
+	}
+	defer bg.Close()
 
 	if cfg.MigrateOnStart {
 		migs, err := database.LoadMigrations(migrations.FS)
@@ -162,10 +171,10 @@ func run() error {
 	}), log)
 
 	if cfg.RetentionEvery > 0 {
-		go retention.Run(ctx, pool, retention.DefaultPolicy(), cfg.RetentionEvery, log)
+		go retention.Run(ctx, bg, retention.DefaultPolicy(), cfg.RetentionEvery, log)
 	}
 	if cfg.NATSURL != "" {
-		go runRelay(ctx, cfg.NATSURL, natsbus.Credentials{User: cfg.NATSUser, Password: cfg.NATSPassword}, pool, log, tel)
+		go runRelay(ctx, cfg.NATSURL, natsbus.Credentials{User: cfg.NATSUser, Password: cfg.NATSPassword}, bg, log, tel)
 	} else {
 		log.Warn("AEGIS_NATS_URL not set; outbox events are stored but not published")
 	}

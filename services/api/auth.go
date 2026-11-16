@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -132,6 +133,17 @@ func (a Auth) authenticate(next http.Handler) http.Handler {
 
 type providerDownKey struct{}
 
+// localClient reports whether the direct peer is on loopback or a private
+// network (RFC 1918 / RFC 4193, e.g. the Docker network).
+func localClient(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
+}
+
 // authorize enforces the route's permission for the tenant in X-Aegis-Tenant.
 func (a Auth) authorize(perm access.Permission, next http.Handler) http.Handler {
 	if perm == access.Public {
@@ -146,6 +158,13 @@ func (a Auth) authorize(perm access.Permission, next http.Handler) http.Handler 
 			}
 			w.Header().Set("WWW-Authenticate", `Bearer realm="aegis"`)
 			writeError(w, http.StatusUnauthorized, "unauthenticated", "a valid bearer token is required")
+			return
+		}
+		// Development mode trusts the actor header and grants everything, so it
+		// only accepts clients on loopback or private networks: an accidentally
+		// exposed development API is not open to the internet.
+		if p.Method == AuthDevHeaders && !localClient(r) {
+			writeError(w, http.StatusForbidden, "dev_mode_local_only", "this API runs in development mode and only accepts local clients")
 			return
 		}
 		if perm == access.Signed || p.Method == AuthDevHeaders {

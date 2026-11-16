@@ -9,8 +9,11 @@
 # browser and the API see the same issuer URL.
 issuer: http://dex.localhost:5556/dex
 
+# SQLite on a volume: signing keys (and sessions) survive a Dex restart.
 storage:
-  type: memory
+  type: sqlite3
+  config:
+    file: /var/dex/dex.db
 
 web:
   http: 0.0.0.0:5556

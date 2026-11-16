@@ -88,6 +88,11 @@ func Append(ctx context.Context, tx pgx.Tx, tenantID string, e Event) error {
 	default:
 		return fmt.Errorf("audit: invalid outcome %q", e.Outcome)
 	}
+	// The per-tenant chain lock serialises audited writes. A bounded wait turns
+	// contention into a clear error instead of a silent stall.
+	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '15s'`); err != nil {
+		return fmt.Errorf("audit lock timeout: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('audit:' || $1, 0))`, tenantID); err != nil {
 		return fmt.Errorf("audit lock: %w", err)
 	}

@@ -106,6 +106,11 @@ func (s *Service) Import(ctx context.Context, tenant, actor string, raw []byte) 
 	res.TotalUSD = round2(res.TotalUSD)
 
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		// Concurrent imports of overlapping rows would upsert in different
+		// orders and could deadlock; one import per tenant at a time.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cost-import:' || $1::text))`, tenantID); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `INSERT INTO cost_imports (tenant_id, sha256, rows, from_date, to_date, total_usd, actor)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, tenantID, digest, len(recs), from, to, res.TotalUSD, actor).Scan(&res.ImportID); err != nil {
 			return err
