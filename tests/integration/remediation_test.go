@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,7 +76,7 @@ func TestRemediationClosedLoop(t *testing.T) {
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	cat, _ := compliance.LoadCatalog()
-	oc := &opa.Client{BaseURL: opaURL}
+	oc := testOPA(opaURL)
 	csvc := &compliance.Service{Pool: pool, Catalog: cat, OPA: oc}
 	svc := &remediation.Service{Pool: pool, OPA: oc}
 
@@ -175,7 +176,7 @@ func TestRemediationControls(t *testing.T) {
 	}
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
-	svc := &remediation.Service{Pool: pool, OPA: &opa.Client{BaseURL: opaURL}}
+	svc := &remediation.Service{Pool: pool, OPA: testOPA(opaURL)}
 	imports := 0
 	bucket := func(pab bool, tags map[string]string) inventory.Snapshot {
 		imports++ // each import is a later observation
@@ -289,4 +290,38 @@ func TestRemediationControls(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE remediation_approvals SET decision = 'reject'`); err == nil {
 		t.Error("approvals must be append-only")
 	}
+
+	// The policies change after the simulation: the plan can no longer be
+	// approved or released, because its simulation no longer holds.
+	moving := &changingPolicy{Policy: testOPA(opaURL)}
+	psvc := &remediation.Service{Pool: pool, OPA: moving}
+	if _, err := inv.Import(ctx, "demo", bucket(false, tags)); err != nil {
+		t.Fatal(err)
+	}
+	pv, err := psvc.Propose(ctx, "demo", "alice", remediation.ProposeRequest{Source: "finding", RuleID: "AEGIS-S3-001",
+		ResourceID: "aws_s3_bucket.logs", Justification: "policy change test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	moving.changed = true
+	if _, err := psvc.Decide(ctx, "demo", "bob", pv.ID, "approve", ""); !errors.Is(err, remediation.ErrStale) {
+		t.Fatalf("approving after a policy change: %v", err)
+	}
+	if got, _ := psvc.Get(ctx, "demo", pv.ID); got.Status != remediation.StatusStale || got.StaleReason != "the policies changed since the simulation" {
+		t.Errorf("stale after policy change: %s %q", got.Status, got.StaleReason)
+	}
+}
+
+// changingPolicy reports a different policy bundle once changed is set.
+type changingPolicy struct {
+	remediation.Policy
+	changed bool
+}
+
+func (c *changingPolicy) Bundle(ctx context.Context) (opa.Bundle, error) {
+	b, err := c.Policy.Bundle(ctx)
+	if c.changed {
+		b.SHA256 = strings.Repeat("0", 64)
+	}
+	return b, err
 }

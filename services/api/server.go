@@ -36,8 +36,12 @@ type Deps struct {
 	FinOps       FinOpsService
 	Investigator InvestigatorService
 	// Auth selects OIDC or development header authentication.
-	Auth        Auth
-	Remediation RemediationService
+	Auth Auth
+	// RateLimit limits requests per caller; nil disables it.
+	RateLimit *RateLimit
+	// OutboxRequeue re-queues parked outbox events (admin endpoint).
+	OutboxRequeue OutboxRequeuer
+	Remediation   RemediationService
 	// InvestigationWriteBudget is the write deadline for creating an
 	// investigation (it may wait on a local model); 0 keeps the server default.
 	InvestigationWriteBudget time.Duration
@@ -50,12 +54,17 @@ type Deps struct {
 // gets an explicit body limit.
 func NewHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
+	lim := newLimiter(nil)
+	if d.RateLimit != nil {
+		lim = newLimiter(d.RateLimit.Now)
+	}
 	handle := func(pattern string, limit int64, h http.HandlerFunc) {
 		perm, ok := routePermissions[pattern]
 		if !ok {
 			panic("api: route " + pattern + " has no entry in routePermissions")
 		}
-		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.Auth.authorize(perm, h))))
+		// Rate limiting runs after authentication, so it is per user.
+		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.RateLimit.limit(lim, pattern, d.Auth.authorize(perm, h)))))
 	}
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
@@ -65,6 +74,7 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /readyz", d.MaxBodyBytes, handleReadiness(d.DB))
 	handle("GET /api/v1/version", d.MaxBodyBytes, handleVersion(d.Version))
 	ac := accessHandlers{auth: d.Auth}
+	handle("POST /api/v1/admin/outbox/requeue", d.MaxBodyBytes, opsHandlers{requeue: d.OutboxRequeue}.requeueOutbox)
 	handle("GET /api/v1/auth/config", d.MaxBodyBytes, ac.config)
 	handle("GET /api/v1/me", d.MaxBodyBytes, ac.me)
 	handle("GET /api/v1/access/bindings", d.MaxBodyBytes, ac.list)

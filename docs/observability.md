@@ -21,7 +21,7 @@ docker compose --profile core --profile observability up -d
 |---|---|---|
 | `http_server_request_duration_seconds` (histogram) | otelhttp | labels: method, status code, `http_route` (the route *pattern*, e.g. `/api/v1/investigations/{id}`) |
 | request and response body sizes | otelhttp | same labels |
-| `aegis_outbox_published_total`, `aegis_outbox_failed_total`, `aegis_outbox_backlog` | outbox relay | backlog is sampled after every batch |
+| `aegis_outbox_published_total`, `aegis_outbox_failed_total`, `aegis_outbox_backlog`, `aegis_outbox_parked` | outbox relay | backlog and parked are sampled after every batch; alert on `aegis_outbox_parked > 0` |
 | Go runtime and process metrics | Prometheus collectors | heap, goroutines, GC, file descriptors |
 | Traces | otelhttp, one span per request named after the route pattern | exported over OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT`; W3C trace context is propagated |
 | Logs | slog JSON | every request log line has `request_id` and, when tracing is active, `trace_id`, so logs and traces can be joined |

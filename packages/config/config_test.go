@@ -39,6 +39,7 @@ func TestLoadProductionDefaults(t *testing.T) {
 		"AEGIS_DATABASE_URL":   "postgres://x?sslmode=verify-full",
 		"AEGIS_OIDC_ISSUER":    "https://idp.example",
 		"AEGIS_OIDC_CLIENT_ID": "aegis-web",
+		"AEGIS_OPA_TOKEN":      "0123456789abcdef0123456789abcdef",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -74,6 +75,8 @@ func TestLoadErrors(t *testing.T) {
 		{"oidc without client", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "oidc", "AEGIS_OIDC_ISSUER": "https://idp"}, "AEGIS_OIDC_CLIENT_ID"},
 		{"http issuer in production", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "http://idp", "AEGIS_OIDC_CLIENT_ID": "c"}, "https in production"},
 		{"unknown auth mode", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "none"}, "AEGIS_AUTH_MODE"},
+		{"production without OPA token", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "https://idp", "AEGIS_OIDC_CLIENT_ID": "c"}, "AEGIS_OPA_TOKEN"},
+		{"NATS credentials in URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "nats://u:p@nats:4222"}, "not in the URL"},
 		{"bad NATS URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "http://nats:4222"}, "AEGIS_NATS_URL"},
 		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},

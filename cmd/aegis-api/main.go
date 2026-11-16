@@ -31,6 +31,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/investigator"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/outbox"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/retention"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
 )
 
@@ -96,7 +97,7 @@ func run() error {
 		return err
 	}
 	log.Info("compliance catalog loaded", "version", catalog.Version, "sha256", catalog.SHA256)
-	opaClient := &opa.Client{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}}
+	opaClient := &opa.Client{BaseURL: cfg.OPAURL, Token: cfg.OPAToken, HTTP: &http.Client{Timeout: 30 * time.Second}}
 
 	ruleInfo := map[string]risk.RuleInfo{}
 	counts := catalog.ControlCounts()
@@ -116,6 +117,7 @@ func run() error {
 			return fmt.Errorf("AI model: %w", err)
 		}
 		inv.Model = m
+		inv.ModelSlots = make(chan struct{}, cfg.AI.MaxConcurrent)
 		log.Info("investigation model enabled", "model", m.Name(), "remote_allowed", cfg.AI.AllowRemote)
 	}
 
@@ -147,7 +149,11 @@ func run() error {
 		FinOps:       &finops.Service{Pool: pool},
 		Investigator: inv,
 		Auth:         auth,
-		Remediation:  &remediation.Service{Pool: pool, OPA: opaClient},
+		OutboxRequeue: func(ctx context.Context, tenant string) (int64, error) {
+			return outbox.RequeueParked(ctx, pool, tenant, 0)
+		},
+		RateLimit:   &api.RateLimit{PerMinute: cfg.RateLimitPerMinute, ExpensivePerMinute: cfg.RateLimitExpensivePerMinute},
+		Remediation: &remediation.Service{Pool: pool, OPA: opaClient},
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
 		Version:                  version,
@@ -155,8 +161,11 @@ func run() error {
 		MaxImportBytes:           cfg.MaxImportBytes,
 	}), log)
 
+	if cfg.RetentionEvery > 0 {
+		go retention.Run(ctx, pool, retention.DefaultPolicy(), cfg.RetentionEvery, log)
+	}
 	if cfg.NATSURL != "" {
-		go runRelay(ctx, cfg.NATSURL, pool, log, tel)
+		go runRelay(ctx, cfg.NATSURL, natsbus.Credentials{User: cfg.NATSUser, Password: cfg.NATSPassword}, pool, log, tel)
 	} else {
 		log.Warn("AEGIS_NATS_URL not set; outbox events are stored but not published")
 	}
@@ -189,10 +198,10 @@ func run() error {
 
 // runRelay connects to NATS (retrying until it is reachable) and publishes
 // outbox events until ctx is cancelled.
-func runRelay(ctx context.Context, url string, pool *pgxpool.Pool, log *slog.Logger, tel *telemetry.Telemetry) {
+func runRelay(ctx context.Context, url string, creds natsbus.Credentials, pool *pgxpool.Pool, log *slog.Logger, tel *telemetry.Telemetry) {
 	wait := time.Second
 	for {
-		bus, err := natsbus.Connect(ctx, url, "aegis-api")
+		bus, err := natsbus.Connect(ctx, url, "aegis-api", creds)
 		if err == nil {
 			defer bus.Close()
 			log.Info("outbox relay started", "stream", natsbus.Stream)

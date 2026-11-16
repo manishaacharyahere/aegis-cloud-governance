@@ -50,3 +50,6 @@ site/
 
 # Demo video (published as a release asset, not committed)
 demo/
+
+# Private engineering review (lists unfixed security weaknesses)
+research/engineering-review-*.md

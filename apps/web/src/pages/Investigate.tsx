@@ -40,8 +40,13 @@ export default function Investigate({ api, me, go, params }: PageProps) {
     const r = await act.run(() => api<Investigation>('POST', '/api/v1/investigations', { resource_id: rid, question }))
     if (r) setInv(r)
   }
+  // Only an explicit "Investigate" click (run=1) starts an investigation. The
+  // marker is removed from the URL at once, so Back, reload or a bookmark
+  // shows the form instead of storing a duplicate investigation.
   useEffect(() => {
     const r = params.get('resource')
+    if (params.get('run') !== '1') return
+    window.history.replaceState(null, '', `#/investigate?resource=${encodeURIComponent(r ?? '')}`)
     if (r && can(me, 'operate')) void Promise.resolve().then(() => runIt(r))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.get('resource')])

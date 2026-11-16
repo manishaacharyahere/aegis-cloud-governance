@@ -46,7 +46,7 @@ func complianceSvc(t *testing.T) (*pgxpool.Pool, *compliance.Service, synthetic.
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pool, &compliance.Service{Pool: pool, Catalog: cat, OPA: &opa.Client{BaseURL: opaURL}}, ds
+	return pool, &compliance.Service{Pool: pool, Catalog: cat, OPA: testOPA(opaURL)}, ds
 }
 
 type evalRow struct{ rule, subject, result, exception string }

@@ -46,7 +46,7 @@ func run() error {
 	if _, err := os.Stat(cfg.FixturesDir); err != nil {
 		return fmt.Errorf("fixtures directory: %w", err)
 	}
-	policy := &iac.OPAClient{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}}
+	policy := &iac.OPAClient{BaseURL: cfg.OPAURL, Token: cfg.OPAToken, HTTP: &http.Client{Timeout: 30 * time.Second}}
 	if b, err := policy.Bundle(ctx); err != nil {
 		log.Warn("OPA not reachable yet; scans will retry", "error", err)
 	} else {

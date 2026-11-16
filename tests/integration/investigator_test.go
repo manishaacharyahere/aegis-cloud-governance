@@ -13,7 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/finops"
@@ -38,7 +37,7 @@ func seedEstate(t *testing.T, opaURL string) (*pgxpool.Pool, map[string]investig
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	cat, _ := compliance.LoadCatalog()
-	oc := &opa.Client{BaseURL: opaURL}
+	oc := testOPA(opaURL)
 
 	v1 := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
 	if _, err := inv.Import(ctx, "demo", v1.Snapshot); err != nil {

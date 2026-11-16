@@ -43,9 +43,12 @@ services:
     <<: *hardening
     profiles: ["core"]
     image: nats:2.10.24-alpine
-    command: ["-js", "-sd", "/data", "-m", "8222"]
+    # Anonymous access is off; see infrastructure/nats/nats.conf.
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_API_PASSWORD: ${AEGIS_NATS_PASSWORD:?set AEGIS_NATS_PASSWORD in .env}
     ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
-    volumes: ["natsdata:/data"]
+    volumes: ["natsdata:/data", "./infrastructure/nats/nats.conf:/etc/nats/nats.conf:ro"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 5s
@@ -59,7 +62,12 @@ services:
     <<: *hardening
     profiles: ["core"]
     image: openpolicyagent/opa:1.0.0-static
-    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-format=json", "/policies"]
+    # Token authentication plus policies/system/authz.rego: only evaluation is
+    # allowed, and policies can never be changed through the API.
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-format=json",
+              "--authentication=token", "--authorization=basic", "/policies"]
+    environment:
+      OPA_AUTH_TOKEN: ${AEGIS_OPA_TOKEN:?set AEGIS_OPA_TOKEN in .env}
     ports: ["127.0.0.1:8181:8181"]
     volumes: ["./policies:/policies:ro"]
     read_only: true
@@ -78,7 +86,10 @@ services:
       AEGIS_ENV: development
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
       AEGIS_OPA_URL: http://opa:8181
+      AEGIS_OPA_TOKEN: ${AEGIS_OPA_TOKEN}
       AEGIS_NATS_URL: nats://nats:4222
+      AEGIS_NATS_USER: aegis_api
+      AEGIS_NATS_PASSWORD: ${AEGIS_NATS_PASSWORD}
       AEGIS_METRICS_ADDR: ":9464"
       AEGIS_AUTH_MODE: ${AEGIS_AUTH_MODE:-dev-headers}
       AEGIS_OIDC_ISSUER: ${AEGIS_OIDC_ISSUER:-http://dex.localhost:5556/dex}

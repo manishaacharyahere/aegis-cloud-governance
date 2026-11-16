@@ -79,7 +79,7 @@ function ControlPanel({ api, me, go, framework, control }: Pick<PageProps, 'api'
                   <td>{e.rule_id}</td>
                   <td className="small">{e.message}<div className="muted">snapshot v{String(e.evidence.version ?? '?')} · {String(e.evidence.content_sha256 ?? '').slice(0, 12)}</div></td>
                   <td className="actions-cell">
-                    <button className="link" onClick={() => go('investigate', { resource: e.subject })}>Investigate</button>
+                    <button className="link" onClick={() => go('investigate', { resource: e.subject, run: '1' })}>Investigate</button>
                     {can(me, 'operate') && e.result === 'fail' && (
                       <>
                         <button className="link" onClick={() => go('remediation', { propose: '1', rule: e.rule_id, resource: e.subject })}>Fix</button>

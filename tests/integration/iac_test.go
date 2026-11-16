@@ -196,7 +196,7 @@ func TestPolicyGroundTruth(t *testing.T) {
 	if opaURL == "" {
 		t.Skip("AEGIS_TEST_OPA_URL not set; skipping OPA ground-truth test")
 	}
-	opa := &iac.OPAClient{BaseURL: opaURL}
+	opa := &iac.OPAClient{BaseURL: opaURL, Token: os.Getenv("AEGIS_TEST_OPA_TOKEN")}
 	fixtures := []string{"secure-baseline", "insecure-storage", "iam-wildcard", "network-exposure", "missing-logging-tags", "unapproved-region"}
 	for _, f := range fixtures {
 		t.Run(f, func(t *testing.T) {

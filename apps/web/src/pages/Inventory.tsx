@@ -84,7 +84,7 @@ export default function Inventory({ api, me, go }: PageProps) {
                   <td>{r.region || '—'}</td>
                   <td>{r.owner || <Badge value="unowned" />}</td>
                   <td className="num">{r.current_version}</td>
-                  <td><button className="link" onClick={() => go('investigate', { resource: r.resource_id })}>Investigate</button></td>
+                  <td><button className="link" onClick={() => go('investigate', { resource: r.resource_id, run: '1' })}>Investigate</button></td>
                 </tr>
               ))}
             </tbody>

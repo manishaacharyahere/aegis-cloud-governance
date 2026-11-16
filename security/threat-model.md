@@ -20,6 +20,9 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 | Threat | Example | Control | Status |
 |---|---|---|---|
 | Spoofing | Forged user identity | OIDC ID tokens verified for signature (JWKS), issuer, audience and expiry; actor taken from the token, never from a header; dev header mode refused in production (docs/auth.md) | implemented |
+| Tampering (policy engine) | A local process replaces OPA policies through its REST API, silently changing every decision | OPA runs with token authentication and `policies/system/authz.rego`: only evaluation of `aegis` packages and policy listing, with the token; policy writes are refused for everyone; policies come only from the read-only mount. Remediation approvals and releases re-check the policy bundle hash | implemented |
+| Spoofing (events) | A local process publishes forged `aegis.*` events | NATS anonymous access off; the Aegis user may publish only `aegis.>` and the JetStream API (`infrastructure/nats/nats.conf`) | implemented |
+| Denial of service (expensive work) | Spamming model investigations, scans, imports or assessments | Per-user token buckets: 600 requests/min, 20/min on expensive routes (429 + Retry-After); at most `AEGIS_AI_MAX_CONCURRENT` model calls, others return the brief without the model | implemented |
 | Tampering | Edited audit or policy records | Append-only audit table (UPDATE/DELETE/TRUNCATE rejected by trigger), hash chain, migration checksums | partial |
 | Repudiation | User denies approving a change | Actor, action, target, outcome recorded in audit events | schema ready |
 | Information disclosure | Secrets in Terraform plan JSON; errors leaking internals | Redaction before storage; generic error bodies; panics hidden from clients; DB URL never logged | partial |

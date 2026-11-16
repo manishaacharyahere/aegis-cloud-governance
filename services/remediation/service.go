@@ -115,6 +115,7 @@ type View struct {
 	CreatedAt         time.Time       `json:"created_at"`
 	ReleasedAt        *time.Time      `json:"released_at,omitempty"`
 	ReleasedBy        string          `json:"released_by,omitempty"`
+	StaleReason       string          `json:"stale_reason,omitempty"`
 	VerifiedAt        *time.Time      `json:"verified_at,omitempty"`
 	Verification      json.RawMessage `json:"verification,omitempty"`
 	Approvals         []Approval      `json:"approvals"`
@@ -195,8 +196,14 @@ func loadResource(ctx context.Context, q querier, tenantID, resourceID, account 
 }
 
 func loadByPK(ctx context.Context, q querier, tenantID, pk string) (resource, error) {
+	return loadByPKLock(ctx, q, tenantID, pk, "")
+}
+
+// loadByPKLock optionally locks the resource row (lock "FOR SHARE OF r"), so an
+// import cannot change it between a freshness check and the commit.
+func loadByPKLock(ctx context.Context, q querier, tenantID, pk, lock string) (resource, error) {
 	rows, err := q.Query(ctx, `SELECT `+resourceCols+` FROM resources r JOIN cloud_accounts a ON a.id = r.account_id
-		WHERE r.tenant_id = $1 AND r.id = $2`, tenantID, pk)
+		WHERE r.tenant_id = $1 AND r.id = $2 `+lock, tenantID, pk)
 	if err != nil {
 		return resource{}, err
 	}
@@ -437,14 +444,14 @@ type row struct {
 
 const viewCols = `id, tenant_id, source, rule_id, resource_pk, resource_id, account_id, operations, justification, requested_by,
 	status, required_approvals, disruptive, simulation, plan_sha256, resource_version, resource_sha256, policy_bundle_sha,
-	created_at, released_at, coalesce(released_by, ''), verified_at, verification`
+	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason`
 
 func scanRow(r pgx.Row) (row, error) {
 	var x row
 	var ops, sim, ver []byte
 	err := r.Scan(&x.ID, &x.tenantID, &x.Source, &x.RuleID, &x.resourcePK, &x.ResourceID, &x.AccountID, &ops, &x.Justification,
 		&x.RequestedBy, &x.Status, &x.RequiredApprovals, &x.Disruptive, &sim, &x.PlanSHA256, &x.ResourceVersion, &x.resourceSHA,
-		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver)
+		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row{}, ErrNotFound
 	}
@@ -573,22 +580,41 @@ func (s *Service) withLocked(ctx context.Context, tenant, id string, fn func(tx 
 }
 
 // checkFresh marks the remediation stale if the resource changed since simulation.
+// checkFresh marks the remediation stale if the resource or the policies
+// changed since it was simulated. The resource row stays share-locked until
+// the transaction ends, so it cannot change before the decision commits.
 func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor string) (resource, error) {
-	cur, err := loadByPK(ctx, tx, x.tenantID, x.resourcePK)
+	cur, err := loadByPKLock(ctx, tx, x.tenantID, x.resourcePK, "FOR SHARE OF r")
 	if err != nil {
 		return resource{}, err
 	}
-	if cur.version == x.ResourceVersion && cur.sha == x.resourceSHA && !cur.deleted {
+	reason := ""
+	switch {
+	case cur.deleted:
+		reason = "the resource was deleted"
+	case cur.version != x.ResourceVersion || cur.sha != x.resourceSHA:
+		reason = fmt.Sprintf("the resource changed (version %d, simulated against %d)", cur.version, x.ResourceVersion)
+	default:
+		bundle, err := s.OPA.Bundle(ctx)
+		if err != nil {
+			return resource{}, fmt.Errorf("policy bundle: %w", err)
+		}
+		if bundle.SHA256 != x.PolicyBundleSHA {
+			reason = "the policies changed since the simulation"
+		}
+	}
+	if reason == "" {
 		return cur, nil
 	}
-	if _, err := tx.Exec(ctx, `UPDATE remediations SET status = 'stale' WHERE id = $1`, x.ID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE remediations SET status = 'stale', stale_reason = $2 WHERE id = $1`, x.ID, reason); err != nil {
 		return resource{}, err
 	}
 	if err := audit.Append(ctx, tx, x.tenantID, audit.Event{Actor: actor, Action: "remediation.stale", TargetType: "remediation",
-		TargetID: x.ID, Outcome: "failure", Details: map[string]any{"pinned_version": x.ResourceVersion, "current_version": cur.version}}); err != nil {
+		TargetID: x.ID, Outcome: "failure", Details: map[string]any{"reason": reason, "pinned_version": x.ResourceVersion,
+			"current_version": cur.version}}); err != nil {
 		return resource{}, err
 	}
-	return resource{}, &committing{ErrStale}
+	return resource{}, &committing{fmt.Errorf("%w (%s)", ErrStale, reason)}
 }
 
 // Decide records an approval or rejection. The requester cannot decide their

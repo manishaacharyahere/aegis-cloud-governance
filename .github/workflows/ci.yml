@@ -29,16 +29,22 @@ jobs:
     env:
       AEGIS_TEST_DATABASE_URL: postgres://aegis:ci-only@localhost:5432/aegis_test?sslmode=disable
       AEGIS_TEST_OPA_URL: http://localhost:8181
+      AEGIS_TEST_OPA_TOKEN: ci-only-opa-token
       AEGIS_TEST_NATS_URL: nats://localhost:4222
+      AEGIS_TEST_NATS_USER: aegis_api
+      AEGIS_TEST_NATS_PASSWORD: ci-only-nats-password
     steps:
       - uses: actions/checkout@v4
       - name: start OPA with the repository policies
         run: |
-          docker run -d --name opa -p 8181:8181 -v "$PWD/policies:/policies:ro"             openpolicyagent/opa:1.0.0-static run --server --addr=0.0.0.0:8181 /policies
+          docker run -d --name opa -p 8181:8181 -e OPA_AUTH_TOKEN=ci-only-opa-token -v "$PWD/policies:/policies:ro" \
+            openpolicyagent/opa:1.0.0-static run --server --addr=0.0.0.0:8181 \
+            --authentication=token --authorization=basic /policies
           for i in $(seq 1 30); do curl -sf localhost:8181/health && break; sleep 1; done
       - name: start NATS with JetStream
         run: |
-          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.10.24-alpine -js -m 8222
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 -e NATS_API_PASSWORD=ci-only-nats-password \
+            -v "$PWD/infrastructure/nats/nats.conf:/etc/nats/nats.conf:ro" nats:2.10.24-alpine -c /etc/nats/nats.conf
           for i in $(seq 1 30); do curl -sf localhost:8222/healthz && break; sleep 1; done
       - uses: actions/setup-go@v5
         with:
@@ -99,4 +105,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f infrastructure/docker/api.Dockerfile -t aegis-api:ci .
       - name: compose config
-        run: POSTGRES_PASSWORD=ci docker compose --profile core config --quiet
+        run: POSTGRES_PASSWORD=ci AEGIS_OPA_TOKEN=ci AEGIS_NATS_PASSWORD=ci docker compose --profile core config --quiet

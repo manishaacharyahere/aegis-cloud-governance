@@ -80,7 +80,7 @@ export default function Risk({ api, me, go }: PageProps) {
                     )}
                   </td>
                   <td style={{ width: 110 }}>
-                    <button className="link" onClick={(e) => { e.stopPropagation(); go('investigate', { resource: a.subject }) }}>Investigate</button>
+                    <button className="link" onClick={(e) => { e.stopPropagation(); go('investigate', { resource: a.subject, run: '1' }) }}>Investigate</button>
                   </td>
                 </tr>
               )

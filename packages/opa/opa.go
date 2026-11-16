@@ -29,6 +29,9 @@ func (e *UnavailableError) Unwrap() error { return e.Err }
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
+	// Token is sent as a bearer token; OPA runs with token authentication and
+	// a system policy that only allows evaluation (policies/system/authz.rego).
+	Token string
 }
 
 func (c *Client) http() *http.Client {
@@ -52,11 +55,17 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	resp, err := c.http().Do(req)
 	if err != nil {
 		return &UnavailableError{fmt.Errorf("opa request: %w", err)}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return errors.New("opa rejected the request: missing or wrong OPA token")
+	}
 	if resp.StatusCode >= 500 {
 		return &UnavailableError{fmt.Errorf("opa returned %s", resp.Status)}
 	}

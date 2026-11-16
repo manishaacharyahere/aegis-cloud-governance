@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
@@ -39,7 +38,7 @@ func TestRiskAssessmentLifecycle(t *testing.T) {
 
 	// Two compliance runs ten days apart: persistent failures must be aged from the first.
 	tenDaysAgo := now.Add(-10 * 24 * time.Hour)
-	csvc := &compliance.Service{Pool: pool, Catalog: cat, OPA: &opa.Client{BaseURL: opaURL}, Now: func() time.Time { return tenDaysAgo }}
+	csvc := &compliance.Service{Pool: pool, Catalog: cat, OPA: testOPA(opaURL), Now: func() time.Time { return tenDaysAgo }}
 	if _, err := csvc.EvaluateInventory(ctx, "demo", "tester"); err != nil {
 		t.Fatal(err)
 	}

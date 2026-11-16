@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
@@ -23,7 +22,7 @@ func TestDriftLifecycle(t *testing.T) {
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	cat, _ := compliance.LoadCatalog()
-	svc := &drift.Service{Pool: pool, OPA: &opa.Client{BaseURL: opaURL}, Config: drift.DefaultConfig(), RuleSeverity: cat.RuleSeverities()}
+	svc := &drift.Service{Pool: pool, OPA: testOPA(opaURL), Config: drift.DefaultConfig(), RuleSeverity: cat.RuleSeverities()}
 
 	if _, err := svc.Compare(ctx, "demo", "", "alice"); !errors.Is(err, drift.ErrNoInventory) {
 		t.Fatalf("no inventory: %v", err)

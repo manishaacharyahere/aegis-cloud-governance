@@ -18,7 +18,13 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/migrations"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 )
+
+// testOPA returns a client for the test OPA server (token from AEGIS_TEST_OPA_TOKEN).
+func testOPA(url string) *opa.Client {
+	return &opa.Client{BaseURL: url, Token: os.Getenv("AEGIS_TEST_OPA_TOKEN")}
+}
 
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()

@@ -113,7 +113,7 @@ func TestScale(t *testing.T) {
 	for id, sev := range cat.RuleSeverities() {
 		rules[id] = risk.RuleInfo{Severity: sev, Controls: counts[id]}
 	}
-	oc := &opa.Client{BaseURL: opaURL, HTTP: &http.Client{Timeout: 5 * time.Minute}}
+	oc := &opa.Client{BaseURL: opaURL, Token: os.Getenv("AEGIS_TEST_OPA_TOKEN"), HTTP: &http.Client{Timeout: 5 * time.Minute}}
 
 	var results []map[string]any
 	for _, sz := range strings.Split(sizesEnv, ",") {

@@ -36,8 +36,17 @@ type Config struct {
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
+	OPAToken        string
+	// Retention runs every RetentionEvery (0 disables it).
+	RetentionEvery time.Duration
+	// Requests per caller per minute (0 disables), ordinary and expensive routes.
+	RateLimitPerMinute          int
+	RateLimitExpensivePerMinute int
 	// NATSURL enables the outbox relay when set (e.g. nats://nats:4222).
 	NATSURL string
+	// NATS credentials (kept out of the URL so they never appear in logs).
+	NATSUser     string
+	NATSPassword string
 	// MetricsAddr serves Prometheus metrics when set (internal port, e.g. :9464).
 	MetricsAddr string
 	// Auth: "oidc" or "dev-headers" (development only).
@@ -52,11 +61,12 @@ type Config struct {
 
 // AIConfig configures the optional local model.
 type AIConfig struct {
-	Provider    string // none | ollama
-	URL         string
-	Model       string
-	Timeout     time.Duration
-	AllowRemote bool // permit sending evidence to a non-local endpoint
+	Provider      string // none | ollama
+	URL           string
+	Model         string
+	Timeout       time.Duration
+	AllowRemote   bool // permit sending evidence to a non-local endpoint
+	MaxConcurrent int  // concurrent model calls (default 2)
 }
 
 // LookupFunc matches os.LookupEnv. It is injected so tests do not mutate the
@@ -139,7 +149,35 @@ func Load(lookup LookupFunc) (Config, error) {
 	}
 
 	cfg.OPAURL = get("AEGIS_OPA_URL", "http://127.0.0.1:8181")
+	for _, rl := range []struct {
+		key string
+		def string
+		dst *int
+	}{{"AEGIS_RATE_LIMIT_PER_MINUTE", "600", &cfg.RateLimitPerMinute}, {"AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE", "20", &cfg.RateLimitExpensivePerMinute}} {
+		n, err := strconv.Atoi(get(rl.key, rl.def))
+		if err != nil || n < 0 || n > 100000 {
+			errs = append(errs, fmt.Errorf("%s: must be an integer between 0 and 100000", rl.key))
+		}
+		*rl.dst = n
+	}
+	if d, err := time.ParseDuration(get("AEGIS_RETENTION_INTERVAL", "1h")); err != nil || d < 0 {
+		errs = append(errs, errors.New("AEGIS_RETENTION_INTERVAL: must be a duration such as 1h (0 disables retention)"))
+	} else {
+		cfg.RetentionEvery = d
+	}
+	cfg.OPAToken = get("AEGIS_OPA_TOKEN", "")
+	if cfg.Environment == EnvProduction && len(cfg.OPAToken) < 32 {
+		errs = append(errs, errors.New("AEGIS_OPA_TOKEN: required in production (at least 32 characters)"))
+	}
 	cfg.NATSURL = get("AEGIS_NATS_URL", "")
+	cfg.NATSUser = get("AEGIS_NATS_USER", "")
+	cfg.NATSPassword = get("AEGIS_NATS_PASSWORD", "")
+	if u, err := url.Parse(cfg.NATSURL); err == nil && u.User != nil {
+		errs = append(errs, errors.New("AEGIS_NATS_URL: put credentials in AEGIS_NATS_USER and AEGIS_NATS_PASSWORD, not in the URL"))
+	}
+	if cfg.Environment == EnvProduction && cfg.NATSURL != "" && cfg.NATSUser == "" {
+		errs = append(errs, errors.New("AEGIS_NATS_USER: NATS authentication is required in production"))
+	}
 	cfg.MetricsAddr = get("AEGIS_METRICS_ADDR", "")
 
 	defAuth := "dev-headers"
@@ -208,6 +246,11 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, fmt.Errorf("AEGIS_AI_ALLOW_REMOTE: %w", err))
 	}
 	cfg.AI.AllowRemote = allowRemote
+	maxAI, err := strconv.Atoi(get("AEGIS_AI_MAX_CONCURRENT", "2"))
+	if err != nil || maxAI < 1 || maxAI > 64 {
+		errs = append(errs, errors.New("AEGIS_AI_MAX_CONCURRENT: must be 1-64"))
+	}
+	cfg.AI.MaxConcurrent = maxAI
 
 	if cfg.Environment == EnvProduction && strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 		errs = append(errs, errors.New("AEGIS_DATABASE_URL: sslmode=disable is not allowed in production"))

@@ -50,6 +50,7 @@ var routePermissions = map[string]access.Permission{
 	"GET /api/v1/compliance/frameworks":  access.Signed,
 	"GET /api/v1/remediation/templates":  access.Signed,
 	"GET /api/v1/access/bindings":        access.Admin,
+	"POST /api/v1/admin/outbox/requeue":  access.Admin,
 	"POST /api/v1/access/bindings":       access.Admin,
 	"DELETE /api/v1/access/bindings":     access.Admin,
 	"POST /api/v1/inventory/import":      access.Operate,

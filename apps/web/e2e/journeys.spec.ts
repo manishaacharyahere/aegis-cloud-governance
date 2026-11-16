@@ -59,11 +59,18 @@ test('2. investigate risk and propose a fix', async ({ page }) => {
   await expect(page.locator('.table tbody tr').first()).toBeVisible({ timeout: 20_000 })
   await shot(page, '03-risk')
 
-  await page.goto('/#/investigate?resource=aws_db_instance.checkout_002')
+  await page.goto('/#/investigate?resource=aws_db_instance.checkout_002&run=1')
   await expect(page.getByRole('heading', { name: /Evidence \(\d+ items\)/ })).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.claims li').first()).toContainText(/aws_db_instance.checkout_002/)
   await page.locator('.claims .cite').first().click()
   await shot(page, '04-investigation')
+
+  // Reloading (or Back, or a bookmark) must not store another investigation.
+  await page.reload()
+  await expect(page.getByLabel('Resource ID')).toHaveValue('aws_db_instance.checkout_002')
+  await expect(page.getByRole('heading', { name: /Evidence \(\d+ items\)/ })).toHaveCount(0)
+  await page.goto('/#/investigate?resource=aws_db_instance.checkout_002&run=1')
+  await expect(page.getByRole('heading', { name: /Evidence \(\d+ items\)/ })).toBeVisible({ timeout: 20_000 })
 
   await page.getByRole('button', { name: /Propose fix for AEGIS-DB-002/ }).click()
   await expect(page.getByLabel('Resource ID')).toHaveValue('aws_db_instance.checkout_002')

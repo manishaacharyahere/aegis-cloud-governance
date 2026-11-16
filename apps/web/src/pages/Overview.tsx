@@ -35,7 +35,7 @@ export default function Overview({ api, go }: PageProps) {
                     <td className="mono">{a.subject}</td>
                     <td>{a.rule_id}</td>
                     <td className="num">{a.score.toFixed(1)}</td>
-                    <td><button className="link" onClick={() => go('investigate', { resource: a.subject })}>Investigate</button></td>
+                    <td><button className="link" onClick={() => go('investigate', { resource: a.subject, run: '1' })}>Investigate</button></td>
                   </tr>
                 ))}
               </tbody>

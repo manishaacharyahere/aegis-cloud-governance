@@ -120,6 +120,9 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
       <Panel title={`${x.rule_id || 'Manual change'} on ${x.resource_id}`} actions={<Badge value={x.status} />}>
         <p className="small">Requested by <b>{x.requested_by}</b> · {when(x.created_at)} · environment {sim.environment || '—'} · plan <code>{x.plan_sha256.slice(0, 12)}</code></p>
         <p className="small">{x.justification}</p>
+        {x.status === 'stale' && (
+          <p className="error">This plan is stale: {x.stale_reason || 'the resource or the policies changed'}. Propose it again to simulate against the current state.</p>
+        )}
         <div className="grid2">
           <div>
             <h3>Simulation (OPA, before → after)</h3>

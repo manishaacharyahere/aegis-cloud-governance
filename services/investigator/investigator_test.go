@@ -311,6 +311,40 @@ func TestAskStatuses(t *testing.T) {
 	}
 }
 
+// blockingModel holds its slot until released.
+type blockingModel struct{ release chan struct{} }
+
+func (b blockingModel) Name() string { return "slow" }
+func (b blockingModel) Generate(ctx context.Context, _, _ string) (string, error) {
+	select {
+	case <-b.release:
+	case <-ctx.Done():
+	}
+	return `{"claims":[]}`, nil
+}
+
+func TestModelSlotsLimitConcurrency(t *testing.T) {
+	c := loadCorpus(t)
+	m := blockingModel{release: make(chan struct{})}
+	s := &Service{Model: m, ModelSlots: make(chan struct{}, 1)}
+	done := make(chan ModelResult)
+	go func() { r, _ := s.ask(context.Background(), "", c.Bundle); done <- r }()
+	for len(s.ModelSlots) == 0 { // wait until the first call holds the slot
+		time.Sleep(time.Millisecond)
+	}
+	busy, _ := s.ask(context.Background(), "", c.Bundle)
+	if busy.Status != StatusError || !strings.Contains(busy.Error, "busy") {
+		t.Errorf("second concurrent call: %+v", busy)
+	}
+	close(m.release)
+	if first := <-done; first.Status != StatusRejected { // {"claims":[]} -> nothing accepted
+		t.Errorf("first call: %+v", first)
+	}
+	if len(s.ModelSlots) != 0 {
+		t.Error("slot not released")
+	}
+}
+
 func TestCleanQuestion(t *testing.T) {
 	q, err := cleanQuestion("  why\nis\x00 this\x1b[31m risky?\t ")
 	if err != nil || q != "why is this[31m risky?" {

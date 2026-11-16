@@ -19,10 +19,20 @@ type Bus struct {
 	js jetstream.JetStream
 }
 
+// Credentials authenticate to NATS (empty user: no authentication).
+type Credentials struct {
+	User     string
+	Password string
+}
+
 // Connect dials NATS and ensures the event stream exists. Duplicate message
 // IDs are dropped by the server for two minutes, which covers relay retries.
-func Connect(ctx context.Context, url, name string) (*Bus, error) {
-	nc, err := nats.Connect(url, nats.Name(name), nats.MaxReconnects(-1), nats.ReconnectWait(2*time.Second))
+func Connect(ctx context.Context, url, name string, creds Credentials) (*Bus, error) {
+	opts := []nats.Option{nats.Name(name), nats.MaxReconnects(-1), nats.ReconnectWait(2 * time.Second)}
+	if creds.User != "" {
+		opts = append(opts, nats.UserInfo(creds.User, creds.Password))
+	}
+	nc, err := nats.Connect(url, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats connect: %w", err)
 	}

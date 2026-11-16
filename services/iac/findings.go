@@ -210,9 +210,12 @@ type PolicyEvaluator interface {
 type OPAClient struct {
 	BaseURL string // e.g. http://127.0.0.1:8181
 	HTTP    *http.Client
+	Token   string
 }
 
-func (c *OPAClient) client() *opa.Client { return &opa.Client{BaseURL: c.BaseURL, HTTP: c.HTTP} }
+func (c *OPAClient) client() *opa.Client {
+	return &opa.Client{BaseURL: c.BaseURL, HTTP: c.HTTP, Token: c.Token}
+}
 
 // Evaluate queries data.aegis.terraform. It fails closed: an undefined
 // document (policy not loaded) is an error, never "no findings".

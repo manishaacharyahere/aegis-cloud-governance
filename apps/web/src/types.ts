@@ -188,6 +188,7 @@ export interface Remediation {
   justification: string
   requested_by: string
   status: string
+  stale_reason?: string
   required_approvals: number
   disruptive: boolean
   simulation: {

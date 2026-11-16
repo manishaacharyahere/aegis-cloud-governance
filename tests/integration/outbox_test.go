@@ -57,8 +57,28 @@ func TestOutboxRelay(t *testing.T) {
 	if pub, failed, _ := r.RunOnce(ctx); pub+failed != 0 {
 		t.Fatal("parked rows were claimed again")
 	}
-	// An operator resets parked rows; they are then delivered.
-	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET attempts = 0`); err != nil {
+	if n, err := r.Parked(ctx); err != nil || n != 5 {
+		t.Fatalf("parked = %d %v", n, err)
+	}
+	// An admin requeues them; they are then delivered.
+	if n, err := outbox.RequeueParked(ctx, pool, "demo", 2); err != nil || n != 5 {
+		t.Fatalf("requeue = %d %v", n, err)
+	}
+
+	// A relay that died after claiming leaves its rows leased: nobody else
+	// takes them until the lease expires, then another relay delivers them.
+	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET claimed_until = now() + interval '400 milliseconds', claimed_by = 'dead-relay'`); err != nil {
+		t.Fatal(err)
+	}
+	other := &recordingPub{ids: map[string]int{}}
+	if pub, _, err := (&outbox.Relay{Pool: pool, Pub: other}).RunOnce(ctx); err != nil || pub != 0 {
+		t.Fatalf("leased rows were taken before the lease expired: %d %v", pub, err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if pub, _, err := (&outbox.Relay{Pool: pool, Pub: other}).RunOnce(ctx); err != nil || pub != 5 {
+		t.Fatalf("after lease expiry: %d %v", pub, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET published_at = NULL, attempts = 0`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,11 +121,22 @@ func TestOutboxRelay(t *testing.T) {
 	if natsURL == "" {
 		t.Skip("AEGIS_TEST_NATS_URL not set; skipping the JetStream part")
 	}
-	bus, err := natsbus.Connect(ctx, natsURL, "aegis-test")
+	bus, err := natsbus.Connect(ctx, natsURL, "aegis-test", natsbus.Credentials{
+		User: os.Getenv("AEGIS_TEST_NATS_USER"), Password: os.Getenv("AEGIS_TEST_NATS_PASSWORD")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer bus.Close()
+	if os.Getenv("AEGIS_TEST_NATS_USER") != "" {
+		// Anonymous clients are refused, and the Aegis user cannot publish outside aegis.>.
+		if anon, err := natsbus.Connect(ctx, natsURL, "anonymous", natsbus.Credentials{}); err == nil {
+			anon.Close()
+			t.Error("anonymous NATS connection was accepted")
+		}
+		if err := bus.Publish(ctx, "evil.injected", "x1", []byte("{}")); err == nil {
+			t.Error("publishing outside aegis.> was allowed")
+		}
+	}
 	stream, err := bus.JetStream().Stream(ctx, natsbus.Stream)
 	if err != nil {
 		t.Fatal(err)

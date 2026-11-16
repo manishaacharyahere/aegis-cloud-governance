@@ -66,7 +66,7 @@ test('demo', async ({ browser }) => {
   await page.locator('.table tbody tr').first().click()
   await caption(page, 'Each score explains itself: the reasons and the attack path from the internet.')
 
-  await page.goto('/#/investigate?resource=aws_db_instance.checkout_002')
+  await page.goto('/#/investigate?resource=aws_db_instance.checkout_002&run=1')
   await expect(page.getByRole('heading', { name: /Evidence \(\d+ items\)/ })).toBeVisible({ timeout: 20_000 })
   await caption(page, 'An investigation: Aegis reads evidence in a read-only transaction and writes a brief where every sentence cites it.', 3500)
   await page.locator('.claims .cite').nth(3).click()

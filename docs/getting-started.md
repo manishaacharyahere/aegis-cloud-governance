@@ -34,9 +34,10 @@ curl http://127.0.0.1:8080/healthz      # liveness
 curl http://127.0.0.1:8080/readyz       # readiness (checks the database)
 curl http://127.0.0.1:8080/api/v1/version
 
-# Ask OPA to evaluate a deliberately insecure bucket
-curl -s http://127.0.0.1:8181/v1/data/aegis/aws/storage/deny \
-  -d '{"input":{"resource_id":"b1","resource_type":"storage.bucket","configuration":{"public_access_block":false}}}'
+# Ask OPA to evaluate a deliberately insecure bucket (OPA requires the token
+# from .env, and only allows evaluation; policies cannot be changed via its API)
+curl -s -H "Authorization: Bearer $AEGIS_OPA_TOKEN" http://127.0.0.1:8181/v1/data/aegis/inventory/deny \
+  -d '{"input":{"resources":[{"id":"b1","type":"storage.bucket","configuration":{"public_access_block":false}}]}}'
 ```
 
 ## 2. Run the worker (IaC scans)
@@ -45,7 +46,7 @@ The worker runs on the host because it starts the sandboxed Terraform,
 Trivy and Checkov containers:
 
 ```bash
-AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:<port>/aegis?sslmode=disable" go run ./cmd/aegis-worker
+AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:<port>/aegis?sslmode=disable" AEGIS_OPA_TOKEN="<token from .env>" go run ./cmd/aegis-worker
 ```
 
 See [docs/modules/iac.md](modules/iac.md).
@@ -86,6 +87,12 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_MAX_BODY_BYTES` | `1048576` | 1 KiB – 64 MiB |
 | `AEGIS_MAX_IMPORT_BYTES` | `33554432` | inventory import body limit, 1 KiB – 256 MiB |
 | `AEGIS_BOOTSTRAP_TENANT` | `demo` (non-production) | tenant created at startup |
+| `AEGIS_OPA_TOKEN` | — (required by Compose; required in production) | token for the OPA API, which only allows policy evaluation |
+| `AEGIS_NATS_USER` / `AEGIS_NATS_PASSWORD` | Compose: `aegis_api` / from `.env` | NATS credentials (anonymous access is off) |
+| `AEGIS_RATE_LIMIT_PER_MINUTE` | `600` | requests per user per minute (0 disables) |
+| `AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE` | `20` | imports, scans, evaluations, assessments, investigations, proposals |
+| `AEGIS_AI_MAX_CONCURRENT` | `2` | concurrent model calls; extra investigations return the brief without the model |
+| `AEGIS_RETENTION_INTERVAL` | `1h` | retention job period (0 disables): published events 7 days, investigations 180 days, latest 50 compliance/risk/drift runs, 20 ML runs |
 
 ## 4. Run the tests
 

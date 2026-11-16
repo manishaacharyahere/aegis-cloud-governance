@@ -10,13 +10,18 @@ package outbox
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -45,6 +50,8 @@ type Relay struct {
 	Batch       int           // rows per claim (default 100)
 	Interval    time.Duration // idle poll interval (default 1s)
 	MaxAttempts int           // rows that failed this often are parked (default 10)
+	Lease       time.Duration // how long a claim lasts (default 30s; keep below the broker's 2-minute de-duplication window)
+	ID          string        // relay identity recorded on claims (default random)
 	Metrics     Metrics
 }
 
@@ -53,13 +60,15 @@ type Metrics interface {
 	Published(n int)
 	Failed(n int)
 	Backlog(n int64)
+	Parked(n int64)
 }
 
 type noMetrics struct{}
 
-func (noMetrics) Published(int)   {}
-func (noMetrics) Failed(int)      {}
-func (noMetrics) Backlog(n int64) {}
+func (noMetrics) Published(int) {}
+func (noMetrics) Failed(int)    {}
+func (noMetrics) Backlog(int64) {}
+func (noMetrics) Parked(int64)  {}
 
 var unsafeToken = regexp.MustCompile(`[^A-Za-z0-9_-]`)
 
@@ -86,6 +95,14 @@ func (r *Relay) defaults() {
 	if r.MaxAttempts <= 0 {
 		r.MaxAttempts = 10
 	}
+	if r.Lease <= 0 {
+		r.Lease = 30 * time.Second
+	}
+	if r.ID == "" {
+		var b [8]byte
+		_, _ = rand.Read(b[:])
+		r.ID = "relay-" + hex.EncodeToString(b[:])
+	}
 	if r.Metrics == nil {
 		r.Metrics = noMetrics{}
 	}
@@ -94,65 +111,98 @@ func (r *Relay) defaults() {
 	}
 }
 
-// RunOnce claims and publishes one batch. It returns how many rows were
-// published and how many failed.
+// RunOnce claims, publishes and records one batch. No transaction is held
+// while publishing: rows are claimed with a lease in one statement, published,
+// then marked in a second statement. If the relay dies in between, the lease
+// expires and another relay re-sends; the broker drops the duplicate because
+// the lease is shorter than its de-duplication window.
 func (r *Relay) RunOnce(ctx context.Context) (published, failed int, err error) {
 	r.defaults()
-	tx, err := r.Pool.Begin(ctx)
-	if err != nil {
+	events, err := r.claim(ctx)
+	if err != nil || len(events) == 0 {
 		return 0, 0, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, `SELECT id, tenant_id, aggregate_type, aggregate_id, event_type, payload, created_at
-		FROM outbox_events WHERE published_at IS NULL AND attempts < $1
-		ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`, r.MaxAttempts, r.Batch)
-	if err != nil {
-		return 0, 0, err
-	}
-	var events []Event
-	for rows.Next() {
-		var e Event
-		if err := rows.Scan(&e.ID, &e.TenantID, &e.AggregateType, &e.AggregateID, &e.Type, &e.Payload, &e.CreatedAt); err != nil {
-			rows.Close()
-			return 0, 0, err
-		}
-		events = append(events, e)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, 0, err
-	}
+	var ok []string
+	type failure struct{ id, msg string }
+	var bad []failure
 	for _, e := range events {
 		data, _ := json.Marshal(e)
 		if perr := r.Pub.Publish(ctx, Subject(e), e.ID, data); perr != nil {
-			failed++
 			msg := perr.Error()
 			if len(msg) > 500 {
 				msg = msg[:500]
 			}
-			if _, err := tx.Exec(ctx, `UPDATE outbox_events SET attempts = attempts + 1, last_error = $2 WHERE id = $1`, e.ID, msg); err != nil {
-				return published, failed, err
-			}
+			bad = append(bad, failure{e.ID, msg})
 			if errors.Is(perr, context.Canceled) || errors.Is(perr, context.DeadlineExceeded) {
-				break
+				break // leave the rest claimed; their lease expires
 			}
 			continue
 		}
-		published++
-		if _, err := tx.Exec(ctx, `UPDATE outbox_events SET published_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1`, e.ID); err != nil {
-			return published, failed, err
+		ok = append(ok, e.ID)
+	}
+	// Record results with a fresh context so a shutdown mid-batch still
+	// records what was published.
+	mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if len(ok) > 0 {
+		if _, err := r.Pool.Exec(mctx, `UPDATE outbox_events SET published_at = now(), attempts = attempts + 1,
+			last_error = NULL, claimed_until = NULL, claimed_by = NULL WHERE id = ANY($1) AND claimed_by = $2`, ok, r.ID); err != nil {
+			return 0, 0, err
 		}
 	}
-	// Commit with a fresh context so a shutdown mid-batch still records what
-	// was already published (re-publishing is safe, but wasteful).
-	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	if err := tx.Commit(cctx); err != nil {
-		return 0, 0, err
+	for _, f := range bad {
+		if _, err := r.Pool.Exec(mctx, `UPDATE outbox_events SET attempts = attempts + 1, last_error = $2,
+			claimed_until = NULL, claimed_by = NULL WHERE id = $1 AND claimed_by = $3`, f.id, f.msg, r.ID); err != nil {
+			return len(ok), len(bad), err
+		}
 	}
-	r.Metrics.Published(published)
-	r.Metrics.Failed(failed)
-	return published, failed, nil
+	r.Metrics.Published(len(ok))
+	r.Metrics.Failed(len(bad))
+	return len(ok), len(bad), nil
+}
+
+// claim leases up to Batch unpublished rows to this relay in one statement.
+func (r *Relay) claim(ctx context.Context) ([]Event, error) {
+	rows, err := r.Pool.Query(ctx, `
+		UPDATE outbox_events o SET claimed_until = now() + $3::interval, claimed_by = $4
+		FROM (SELECT id FROM outbox_events
+		      WHERE published_at IS NULL AND attempts < $1 AND (claimed_until IS NULL OR claimed_until < now())
+		      ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED) c
+		WHERE o.id = c.id
+		RETURNING o.id, o.tenant_id, o.aggregate_type, o.aggregate_id, o.event_type, o.payload, o.created_at`,
+		r.MaxAttempts, r.Batch, fmt.Sprintf("%d milliseconds", r.Lease.Milliseconds()), r.ID)
+	if err != nil {
+		return nil, err
+	}
+	events, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Event, error) {
+		var e Event
+		return e, row.Scan(&e.ID, &e.TenantID, &e.AggregateType, &e.AggregateID, &e.Type, &e.Payload, &e.CreatedAt)
+	})
+	sort.Slice(events, func(i, j int) bool { // RETURNING order is not guaranteed
+		if !events[i].CreatedAt.Equal(events[j].CreatedAt) {
+			return events[i].CreatedAt.Before(events[j].CreatedAt)
+		}
+		return events[i].ID < events[j].ID
+	})
+	return events, err
+}
+
+// Parked counts events that exceeded the retry limit.
+func (r *Relay) Parked(ctx context.Context) (int64, error) {
+	r.defaults()
+	var n int64
+	err := r.Pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE published_at IS NULL AND attempts >= $1`, r.MaxAttempts).Scan(&n)
+	return n, err
+}
+
+// RequeueParked gives a tenant's parked events another set of attempts.
+func RequeueParked(ctx context.Context, pool *pgxpool.Pool, tenantSlug string, maxAttempts int) (int64, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 10
+	}
+	tag, err := pool.Exec(ctx, `UPDATE outbox_events o SET attempts = 0, claimed_until = NULL, claimed_by = NULL
+		FROM tenants t WHERE t.id = o.tenant_id AND t.slug = $1 AND o.published_at IS NULL AND o.attempts >= $2`, tenantSlug, maxAttempts)
+	return tag.RowsAffected(), err
 }
 
 // Run relays until ctx is cancelled. Full batches are followed immediately by
@@ -168,6 +218,12 @@ func (r *Relay) Run(ctx context.Context) error {
 		var backlog int64
 		if qerr := r.Pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE published_at IS NULL`).Scan(&backlog); qerr == nil {
 			r.Metrics.Backlog(backlog)
+		}
+		if parked, perr := r.Parked(ctx); perr == nil {
+			r.Metrics.Parked(parked)
+			if parked > 0 {
+				r.Log.Warn("outbox events parked after repeated failures; requeue with POST /api/v1/admin/outbox/requeue", "parked", parked)
+			}
 		}
 		wait := r.Interval
 		switch {
@@ -199,7 +255,7 @@ func (r *Relay) Run(ctx context.Context) error {
 // OTelMetrics records relay activity as OpenTelemetry instruments.
 type OTelMetrics struct {
 	published, failed metric.Int64Counter
-	backlog           metric.Int64Gauge
+	backlog, parked   metric.Int64Gauge
 }
 
 // NewOTelMetrics creates the relay instruments on m.
@@ -207,10 +263,11 @@ func NewOTelMetrics(m metric.Meter) (*OTelMetrics, error) {
 	p, err1 := m.Int64Counter("aegis.outbox.published", metric.WithDescription("Outbox events published to the broker"))
 	f, err2 := m.Int64Counter("aegis.outbox.failed", metric.WithDescription("Outbox publish attempts that failed"))
 	b, err3 := m.Int64Gauge("aegis.outbox.backlog", metric.WithDescription("Outbox events not yet published"))
-	if err := errors.Join(err1, err2, err3); err != nil {
+	k, err4 := m.Int64Gauge("aegis.outbox.parked", metric.WithDescription("Outbox events that exceeded the retry limit"))
+	if err := errors.Join(err1, err2, err3, err4); err != nil {
 		return nil, err
 	}
-	return &OTelMetrics{published: p, failed: f, backlog: b}, nil
+	return &OTelMetrics{published: p, failed: f, backlog: b, parked: k}, nil
 }
 
 // Published implements Metrics.
@@ -221,3 +278,6 @@ func (o *OTelMetrics) Failed(n int) { o.failed.Add(context.Background(), int64(n
 
 // Backlog implements Metrics.
 func (o *OTelMetrics) Backlog(n int64) { o.backlog.Record(context.Background(), n) }
+
+// Parked implements Metrics.
+func (o *OTelMetrics) Parked(n int64) { o.parked.Record(context.Background(), n) }

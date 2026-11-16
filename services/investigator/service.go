@@ -37,7 +37,11 @@ type Service struct {
 	Model Model // nil: deterministic briefs only
 	// ModelTimeout bounds one model call (default 60s).
 	ModelTimeout time.Duration
-	Now          func() time.Time
+	// ModelSlots caps concurrent model calls (nil: unlimited). A local model
+	// is CPU-heavy; when every slot is busy the investigation returns its
+	// deterministic brief with model status "error" (busy) instead of queueing.
+	ModelSlots chan struct{}
+	Now        func() time.Time
 }
 
 func (s *Service) now() time.Time {
@@ -195,6 +199,18 @@ func (s *Service) ask(ctx context.Context, question string, b Bundle) (ModelResu
 	timeout := s.ModelTimeout
 	if timeout <= 0 {
 		timeout = 60 * time.Second
+	}
+	if s.ModelSlots != nil {
+		select {
+		case s.ModelSlots <- struct{}{}:
+			defer func() { <-s.ModelSlots }()
+		case <-time.After(2 * time.Second):
+			res.Status, res.Error = StatusError, "the model is busy; the brief above is complete without it"
+			return res, ""
+		case <-ctx.Done():
+			res.Status, res.Error = StatusError, "request cancelled"
+			return res, ""
+		}
 	}
 	mctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
