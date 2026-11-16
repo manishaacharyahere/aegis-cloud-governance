@@ -25,6 +25,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.BootstrapTenant != "demo" || cfg.MaxImportBytes != 32<<20 {
 		t.Errorf("unexpected import defaults: %+v", cfg)
 	}
+	if cfg.AI.Provider != "none" || cfg.AI.AllowRemote || cfg.AI.Timeout != time.Minute {
+		t.Errorf("AI must be off and local-only by default: %+v", cfg.AI)
+	}
 	if cfg.ShutdownTimeout != 15*time.Second || cfg.MaxBodyBytes != 1<<20 {
 		t.Errorf("unexpected limits: %+v", cfg)
 	}
@@ -58,6 +61,10 @@ func TestLoadErrors(t *testing.T) {
 		{"bad bool", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MIGRATE_ON_START": "maybe"}, "AEGIS_MIGRATE_ON_START"},
 		{"bad duration", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_SHUTDOWN_TIMEOUT": "soon"}, "AEGIS_SHUTDOWN_TIMEOUT"},
 		{"zero duration", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_SHUTDOWN_TIMEOUT": "0s"}, "must be in"},
+		{"unknown AI provider", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "openai"}, "AEGIS_AI_PROVIDER"},
+		{"ollama without model", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "ollama"}, "AEGIS_AI_MODEL"},
+		{"bad AI timeout", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_TIMEOUT": "1h"}, "AEGIS_AI_TIMEOUT"},
+		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},
 		{"huge import", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_IMPORT_BYTES": "999999999999"}, "AEGIS_MAX_IMPORT_BYTES"},
 		{"bad tenant", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_BOOTSTRAP_TENANT": "Bad Tenant"}, "AEGIS_BOOTSTRAP_TENANT"},

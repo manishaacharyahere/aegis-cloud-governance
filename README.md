@@ -27,8 +27,8 @@ machine with no paid cloud services or mandatory AI API.
 | D. Drift detection - approved baselines vs observed inventory, canonical comparison (defaults, volatile fields, unordered lists), six drift categories, policy-delta severity ([docs](docs/modules/drift.md)) | ✅ implemented; seeded drift detected exactly over 200 seeds |
 | E. Risk intelligence - explainable 6-factor contextual score with sensitivity analysis, attack paths from the internet to sensitive data over the relationship graph ([docs](docs/modules/risk.md)) | ✅ implemented; ranking stable under ±20% weight changes |
 | F. FinOps intelligence - validated idempotent cost import, tag allocation, reports, rule-based recommendations with projected vs measured savings; Python anomaly detection and forecasting benchmarked against baselines ([docs](docs/modules/finops.md)) | ✅ implemented; seasonal-naive baseline beat Holt-Winters and SARIMAX on this data |
-| G. Evidence-grounded AI assistant (optional) | ⏳ next |
-| H. Approval-gated remediation simulation | ⏳ planned |
+| G. Evidence-grounded investigation assistant (optional) - read-only evidence collection, cited deterministic brief, optional local model (Ollama) with no tools whose every claim is validated against the cited evidence ([docs](docs/modules/investigator.md)) | ✅ implemented; every brief for 1 014 synthetic resources self-validates; with qwen2.5:3b, 48 of 59 accepted model claims were correct on manual review (meaning errors are not caught; documented) |
+| H. Approval-gated remediation simulation | ⏳ next |
 
 ## Architecture
 
@@ -71,7 +71,7 @@ Full instructions, including running tests without Docker:
 | Path | Purpose |
 |---|---|
 | `cmd/` | Process entry points (`aegis-api`, later `aegis-worker`) |
-| `services/` | Control-plane modules (api, inventory, governance, compliance, drift, risk, finops, audit, ai-investigator) |
+| `services/` | Control-plane modules (api, inventory, governance, compliance, drift, risk, finops, audit, investigator) |
 | `workers/` | Background workers (iac-scanner, inventory-importer, remediation) |
 | `packages/` | Shared Go libraries (config, logging, database, telemetry, contracts) |
 | `migrations/` | Ordered SQL migrations (embedded into the binary) |

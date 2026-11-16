@@ -36,6 +36,18 @@ type Config struct {
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
+	// AI is the optional Module G model. Provider "none" (the default)
+	// means investigations return deterministic briefs only.
+	AI AIConfig
+}
+
+// AIConfig configures the optional local model.
+type AIConfig struct {
+	Provider    string // none | ollama
+	URL         string
+	Model       string
+	Timeout     time.Duration
+	AllowRemote bool // permit sending evidence to a non-local endpoint
 }
 
 // LookupFunc matches os.LookupEnv. It is injected so tests do not mutate the
@@ -121,6 +133,34 @@ func Load(lookup LookupFunc) (Config, error) {
 	if u, err := url.Parse(cfg.OPAURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		errs = append(errs, errors.New("AEGIS_OPA_URL: must be an http(s) URL"))
 	}
+
+	cfg.AI = AIConfig{
+		Provider: get("AEGIS_AI_PROVIDER", "none"),
+		URL:      get("AEGIS_AI_URL", "http://127.0.0.1:11434"),
+		Model:    get("AEGIS_AI_MODEL", ""),
+	}
+	switch cfg.AI.Provider {
+	case "none":
+	case "ollama":
+		if cfg.AI.Model == "" {
+			errs = append(errs, errors.New("AEGIS_AI_MODEL: required when AEGIS_AI_PROVIDER=ollama"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("AEGIS_AI_PROVIDER: must be none or ollama, got %q", cfg.AI.Provider))
+	}
+	aiTimeout, err := time.ParseDuration(get("AEGIS_AI_TIMEOUT", "60s"))
+	switch {
+	case err != nil:
+		errs = append(errs, fmt.Errorf("AEGIS_AI_TIMEOUT: %w", err))
+	case aiTimeout <= 0 || aiTimeout > 10*time.Minute:
+		errs = append(errs, fmt.Errorf("AEGIS_AI_TIMEOUT: must be in (0, 10m], got %s", aiTimeout))
+	}
+	cfg.AI.Timeout = aiTimeout
+	allowRemote, err := strconv.ParseBool(get("AEGIS_AI_ALLOW_REMOTE", "false"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("AEGIS_AI_ALLOW_REMOTE: %w", err))
+	}
+	cfg.AI.AllowRemote = allowRemote
 
 	if cfg.Environment == EnvProduction && strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 		errs = append(errs, errors.New("AEGIS_DATABASE_URL: sslmode=disable is not allowed in production"))

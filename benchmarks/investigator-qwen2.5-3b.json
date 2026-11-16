@@ -1,0 +1,913 @@
+{
+  "runs": [
+    {
+      "resource_id": "aws_db_instance.checkout_002",
+      "question": "Why is this resource risky?",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource is risky because it fails the AEGIS-DB-002 rule, which is a critical severity rule that checks if a database instance is publicly accessible. This rule has a score of 78.5 out of 100 in the risk assessment, indicating a high band risk.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          },
+          {
+            "text": "The database instance is publicly accessible, as evidenced by the AEGIS-DB-002 compliance finding.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The risk assessment identifies an internet attack path of 1 hop to reach the database instance, which is a direct exposure risk.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The database instance holds data with a sensitivity level of 90, contributing to the risk assessment.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The environment in which the database instance resides is production, which increases the risk level.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource is not compliant with the AEGIS-DB-002 rule, as indicated by the compliance run that found the rule failed.",
+            "citations": [
+              "E1",
+              "E2",
+              "E4"
+            ]
+          },
+          {
+            "text": "The resource has not shown any drift from its baseline configuration, as per the drift clear report.",
+            "citations": [
+              "E6"
+            ]
+          },
+          {
+            "text": "The resource's configuration includes encryption, which mitigates some of the risk but does not eliminate the risk associated with public accessibility.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource is part of a subnet that is member of the production subnet, which is a known exposure point.",
+            "citations": [
+              "E2"
+            ]
+          },
+          {
+            "text": "The resource's compliance run shows that the AEGIS-DB-002 rule is the only rule that failed, indicating that this is the primary risk.",
+            "citations": [
+              "E1",
+              "E2",
+              "E4",
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 59427
+      }
+    },
+    {
+      "resource_id": "aws_db_instance.search_004",
+      "question": "What should be fixed first, and why?",
+      "evidence_items": 8,
+      "result": {
+        "status": "rejected",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The database instance should be encrypted at rest first. Rule AEGIS-DB-001 has a severity of high and a score of 71 out of 100, indicating a high risk. The database storage is not encrypted at rest, as per the compliance finding in E4.",
+              "citations": [
+                "E1",
+                "E3",
+                "E4"
+              ]
+            },
+            "reasons": [
+              "unsupported_number"
+            ]
+          },
+          {
+            "claim": {
+              "text": "The database instance should also be made non-publicly accessible. Rule AEGIS-DB-002 has a severity of critical and a score of 78.5 out of 100, indicating a high risk. The database is publicly accessible, as per the compliance finding in E5.",
+              "citations": [
+                "E1",
+                "E3",
+                "E5"
+              ]
+            },
+            "reasons": [
+              "unsupported_number"
+            ]
+          }
+        ],
+        "latency_ms": 30230
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.analytics_data_002",
+      "question": "Summarise this resource's compliance status.",
+      "evidence_items": 6,
+      "result": {
+        "status": "partially_accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The risk assessment for this resource scored the AEGIS-S3-001 finding a score of 69.5 out of 100, placing it in the high band. The reasons for this score include the rule severity, direct internet exposure, data sensitivity, and the production environment.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource has not been found to have drifted from its baseline configuration.",
+            "citations": [
+              "E6"
+            ]
+          }
+        ],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The resource aws_s3_bucket.analytics_data_002 has 1 compliance finding from rule AEGIS-S3-001 (S3 bucket blocks all public access; severity high) which has a result of fail. The finding message states that the bucket does not block public access.",
+              "citations": [
+                "E4"
+              ]
+            },
+            "reasons": [
+              "unsupported_number"
+            ]
+          }
+        ],
+        "latency_ms": 25167
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.billing_data_002",
+      "question": "What does this resource cost, and is there waste?",
+      "evidence_items": 6,
+      "result": {
+        "status": "partially_accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource is configured to block public access, as per E4, which is a compliance finding.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The resource is not configured to write to the public, as per E2, which is a compliance finding.",
+            "citations": [
+              "E2"
+            ]
+          },
+          {
+            "text": "The resource has a risk score of 69.5 out of 100, indicating a high risk, as per E5.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource has a compliance run with 1 failure and 4 passes, as per E3.",
+            "citations": [
+              "E3"
+            ]
+          },
+          {
+            "text": "The resource is in the production environment, as per E1.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource has a sensitivity of 80, as per E5.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource is in the ap-south-1 region, as per E1.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource is owned by the billing-team, as per E1.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource is in account 123456789012, as per E1.",
+            "citations": [
+              "E1"
+            ]
+          }
+        ],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The resource, aws_s3_bucket.billing_data_002, has a drift score of 0, indicating no drift as per E6.",
+              "citations": [
+                "E6"
+              ]
+            },
+            "reasons": [
+              "unsupported_number"
+            ]
+          }
+        ],
+        "latency_ms": 34492
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.billing_data_004",
+      "question": "Why is this resource risky?",
+      "evidence_items": 6,
+      "result": {
+        "status": "partially_accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource is risky because it fails the AEGIS-S3-001 rule, which requires S3 buckets to block all public access. This rule has a severity of high and the bucket does not block public access, as evidenced by finding E4.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          },
+          {
+            "text": "The risk assessment for this resource scored the AEGIS-S3-001 finding a high band score of 69.5, indicating a significant risk.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The risk assessment identified an internet attack path of 1 hop to reach the resource, which is a direct exposure to the internet.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource holds data with a sensitivity level of 80, contributing to its risk classification.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource is in the production environment, which is considered a high-risk environment for sensitive data.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource is not configured to block public access, as indicated by the compliance finding E4.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The resource is not encrypted, as indicated by the configuration summary in E1, which specifies encryption using AWS KMS.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource is not configured with public access block settings, as indicated by the configuration summary in E1, which specifies public access block as disabled.",
+            "citations": [
+              "E1"
+            ]
+          },
+          {
+            "text": "The resource is not configured with versioning, as indicated by the configuration summary in E1, which specifies versioning as enabled.",
+            "citations": [
+              "E1"
+            ]
+          }
+        ],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The resource has a drift score of 0, as reported in drift report E6, indicating no changes have occurred since the last inventory run.",
+              "citations": [
+                "E6"
+              ]
+            },
+            "reasons": [
+              "unsupported_number"
+            ]
+          }
+        ],
+        "latency_ms": 35207
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.billing_data_008",
+      "question": "What should be fixed first, and why?",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The AEGIS-S3-001 finding should be fixed first because it fails with a severity of high and has a blast radius of 1 hop, indicating a direct internet exposure. The risk assessment scores this finding 69.5 out of 100, placing it in the high band. Additionally, the compliance run shows that this rule is failing, requiring immediate attention to prevent data exposure risks.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 20850
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.billing_data_009",
+      "question": "Summarise this resource's compliance status.",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource, aws_s3_bucket.billing_data_009, has a compliance status that includes a failure for rule AEGIS-S3-001 (S3 bucket blocks all public access; severity high).",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The risk assessment for this resource scored the AEGIS-S3-001 finding a high band score of 69.5 out of 100, indicating a high severity risk.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The drift report found that the configuration.public_access_block setting has changed, causing the AEGIS-S3-001 rule to fail.",
+            "citations": [
+              "E6"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 23060
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.checkout_data_006",
+      "question": "What does this resource cost, and is there waste?",
+      "evidence_items": 6,
+      "result": {
+        "status": "partially_accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource aws_s3_bucket.checkout_data_006 is exposed to the internet as per the risk assessment (E5), which is a high severity risk.",
+            "citations": [
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The resource aws_s3_bucket.checkout_data_006 costs and there is no waste as per the drift_clear report (E6).",
+              "citations": [
+                "E6"
+              ]
+            },
+            "reasons": [
+              "unsupported_identifier"
+            ]
+          },
+          {
+            "claim": {
+              "text": "The resource aws_s3_bucket.checkout_data_006 does not block public access as per the compliance_finding (E4), which is a high severity rule.",
+              "citations": [
+                "E4"
+              ]
+            },
+            "reasons": [
+              "unsupported_identifier"
+            ]
+          }
+        ],
+        "latency_ms": 22446
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.identity_data_012",
+      "question": "Why is this resource risky?",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource is risky because it fails the AEGIS-S3-001 rule, which requires S3 buckets to block all public access. This rule has a severity of high and the resource scores 69.5 out of 100 in the risk assessment, indicating a high band risk.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          },
+          {
+            "text": "The AEGIS-S3-001 rule failure is due to the bucket not blocking public access, as indicated in the compliance finding.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The risk assessment identifies the AEGIS-S3-001 finding as the primary reason for the high risk score, citing the rule's severity, the fact that the bucket is directly exposed to the internet, the sensitivity level of the data it holds, and the production environment.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The risk assessment also notes that an internet attack path of 1 hop exists to reach the resource, further increasing its risk level.",
+            "citations": [
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 27309
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.payments_data_004",
+      "question": "What should be fixed first, and why?",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The AEGIS-S3-001 finding should be fixed first because it fails with a severity of high and has a blast radius of 1 hop, indicating a direct internet exposure. The remediation suggested is to add an aws_s3_bucket_public_access_block with all four settings set to true.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 18710
+      }
+    },
+    {
+      "resource_id": "aws_db_instance.checkout_001",
+      "question": "Summarise this resource's compliance status.",
+      "evidence_items": 6,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource aws_db_instance.checkout_001 has 1 compliance rule failure (AEGIS-DB-002) with a severity of critical, as indicated by the compliance finding E4. The rule failure message states that the database is publicly accessible.",
+            "citations": [
+              "E2",
+              "E4"
+            ]
+          },
+          {
+            "text": "The risk assessment E5 for the resource aws_db_instance.checkout_001 scores the AEGIS-DB-002 finding with a score of 69 out of 100, placing it in the high band. The reasons for this score include the rule severity critical, the database being directly internet-exposed, the data sensitivity level, and the environment being staging.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource does not have any drift issues as per the drift report E6, indicating no drift has been detected.",
+            "citations": [
+              "E6"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 25855
+      }
+    },
+    {
+      "resource_id": "aws_instance.platform_018",
+      "question": "What does this resource cost, and is there waste?",
+      "evidence_items": 6,
+      "result": {
+        "status": "partially_accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource aws_instance.platform_018 in account 123456789012 has not been assigned any cost tags, as evidenced by the compliance finding E4, which states that the required tags owner and cost_center are missing.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The resource aws_instance.platform_018 is not in a drift state, as indicated by the drift report E6, which found no drift on this resource.",
+            "citations": [
+              "E6"
+            ]
+          },
+          {
+            "text": "The resource aws_instance.platform_018 is exposed to the internet via the attached security group aws_security_group.platform_012, as stated in the risk assessment E5, which scored the AEGIS-TAG-001 finding 68.0 out of 100, indicating a high risk band.",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "The resource aws_instance.platform_018 is in the production environment, as shown in the resource facts E1, which states the environment is production.",
+            "citations": [
+              "E1"
+            ]
+          }
+        ],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The resource aws_instance.platform_018 is not in a waste state, as there is no information provided in the evidence to suggest any inefficiencies or unnecessary resource usage.",
+              "citations": []
+            },
+            "reasons": [
+              "no_citation"
+            ]
+          }
+        ],
+        "latency_ms": 32056
+      }
+    },
+    {
+      "resource_id": "aws_instance.identity_001",
+      "question": "Why is this resource risky?",
+      "evidence_items": 7,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource has no scored findings in the latest risk run (d49ea28d-d729-4b80-9015-4a51471040bf at 2026-11-16T14:28:54Z), indicating it is not considered risky based on current risk assessments.",
+            "citations": [
+              "E4"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 20089
+      }
+    },
+    {
+      "resource_id": "aws_subnet.production_003",
+      "question": "What should be fixed first, and why?",
+      "evidence_items": 5,
+      "result": {
+        "status": "rejected",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [],
+        "rejected": [
+          {
+            "claim": {
+              "text": "The first thing that should be fixed is the configuration of the aws_subnet.production_003 resource. It is currently set to map_public_ip_on_launch as false, which means that public IP addresses will not be automatically assigned to instances launched in this subnet. This configuration may not be suitable for all use cases, especially if the subnet is intended for instances that require public IP addresses for internet connectivity. To address this, the configuration should be updated to set map_public_ip_on_launch to true.",
+              "citations": [
+                "E1"
+              ]
+            },
+            "reasons": [
+              "unsupported_identifier"
+            ]
+          }
+        ],
+        "latency_ms": 19092
+      }
+    },
+    {
+      "resource_id": "aws_subnet.staging_003",
+      "question": "Summarise this resource's compliance status.",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "aws_subnet.staging_003 has a compliance status of 2 passes and 0 fails as determined by the latest inventory compliance run on 2026-11-16T14:28:53Z.",
+            "citations": [
+              "E3"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 15766
+      }
+    },
+    {
+      "resource_id": "aws_instance.analytics_008",
+      "question": "What does this resource cost, and is there waste?",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The cost of the resource has not been computed in the provided data.",
+            "citations": [
+              "E1",
+              "E3",
+              "E4",
+              "E5"
+            ]
+          },
+          {
+            "text": "There is no evidence of waste associated with this resource.",
+            "citations": [
+              "E4",
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 13876
+      }
+    },
+    {
+      "resource_id": "aws_db_instance.billing_007",
+      "question": "Why is this resource risky?",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "aws_db_instance.billing_007 has not been flagged as risky in any of the risk runs. [E4]",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The latest inventory compliance run for aws_db_instance.billing_007 has all 4 rules passing. [E3]",
+            "citations": [
+              "E3"
+            ]
+          },
+          {
+            "text": "There are no drift issues identified for aws_db_instance.billing_007. [E5]",
+            "citations": [
+              "E5"
+            ]
+          },
+          {
+            "text": "aws_db_instance.billing_007 has no incoming relationships that read from it, indicating it is not a source of risk. [E2]",
+            "citations": [
+              "E2"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 19483
+      }
+    },
+    {
+      "resource_id": "aws_instance.search_002",
+      "question": "What should be fixed first, and why?",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "Given the resource 'aws_instance.search_002' has no drift or compliance issues, the next step should be to address the risk. Since no risk findings have been scored for this resource, the risk run should be the first action to take.",
+            "citations": [
+              "E4"
+            ]
+          },
+          {
+            "text": "The resource 'aws_instance.search_002' has no drift issues, indicating it is in line with the latest inventory. Therefore, the risk should be the first issue to resolve, as it provides insights into potential security vulnerabilities.",
+            "citations": [
+              "E4"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 17414
+      }
+    },
+    {
+      "resource_id": "aws_iam_role.checkout_004",
+      "question": "Summarise this resource's compliance status.",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource's compliance status is as follows: 1 rule applied, 1 pass and 0 fail or excepted.",
+            "citations": [
+              "E1",
+              "E3"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 11990
+      }
+    },
+    {
+      "resource_id": "aws_instance.notifications_015",
+      "question": "What does this resource cost, and is there waste?",
+      "evidence_items": 5,
+      "result": {
+        "status": "accepted",
+        "model": "ollama/qwen2.5:3b",
+        "prompt_version": "investigator-prompt-v1",
+        "accepted": [
+          {
+            "text": "The resource aws_instance.notifications_015 has not been found to be wasteful based on the latest inventory compliance run, which found 2 rules passed and 0 failed, and no findings in the risk run. There is no drift detected on this resource.",
+            "citations": [
+              "E1",
+              "E2",
+              "E3",
+              "E4",
+              "E5"
+            ]
+          }
+        ],
+        "rejected": [],
+        "latency_ms": 14877
+      }
+    }
+  ],
+  "summary": {
+    "accepted": 59,
+    "claims": 68,
+    "investigations": 20,
+    "latency_ms_max": 59427,
+    "latency_ms_p50": 22446,
+    "model": "ollama/qwen2.5:3b",
+    "prompt_version": "investigator-prompt-v1",
+    "rejected": 9,
+    "rejection_reasons": {
+      "no_citation": 1,
+      "unsupported_identifier": 3,
+      "unsupported_number": 5
+    },
+    "statuses": {
+      "accepted": 13,
+      "partially_accepted": 5,
+      "rejected": 2
+    }
+  },
+  "environment": {
+    "runtime": "ollama/ollama:0.40.12 in Docker, CPU only (16 vCPU, 7.4 GiB)",
+    "model": "qwen2.5:3b",
+    "temperature": 0,
+    "seed": 42,
+    "dataset": "seed-42 synthetic estate (TestInvestigatorLiveModel)"
+  },
+  "manual_review": {
+    "method": "Every claim compared by hand with the stored evidence of its investigation.",
+    "accepted": {
+      "total": 59,
+      "correct": 48,
+      "wrong": 11,
+      "wrong_breakdown": {
+        "contradicts_evidence": 4,
+        "misused_term": 2,
+        "unsupported_inference": 5
+      },
+      "wrong_claims": [
+        {
+          "run": 1,
+          "claim": "The resource is part of a subnet that is member of the production subnet, which is a known exposure point.",
+          "label": "unsupported inference"
+        },
+        {
+          "run": 4,
+          "claim": "The resource is configured to block public access, as per E4, which is a compliance finding.",
+          "label": "contradicts evidence"
+        },
+        {
+          "run": 4,
+          "claim": "The resource is not configured to write to the public, as per E2, which is a compliance finding.",
+          "label": "unsupported inference"
+        },
+        {
+          "run": 5,
+          "claim": "The resource is not encrypted, as indicated by the configuration summary in E1, which specifies encryption using AWS KMS.",
+          "label": "contradicts evidence"
+        },
+        {
+          "run": 5,
+          "claim": "The resource is not configured with versioning, as indicated by the configuration summary in E1, which specifies versioning as enabled.",
+          "label": "contradicts evidence"
+        },
+        {
+          "run": 6,
+          "claim": "...has a blast radius of 1 hop, indicating a direct internet exposure...",
+          "label": "misused term (attack path called blast radius)"
+        },
+        {
+          "run": 10,
+          "claim": "...has a blast radius of 1 hop, indicating a direct internet exposure...",
+          "label": "misused term (attack path called blast radius)"
+        },
+        {
+          "run": 17,
+          "claim": "aws_db_instance.billing_007 has no incoming relationships that read from it, indicating it is not a source of risk.",
+          "label": "contradicts evidence (3 reads_from edges)"
+        },
+        {
+          "run": 18,
+          "claim": "...the risk run should be the first action to take.",
+          "label": "unsupported inference / not meaningful"
+        },
+        {
+          "run": 18,
+          "claim": "...the risk should be the first issue to resolve...",
+          "label": "unsupported inference / not meaningful"
+        },
+        {
+          "run": 20,
+          "claim": "...has not been found to be wasteful based on the latest inventory compliance run...",
+          "label": "unsupported inference (compliance does not measure waste; no cost data)"
+        }
+      ]
+    },
+    "rejected": {
+      "total": 9,
+      "correctly_rejected_false_or_harmful": 4,
+      "true_but_rejected": 5,
+      "claims": [
+        {
+          "run": 2,
+          "claim": "score of 71 out of 100 (cites E1,E3,E4; the score is in E7)",
+          "label": "true but miscited"
+        },
+        {
+          "run": 2,
+          "claim": "score of 78.5 out of 100 (cites E1,E3,E5; the score is in E6)",
+          "label": "true but miscited"
+        },
+        {
+          "run": 3,
+          "claim": "has 1 compliance finding (cites E4; the count is in E3)",
+          "label": "true but miscited"
+        },
+        {
+          "run": 4,
+          "claim": "has a drift score of 0",
+          "label": "invented concept: correctly rejected"
+        },
+        {
+          "run": 5,
+          "claim": "has a drift score of 0",
+          "label": "invented concept: correctly rejected"
+        },
+        {
+          "run": 8,
+          "claim": "costs and there is no waste as per the drift_clear report",
+          "label": "not meaningful: correctly rejected"
+        },
+        {
+          "run": 8,
+          "claim": "does not block public access as per the compliance_finding (E4)",
+          "label": "true; rejected because the evidence kind name compliance_finding is not treated as citable text"
+        },
+        {
+          "run": 12,
+          "claim": "is not in a waste state (no citation)",
+          "label": "true but uncited"
+        },
+        {
+          "run": 14,
+          "claim": "should set map_public_ip_on_launch to true",
+          "label": "harmful advice: rejected (because config keys are not citable text, not because of its meaning)"
+        }
+      ]
+    }
+  }
+}

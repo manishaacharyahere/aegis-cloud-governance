@@ -22,6 +22,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/finops"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/investigator"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
 )
 
@@ -81,6 +82,21 @@ func run() error {
 		ruleInfo[id] = risk.RuleInfo{Severity: sev, Controls: counts[id]}
 	}
 
+	ruleMeta := map[string]investigator.RuleMeta{}
+	for _, id := range catalog.RuleIDs() {
+		r, _ := catalog.Rule(id)
+		ruleMeta[id] = investigator.RuleMeta{Title: r.Title, Severity: r.Severity, Remediation: r.Remediation}
+	}
+	inv := &investigator.Service{Pool: pool, Rules: ruleMeta, ModelTimeout: cfg.AI.Timeout}
+	if cfg.AI.Provider == "ollama" {
+		m, err := investigator.NewOllama(cfg.AI.URL, cfg.AI.Model, cfg.AI.Timeout, cfg.AI.AllowRemote)
+		if err != nil {
+			return fmt.Errorf("AI model: %w", err)
+		}
+		inv.Model = m
+		log.Info("investigation model enabled", "model", m.Name(), "remote_allowed", cfg.AI.AllowRemote)
+	}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
 		Logger:     log,
 		DB:         pool,
@@ -90,11 +106,14 @@ func run() error {
 		Catalog:    catalog,
 		Drift: &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(),
 			RuleSeverity: catalog.RuleSeverities()},
-		Risk:           &risk.Service{Pool: pool, Rules: ruleInfo},
-		FinOps:         &finops.Service{Pool: pool},
-		Version:        version,
-		MaxBodyBytes:   cfg.MaxBodyBytes,
-		MaxImportBytes: cfg.MaxImportBytes,
+		Risk:         &risk.Service{Pool: pool, Rules: ruleInfo},
+		FinOps:       &finops.Service{Pool: pool},
+		Investigator: inv,
+		// Model timeout plus time to collect evidence and store the result.
+		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
+		Version:                  version,
+		MaxBodyBytes:             cfg.MaxBodyBytes,
+		MaxImportBytes:           cfg.MaxImportBytes,
 	}), log)
 
 	errCh := make(chan error, 1)

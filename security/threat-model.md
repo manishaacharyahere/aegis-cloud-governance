@@ -24,7 +24,9 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 | Repudiation | User denies approving a change | Actor, action, target, outcome recorded in audit events | schema ready |
 | Information disclosure | Secrets in Terraform plan JSON; errors leaking internals | Redaction before storage; generic error bodies; panics hidden from clients; DB URL never logged | partial |
 | Denial of service | Huge import overwhelms API/workers | Request body limit, server timeouts, bounded concurrency, queue backpressure | partial |
-| Elevation of privilege | User approves an unauthorised change; AI executes commands | RBAC + approval policy; AI read-only tools, no shell, no `terraform apply` | planned |
+| Elevation of privilege | User approves an unauthorised change; AI executes commands | RBAC + approval policy (planned); the assistant has no tools at all: no shell, no queries, no `terraform apply`, no approvals (ADR-009) | AI part implemented |
+| Tampering (AI) | Prompt injection through imported tag values or messages | Evidence sent as JSON data; model claims validated against cited evidence; command/action text and echoed instructions rejected; deterministic brief never uses model output | implemented; meaning-level contradictions not detected (documented) |
+| Information disclosure (AI) | Tenant evidence sent to a remote model | Model endpoint must be loopback or a single-label host unless `AEGIS_AI_ALLOW_REMOTE=true`; no redirects; sensitive keys re-redacted; config capped at 4 KiB | implemented |
 
 ## Implemented so far
 - HTTP server timeouts (header/read/write/idle) and max header size.
@@ -34,6 +36,9 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 - Containers: distroless non-root API image, read-only root filesystems,
   `no-new-privileges`, memory limits, ports bound to 127.0.0.1.
 - `.env`, Terraform state and plan files git-ignored; secret scanning in CI.
+- Investigations read evidence in a `READ ONLY` transaction (the database
+  refuses writes), store evidence, brief, model output and verdicts
+  append-only, and write an audit event.
 
 ## Known limitations
 - No authentication yet — the API must not be exposed beyond localhost.

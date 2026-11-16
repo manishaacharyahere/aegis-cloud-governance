@@ -1,6 +1,11 @@
 # Aegis local environment.
 #
 #   docker compose --profile core up -d --build     # postgres, nats, opa, api
+#   docker compose --profile core --profile ai up -d # + optional local model (Module G)
+#
+# The AI profile is optional: Aegis works fully without it. To use it, pull a
+# model once (docker compose exec ollama ollama pull qwen2.5:3b) and set
+# AEGIS_AI_PROVIDER=ollama and AEGIS_AI_MODEL in .env.
 #
 # All ports bind to 127.0.0.1 only. Credentials come from .env (see
 # .env.example) and are for local development only.
@@ -71,6 +76,9 @@ services:
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
       AEGIS_OPA_URL: http://opa:8181
       AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+      AEGIS_AI_PROVIDER: ${AEGIS_AI_PROVIDER:-none}
+      AEGIS_AI_URL: http://ollama:11434
+      AEGIS_AI_MODEL: ${AEGIS_AI_MODEL:-}
     ports: ["127.0.0.1:8080:8080"]
     read_only: true
     depends_on:
@@ -81,6 +89,17 @@ services:
       resources:
         limits: { memory: 256m }
 
+  ollama:
+    <<: *hardening
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.12
+    ports: ["127.0.0.1:11434:11434"]
+    volumes: ["ollamadata:/root/.ollama"]
+    deploy:
+      resources:
+        limits: { memory: 6g }
+
 volumes:
   pgdata:
   natsdata:
+  ollamadata:

@@ -19,18 +19,22 @@ type Pinger interface {
 
 // Deps are the dependencies of the HTTP API.
 type Deps struct {
-	Logger         *slog.Logger
-	DB             Pinger
-	Inventory      InventoryService // nil disables inventory routes (503)
-	IaC            IaCService       // nil disables IaC routes (503)
-	Compliance     ComplianceService
-	Catalog        *compliance.Catalog
-	Drift          DriftService
-	Risk           RiskService
-	FinOps         FinOpsService
-	Version        string
-	MaxBodyBytes   int64 // default per-request body limit
-	MaxImportBytes int64 // body limit for inventory imports
+	Logger       *slog.Logger
+	DB           Pinger
+	Inventory    InventoryService // nil disables inventory routes (503)
+	IaC          IaCService       // nil disables IaC routes (503)
+	Compliance   ComplianceService
+	Catalog      *compliance.Catalog
+	Drift        DriftService
+	Risk         RiskService
+	FinOps       FinOpsService
+	Investigator InvestigatorService
+	// InvestigationWriteBudget is the write deadline for creating an
+	// investigation (it may wait on a local model); 0 keeps the server default.
+	InvestigationWriteBudget time.Duration
+	Version                  string
+	MaxBodyBytes             int64 // default per-request body limit
+	MaxImportBytes           int64 // body limit for inventory imports
 }
 
 // NewHandler builds the routed, middleware-wrapped API handler. Every route
@@ -88,6 +92,10 @@ func NewHandler(d Deps) http.Handler {
 	handle("POST /api/v1/recommendations/{id}/accept", d.MaxBodyBytes, fo.decide("accept"))
 	handle("POST /api/v1/recommendations/{id}/dismiss", d.MaxBodyBytes, fo.decide("dismiss"))
 	handle("POST /api/v1/recommendations/{id}/implement", d.MaxBodyBytes, fo.decide("implement"))
+	ig := investigatorHandlers{svc: d.Investigator, writeBudget: d.InvestigationWriteBudget}
+	handle("GET /api/v1/assistant/status", d.MaxBodyBytes, ig.status)
+	handle("POST /api/v1/investigations", d.MaxBodyBytes, ig.create)
+	handle("GET /api/v1/investigations/{id}", d.MaxBodyBytes, ig.get)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,
