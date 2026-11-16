@@ -27,6 +27,7 @@ type Deps struct {
 	Catalog        *compliance.Catalog
 	Drift          DriftService
 	Risk           RiskService
+	FinOps         FinOpsService
 	Version        string
 	MaxBodyBytes   int64 // default per-request body limit
 	MaxImportBytes int64 // body limit for inventory imports
@@ -76,6 +77,17 @@ func NewHandler(d Deps) http.Handler {
 	handle("POST /api/v1/risk/assessments", d.MaxBodyBytes, rk.assess)
 	handle("GET /api/v1/risk/assessments/{id}", d.MaxBodyBytes, rk.getRun)
 	handle("GET /api/v1/risk/attack-paths", d.MaxBodyBytes, rk.attackPaths)
+	fo := finopsHandlers{svc: d.FinOps}
+	handle("POST /api/v1/cost/import", d.MaxImportBytes, fo.importCost)
+	handle("GET /api/v1/cost/summary", d.MaxBodyBytes, fo.summary)
+	handle("GET /api/v1/cost/tag-coverage", d.MaxBodyBytes, fo.tagCoverage)
+	handle("GET /api/v1/cost/forecast", d.MaxBodyBytes, fo.ml("forecast"))
+	handle("GET /api/v1/cost/anomalies", d.MaxBodyBytes, fo.ml("anomaly"))
+	handle("POST /api/v1/recommendations", d.MaxBodyBytes, fo.generate)
+	handle("GET /api/v1/recommendations", d.MaxBodyBytes, fo.list)
+	handle("POST /api/v1/recommendations/{id}/accept", d.MaxBodyBytes, fo.decide("accept"))
+	handle("POST /api/v1/recommendations/{id}/dismiss", d.MaxBodyBytes, fo.decide("dismiss"))
+	handle("POST /api/v1/recommendations/{id}/implement", d.MaxBodyBytes, fo.decide("implement"))
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

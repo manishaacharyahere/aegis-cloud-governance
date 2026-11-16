@@ -20,14 +20,14 @@ machine with no paid cloud services or mandatory AI API.
 | Hash-chained, append-only audit log with verification; transactional outbox | ✅ audit implemented; outbox written, relay pending |
 | OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |
 | React + TypeScript dashboard shell with live API status | ✅ implemented, unit-tested |
-| Python ML package with reproducibility manifest | ✅ implemented, unit-tested |
+| Python ML package (cost generator, detectors, forecasters, benchmark, DB worker) | ✅ 27 tests |
 | A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
 | B. Terraform / IaC analysis — sandboxed offline plan, redacted plan analysis, 11 Aegis OPA rules, Trivy + Checkov, unified report, durable job queue with leases/retries ([docs](docs/modules/iac.md)) | ✅ implemented; 6/6 fixtures match ground truth |
 | C. Policy & compliance engine — NIST CSF 2.0 / CIS AWS 3.0.0 / internal baseline catalog, reproducible evaluations (policy text + snapshot pointers), expiring exceptions with separation of duties, coverage with evidence freshness, hash-chained audit log ([docs](docs/modules/compliance.md)) | ✅ implemented; inventory ground truth 132/132, 0 false positives |
 | D. Drift detection - approved baselines vs observed inventory, canonical comparison (defaults, volatile fields, unordered lists), six drift categories, policy-delta severity ([docs](docs/modules/drift.md)) | ✅ implemented; seeded drift detected exactly over 200 seeds |
 | E. Risk intelligence - explainable 6-factor contextual score with sensitivity analysis, attack paths from the internet to sensitive data over the relationship graph ([docs](docs/modules/risk.md)) | ✅ implemented; ranking stable under ±20% weight changes |
-| F. FinOps intelligence | ⏳ next |
-| G. Evidence-grounded AI assistant (optional) | ⏳ planned |
+| F. FinOps intelligence - validated idempotent cost import, tag allocation, reports, rule-based recommendations with projected vs measured savings; Python anomaly detection and forecasting benchmarked against baselines ([docs](docs/modules/finops.md)) | ✅ implemented; seasonal-naive baseline beat Holt-Winters and SARIMAX on this data |
+| G. Evidence-grounded AI assistant (optional) | ⏳ next |
 | H. Approval-gated remediation simulation | ⏳ planned |
 
 ## Architecture

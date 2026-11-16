@@ -43,3 +43,4 @@ Thumbs.db
 
 # Large generated datasets (regenerate with cmd/aegis-datagen)
 datasets/inventory/generated/
+datasets/cost/generated/

@@ -1,0 +1,230 @@
+{
+  "benchmark": "aegis-finops",
+  "created_at": "2026-11-16T12:07:47.266321+00:00",
+  "dataset": {
+    "dataset": "aegis-synthetic-cost",
+    "generator_version": "1.1.0",
+    "seed": 42,
+    "days": 540,
+    "inventory": "snapshot-v1.json",
+    "rows": 292140,
+    "rows_sha256": "5b7a938b503508e645d71584510cf8d7e7fb86198a44d70d9b89df71caf1fcd8",
+    "note": "Synthetic, fictional data. Prices are illustrative planning assumptions."
+  },
+  "environment": {
+    "aegis_ml": "0.2.0",
+    "python": "3.13.1",
+    "numpy": "2.5.5",
+    "pandas": "3.1.1",
+    "statsmodels": "0.15.0",
+    "scikit_learn": "1.9.1",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "parameters": {
+    "mad_threshold": 3.5,
+    "mad_window": 28,
+    "if_contamination": 0.02,
+    "if_train_days": 120
+  },
+  "anomaly_detection": {
+    "evaluated_points": 3297,
+    "labelled_anomalies": 37,
+    "rolling_mad": {
+      "tp": 36,
+      "fp": 78,
+      "fn": 1,
+      "tn": 3182,
+      "precision": 0.3158,
+      "recall": 0.973,
+      "f1": 0.4768,
+      "false_positive_rate": 0.023926
+    },
+    "isolation_forest": {
+      "tp": 26,
+      "fp": 18,
+      "fn": 11,
+      "tn": 3242,
+      "precision": 0.5909,
+      "recall": 0.7027,
+      "f1": 0.642,
+      "false_positive_rate": 0.005521
+    },
+    "sweep": {
+      "rolling_mad": {
+        "3.0": {
+          "tp": 37,
+          "fp": 119,
+          "fn": 0,
+          "tn": 3141,
+          "precision": 0.2372,
+          "recall": 1.0,
+          "f1": 0.3834,
+          "false_positive_rate": 0.036503
+        },
+        "3.5": {
+          "tp": 36,
+          "fp": 78,
+          "fn": 1,
+          "tn": 3182,
+          "precision": 0.3158,
+          "recall": 0.973,
+          "f1": 0.4768,
+          "false_positive_rate": 0.023926
+        },
+        "4.0": {
+          "tp": 35,
+          "fp": 59,
+          "fn": 2,
+          "tn": 3201,
+          "precision": 0.3723,
+          "recall": 0.9459,
+          "f1": 0.5344,
+          "false_positive_rate": 0.018098
+        },
+        "5.0": {
+          "tp": 35,
+          "fp": 50,
+          "fn": 2,
+          "tn": 3210,
+          "precision": 0.4118,
+          "recall": 0.9459,
+          "f1": 0.5738,
+          "false_positive_rate": 0.015337
+        }
+      },
+      "isolation_forest": {
+        "0.01": {
+          "tp": 17,
+          "fp": 8,
+          "fn": 20,
+          "tn": 3252,
+          "precision": 0.68,
+          "recall": 0.4595,
+          "f1": 0.5484,
+          "false_positive_rate": 0.002454
+        },
+        "0.02": {
+          "tp": 26,
+          "fp": 18,
+          "fn": 11,
+          "tn": 3242,
+          "precision": 0.5909,
+          "recall": 0.7027,
+          "f1": 0.642,
+          "false_positive_rate": 0.005521
+        },
+        "0.05": {
+          "tp": 35,
+          "fp": 73,
+          "fn": 2,
+          "tn": 3187,
+          "precision": 0.3241,
+          "recall": 0.9459,
+          "f1": 0.4828,
+          "false_positive_rate": 0.022393
+        }
+      }
+    }
+  },
+  "forecasting": {
+    "horizon_days": 30,
+    "folds": 3,
+    "series": 10,
+    "summary": {
+      "seasonal_naive": {
+        "mae": 30.2388,
+        "rmse": 63.5019,
+        "wape": 0.0304,
+        "fit_seconds": 0.0
+      },
+      "moving_average_28": {
+        "mae": 36.006,
+        "rmse": 64.3927,
+        "wape": 0.0387,
+        "fit_seconds": 0.0
+      },
+      "holt_winters": {
+        "mae": 31.6125,
+        "rmse": 64.8001,
+        "wape": 0.0333,
+        "fit_seconds": 3.35
+      },
+      "sarimax": {
+        "mae": 33.7584,
+        "rmse": 64.4602,
+        "wape": 0.034,
+        "fit_seconds": 7.91
+      }
+    },
+    "best_by_mean_wape": "seasonal_naive",
+    "series_won": {
+      "seasonal_naive": 5,
+      "moving_average_28": 1,
+      "holt_winters": 2,
+      "sarimax": 2
+    },
+    "per_series_wape": {
+      "total": {
+        "seasonal_naive": 0.0232,
+        "moving_average_28": 0.0231,
+        "holt_winters": 0.0219,
+        "sarimax": 0.0255
+      },
+      "analytics": {
+        "seasonal_naive": 0.0726,
+        "moving_average_28": 0.0988,
+        "holt_winters": 0.0768,
+        "sarimax": 0.0715
+      },
+      "billing": {
+        "seasonal_naive": 0.0324,
+        "moving_average_28": 0.0329,
+        "holt_winters": 0.0391,
+        "sarimax": 0.0346
+      },
+      "checkout": {
+        "seasonal_naive": 0.0129,
+        "moving_average_28": 0.0219,
+        "holt_winters": 0.0144,
+        "sarimax": 0.0156
+      },
+      "identity": {
+        "seasonal_naive": 0.0147,
+        "moving_average_28": 0.017,
+        "holt_winters": 0.0188,
+        "sarimax": 0.0191
+      },
+      "notifications": {
+        "seasonal_naive": 0.0168,
+        "moving_average_28": 0.0306,
+        "holt_winters": 0.0164,
+        "sarimax": 0.034
+      },
+      "payments": {
+        "seasonal_naive": 0.0468,
+        "moving_average_28": 0.0754,
+        "holt_winters": 0.0481,
+        "sarimax": 0.0433
+      },
+      "platform": {
+        "seasonal_naive": 0.0168,
+        "moving_average_28": 0.0202,
+        "holt_winters": 0.0221,
+        "sarimax": 0.0245
+      },
+      "search": {
+        "seasonal_naive": 0.0163,
+        "moving_average_28": 0.0272,
+        "holt_winters": 0.0346,
+        "sarimax": 0.0314
+      },
+      "unallocated": {
+        "seasonal_naive": 0.0518,
+        "moving_average_28": 0.0401,
+        "holt_winters": 0.0402,
+        "sarimax": 0.0405
+      }
+    }
+  },
+  "runtime_seconds": 18.5
+}

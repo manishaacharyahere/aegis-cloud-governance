@@ -29,6 +29,19 @@ jobs:
           go-version-file: go.mod
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+  pip-audit:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e . "pip-audit==2.10.1"
+      - run: pip-audit --skip-editable
+
   npm-audit:
     runs-on: ubuntu-24.04
     defaults:

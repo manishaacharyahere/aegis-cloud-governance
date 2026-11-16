@@ -19,6 +19,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/finops"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
@@ -90,6 +91,7 @@ func run() error {
 		Drift: &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(),
 			RuleSeverity: catalog.RuleSeverities()},
 		Risk:           &risk.Service{Pool: pool, Rules: ruleInfo},
+		FinOps:         &finops.Service{Pool: pool},
 		Version:        version,
 		MaxBodyBytes:   cfg.MaxBodyBytes,
 		MaxImportBytes: cfg.MaxImportBytes,
