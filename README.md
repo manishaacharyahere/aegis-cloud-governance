@@ -8,8 +8,15 @@ analyses cloud spend, and proposes remediations that are verified by
 deterministic checks and approved by a human. It runs entirely on a developer
 machine with no paid cloud services or mandatory AI API.
 
-> **Status: early development.** Only the engineering foundation exists today.
-> The table below states what actually works — nothing else should be assumed.
+> **Status: v1.0.** All eight modules and the platform work (authentication, events,
+> observability, dashboard) are implemented and tested. Results come from seeded
+> synthetic data and one laptop; read the [evaluation report](docs/research-report.md)
+> for what they do and do not show.
+
+**[Documentation site](https://manishaacharyahere.github.io/aegis-cloud-governance/)** ·
+**[Evaluation report](docs/research-report.md)** ·
+**[Demo video (82 s)](https://github.com/manishaacharyahere/aegis-cloud-governance/releases/download/v1.0.0/aegis-demo.webm)** ·
+**[Screenshots](screenshots/)**
 
 ## Current status
 

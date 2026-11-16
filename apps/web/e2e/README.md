@@ -33,3 +33,11 @@ npx playwright test                      # AEGIS_SCREENSHOTS=1 writes ../../scre
 ```
 
 The demo identities and their password exist only in `infrastructure/auth/dex.yml`, for development.
+
+## Demo video
+
+`demo.spec.ts` records one continuous, captioned session through the same journeys:
+
+```bash
+AEGIS_DEMO=1 npx playwright test e2e/demo.spec.ts   # writes ../../demo/*.webm (git-ignored; published as a release asset)
+```

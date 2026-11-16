@@ -44,3 +44,9 @@ Thumbs.db
 # Large generated datasets (regenerate with cmd/aegis-datagen)
 datasets/inventory/generated/
 datasets/cost/generated/
+
+# MkDocs build output
+site/
+
+# Demo video (published as a release asset, not committed)
+demo/

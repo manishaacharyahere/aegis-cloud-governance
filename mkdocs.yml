@@ -1,0 +1,53 @@
+site_name: Aegis
+site_description: Local-first cloud governance, security, compliance, risk and FinOps platform
+site_url: https://manishaacharyahere.github.io/aegis-cloud-governance/
+repo_url: https://github.com/manishaacharyahere/aegis-cloud-governance
+repo_name: aegis-cloud-governance
+edit_uri: blob/main/docs/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: blue
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - tables
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+
+hooks:
+  - docs/hooks/github_links.py
+
+exclude_docs: |
+  hooks/
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Evaluation report: research-report.md
+  - Modules:
+      - A. Inventory: modules/inventory.md
+      - B. IaC scanning: modules/iac.md
+      - C. Compliance: modules/compliance.md
+      - D. Drift: modules/drift.md
+      - E. Risk: modules/risk.md
+      - F. FinOps: modules/finops.md
+      - G. Investigation assistant: modules/investigator.md
+      - H. Controlled remediation: modules/remediation.md
+  - Platform:
+      - Authentication and RBAC: auth.md
+      - Domain events: events.md
+      - Observability: observability.md
+      - Scale and resilience: performance.md
