@@ -1,0 +1,40 @@
+# Secrets and local config
+.env
+*.pem
+*.key
+
+# Terraform state/plans can contain secrets — never commit them
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*.json
+.terraform/
+.terraform.lock.hcl.bak
+
+# Private research notes (contain personal/employer context)
+research/refrence/
+
+# Go
+/bin/
+*.exe
+*.test
+coverage.out
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

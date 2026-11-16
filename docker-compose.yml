@@ -1,0 +1,84 @@
+# Aegis local environment.
+#
+#   docker compose --profile core up -d --build     # postgres, nats, opa, api
+#
+# All ports bind to 127.0.0.1 only. Credentials come from .env (see
+# .env.example) and are for local development only.
+
+name: aegis
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  postgres:
+    <<: *hardening
+    profiles: ["core"]
+    image: postgres:16.6-alpine3.21
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aegis}
+      POSTGRES_USER: ${POSTGRES_USER:-aegis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  nats:
+    <<: *hardening
+    profiles: ["core"]
+    image: nats:2.10.24-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
+    volumes: ["natsdata:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  opa:
+    <<: *hardening
+    profiles: ["core"]
+    image: openpolicyagent/opa:1.0.0-static
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-format=json", "/policies"]
+    ports: ["127.0.0.1:8181:8181"]
+    volumes: ["./policies:/policies:ro"]
+    read_only: true
+    user: "65532:65532"
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  api:
+    <<: *hardening
+    profiles: ["core"]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    environment:
+      AEGIS_ENV: development
+      AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
+      AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+    ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    depends_on:
+      postgres: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+volumes:
+  pgdata:
+  natsdata:
