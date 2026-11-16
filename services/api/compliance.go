@@ -11,6 +11,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 )
@@ -53,7 +54,12 @@ func (h complianceHandlers) tenant(w http.ResponseWriter, r *http.Request) (stri
 }
 
 // actor returns the acting identity; required for state-changing requests.
+// actor is the identity recorded for an action: the verified token subject
+// in OIDC mode, or the X-Aegis-Actor header in development mode.
 func actor(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if p, ok := access.FromContext(r.Context()); ok && p.Method == AuthOIDC {
+		return p.Subject, true
+	}
 	a := r.Header.Get(ActorHeader)
 	if !actorRe.MatchString(a) {
 		writeError(w, http.StatusBadRequest, "invalid_actor", "missing or invalid "+ActorHeader+" header")

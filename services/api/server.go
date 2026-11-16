@@ -35,7 +35,9 @@ type Deps struct {
 	Risk         RiskService
 	FinOps       FinOpsService
 	Investigator InvestigatorService
-	Remediation  RemediationService
+	// Auth selects OIDC or development header authentication.
+	Auth        Auth
+	Remediation RemediationService
 	// InvestigationWriteBudget is the write deadline for creating an
 	// investigation (it may wait on a local model); 0 keeps the server default.
 	InvestigationWriteBudget time.Duration
@@ -49,7 +51,11 @@ type Deps struct {
 func NewHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	handle := func(pattern string, limit int64, h http.HandlerFunc) {
-		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, h)))
+		perm, ok := routePermissions[pattern]
+		if !ok {
+			panic("api: route " + pattern + " has no entry in routePermissions")
+		}
+		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.Auth.authorize(perm, h))))
 	}
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
@@ -58,6 +64,11 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /healthz", d.MaxBodyBytes, handleLiveness)
 	handle("GET /readyz", d.MaxBodyBytes, handleReadiness(d.DB))
 	handle("GET /api/v1/version", d.MaxBodyBytes, handleVersion(d.Version))
+	ac := accessHandlers{auth: d.Auth}
+	handle("GET /api/v1/me", d.MaxBodyBytes, ac.me)
+	handle("GET /api/v1/access/bindings", d.MaxBodyBytes, ac.list)
+	handle("POST /api/v1/access/bindings", d.MaxBodyBytes, ac.change(true))
+	handle("DELETE /api/v1/access/bindings", d.MaxBodyBytes, ac.change(false))
 
 	inv := inventoryHandlers{svc: d.Inventory}
 	handle("POST /api/v1/inventory/import", d.MaxImportBytes, inv.importSnapshot)
@@ -123,6 +134,7 @@ func NewHandler(d Deps) http.Handler {
 	return otelhttp.NewHandler(Chain(mux,
 		RequestContext(d.Logger),
 		Recover,
+		d.Auth.authenticate,
 		SecurityHeaders,
 	), "http.server",
 		// A fixed server name: the Host header is client-controlled and must not become a metric label.

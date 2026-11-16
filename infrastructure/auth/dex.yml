@@ -1,0 +1,57 @@
+# Local development identity provider (Dex) for the "auth" Compose profile.
+#
+# DEVELOPMENT ONLY. Every demo user's password is "aegis-dev-only". The
+# password grant is enabled so scripts and tests can obtain tokens. Never use
+# this file, these users or this password anywhere real.
+#
+# The issuer uses dex.localhost, which browsers resolve to 127.0.0.1 and which
+# the API container resolves to this service through a network alias, so the
+# browser and the API see the same issuer URL.
+issuer: http://dex.localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+  allowedOrigins: ["http://127.0.0.1:5173", "http://localhost:5173"]
+
+oauth2:
+  skipApprovalScreen: true
+  responseTypes: ["code"]
+  passwordConnector: local
+
+expiry:
+  idTokens: "1h"
+
+staticClients:
+  - id: aegis-web
+    name: Aegis
+    public: true
+    redirectURIs:
+      - http://127.0.0.1:5173/callback
+      - http://localhost:5173/callback
+
+enablePasswordDB: true
+
+staticPasswords:
+  - email: admin@aegis.local
+    username: admin
+    userID: 0b0a5f0e-6a51-4b7e-9c2c-000000000001
+    hash: "$2a$10$6WkuodpOJY8FmiChKmqATOKJhNkTRxV1BRkjmhUxMzghb7ZSooQne"
+  - email: alice@aegis.local
+    username: alice
+    userID: 0b0a5f0e-6a51-4b7e-9c2c-000000000002
+    hash: "$2a$10$6WkuodpOJY8FmiChKmqATOKJhNkTRxV1BRkjmhUxMzghb7ZSooQne"
+  - email: bob@aegis.local
+    username: bob
+    userID: 0b0a5f0e-6a51-4b7e-9c2c-000000000003
+    hash: "$2a$10$6WkuodpOJY8FmiChKmqATOKJhNkTRxV1BRkjmhUxMzghb7ZSooQne"
+  - email: carol@aegis.local
+    username: carol
+    userID: 0b0a5f0e-6a51-4b7e-9c2c-000000000004
+    hash: "$2a$10$6WkuodpOJY8FmiChKmqATOKJhNkTRxV1BRkjmhUxMzghb7ZSooQne"
+  - email: viewer@aegis.local
+    username: viewer
+    userID: 0b0a5f0e-6a51-4b7e-9c2c-000000000005
+    hash: "$2a$10$6WkuodpOJY8FmiChKmqATOKJhNkTRxV1BRkjmhUxMzghb7ZSooQne"

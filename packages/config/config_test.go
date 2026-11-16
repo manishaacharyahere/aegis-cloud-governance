@@ -35,8 +35,10 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadProductionDefaults(t *testing.T) {
 	cfg, err := Load(env(map[string]string{
-		"AEGIS_ENV":          "production",
-		"AEGIS_DATABASE_URL": "postgres://x?sslmode=verify-full",
+		"AEGIS_ENV":            "production",
+		"AEGIS_DATABASE_URL":   "postgres://x?sslmode=verify-full",
+		"AEGIS_OIDC_ISSUER":    "https://idp.example",
+		"AEGIS_OIDC_CLIENT_ID": "aegis-web",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -46,6 +48,9 @@ func TestLoadProductionDefaults(t *testing.T) {
 	}
 	if cfg.BootstrapTenant != "" {
 		t.Error("production must not bootstrap a tenant by default")
+	}
+	if cfg.AuthMode != "oidc" {
+		t.Errorf("production must default to OIDC, got %q", cfg.AuthMode)
 	}
 }
 
@@ -64,6 +69,11 @@ func TestLoadErrors(t *testing.T) {
 		{"unknown AI provider", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "openai"}, "AEGIS_AI_PROVIDER"},
 		{"ollama without model", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "ollama"}, "AEGIS_AI_MODEL"},
 		{"bad AI timeout", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_TIMEOUT": "1h"}, "AEGIS_AI_TIMEOUT"},
+		{"dev headers in production", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_ENV": "production", "AEGIS_AUTH_MODE": "dev-headers"}, "not allowed in production"},
+		{"oidc without issuer", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "oidc", "AEGIS_OIDC_CLIENT_ID": "c"}, "AEGIS_OIDC_ISSUER"},
+		{"oidc without client", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "oidc", "AEGIS_OIDC_ISSUER": "https://idp"}, "AEGIS_OIDC_CLIENT_ID"},
+		{"http issuer in production", map[string]string{"AEGIS_DATABASE_URL": "x?sslmode=verify-full", "AEGIS_ENV": "production", "AEGIS_OIDC_ISSUER": "http://idp", "AEGIS_OIDC_CLIENT_ID": "c"}, "https in production"},
+		{"unknown auth mode", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AUTH_MODE": "none"}, "AEGIS_AUTH_MODE"},
 		{"bad NATS URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "http://nats:4222"}, "AEGIS_NATS_URL"},
 		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},

@@ -134,8 +134,10 @@ Status codes:
 
 ## Limitations
 
-- Actors are still the temporary `X-Aegis-Actor` header, so separation of duties is only as
-  strong as the identity behind it. OIDC/RBAC is release work.
+- Separation of duties is only as strong as the identity behind it. With
+  `AEGIS_AUTH_MODE=oidc` the actor is the verified token identity and approval
+  needs the approver role ([auth](../auth.md)). In `dev-headers` mode it is
+  caller-asserted.
 - Patches act on Aegis's normalised configuration. Translating them into Terraform
   code is left to the pipeline; the change set is not generated HCL.
 - Verification needs a new inventory import. A change that was applied but not

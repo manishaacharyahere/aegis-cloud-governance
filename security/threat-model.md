@@ -19,12 +19,12 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
 
 | Threat | Example | Control | Status |
 |---|---|---|---|
-| Spoofing | Forged user identity | OIDC-ready authentication, token validation | planned |
+| Spoofing | Forged user identity | OIDC ID tokens verified for signature (JWKS), issuer, audience and expiry; actor taken from the token, never from a header; dev header mode refused in production (docs/auth.md) | implemented |
 | Tampering | Edited audit or policy records | Append-only audit table (UPDATE/DELETE/TRUNCATE rejected by trigger), hash chain, migration checksums | partial |
 | Repudiation | User denies approving a change | Actor, action, target, outcome recorded in audit events | schema ready |
 | Information disclosure | Secrets in Terraform plan JSON; errors leaking internals | Redaction before storage; generic error bodies; panics hidden from clients; DB URL never logged | partial |
 | Denial of service | Huge import overwhelms API/workers | Request body limit, server timeouts, bounded concurrency, queue backpressure | partial |
-| Elevation of privilege | User approves an unauthorised change; AI executes commands | Remediation: requester cannot approve, distinct approvers (+1 for production, +1 for disruptive), approvals bound to the plan hash, staleness re-check under row lock, export-only release with no cloud credentials (ADR-010); the assistant has no tools (ADR-009); OIDC/RBAC planned | implemented except identity (actor header is still caller-asserted) |
+| Elevation of privilege | User approves an unauthorised change; AI executes commands | Remediation: requester cannot approve, distinct approvers (+1 for production, +1 for disruptive), approvals bound to the plan hash, staleness re-check under row lock, export-only release with no cloud credentials (ADR-010); the assistant has no tools (ADR-009); OIDC + per-tenant RBAC (docs/auth.md) | implemented |
 | Tampering (remediation) | A plan is changed after approval, or approved against an outdated resource | Plan SHA-256 over resource ID, version, content hash, operations and policy bundle; append-only approvals; stale plans cannot be approved or released | implemented |
 | Tampering (AI) | Prompt injection through imported tag values or messages | Evidence sent as JSON data; model claims validated against cited evidence; command/action text and echoed instructions rejected; deterministic brief never uses model output | implemented; meaning-level contradictions not detected (documented) |
 | Information disclosure (AI) | Tenant evidence sent to a remote model | Model endpoint must be loopback or a single-label host unless `AEGIS_AI_ALLOW_REMOTE=true`; no redirects; sensitive keys re-redacted; config capped at 4 KiB | implemented |
@@ -42,6 +42,6 @@ Framework: STRIDE. Living document; update whenever a trust boundary changes.
   append-only, and write an audit event.
 
 ## Known limitations
-- No authentication yet — the API must not be exposed beyond localhost.
+- In `dev-headers` mode (the development default) there is no authentication; that mode is refused in production. Tokens are not revocable before expiry.
 - The audit hash chain is tamper-*evident*, not tamper-*proof*: a database
   superuser can rewrite the whole chain. External anchoring is future work.

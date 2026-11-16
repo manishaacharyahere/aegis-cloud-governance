@@ -40,6 +40,11 @@ type Config struct {
 	NATSURL string
 	// MetricsAddr serves Prometheus metrics when set (internal port, e.g. :9464).
 	MetricsAddr string
+	// Auth: "oidc" or "dev-headers" (development only).
+	AuthMode        string
+	OIDCIssuer      string
+	OIDCClientID    string
+	BootstrapAdmins []string
 	// AI is the optional Module G model. Provider "none" (the default)
 	// means investigations return deterministic briefs only.
 	AI AIConfig
@@ -136,6 +141,39 @@ func Load(lookup LookupFunc) (Config, error) {
 	cfg.OPAURL = get("AEGIS_OPA_URL", "http://127.0.0.1:8181")
 	cfg.NATSURL = get("AEGIS_NATS_URL", "")
 	cfg.MetricsAddr = get("AEGIS_METRICS_ADDR", "")
+
+	defAuth := "dev-headers"
+	if cfg.Environment == EnvProduction {
+		defAuth = "oidc"
+	}
+	cfg.AuthMode = get("AEGIS_AUTH_MODE", defAuth)
+	cfg.OIDCIssuer = get("AEGIS_OIDC_ISSUER", "")
+	cfg.OIDCClientID = get("AEGIS_OIDC_CLIENT_ID", "")
+	switch cfg.AuthMode {
+	case "oidc":
+		if u, err := url.Parse(cfg.OIDCIssuer); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			errs = append(errs, errors.New("AEGIS_OIDC_ISSUER: required http(s) URL when AEGIS_AUTH_MODE=oidc"))
+		} else if cfg.Environment == EnvProduction && u.Scheme != "https" {
+			errs = append(errs, errors.New("AEGIS_OIDC_ISSUER: must use https in production"))
+		}
+		if cfg.OIDCClientID == "" {
+			errs = append(errs, errors.New("AEGIS_OIDC_CLIENT_ID: required when AEGIS_AUTH_MODE=oidc"))
+		}
+	case "dev-headers":
+		if cfg.Environment == EnvProduction {
+			errs = append(errs, errors.New("AEGIS_AUTH_MODE: dev-headers trusts caller-asserted identity and is not allowed in production"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("AEGIS_AUTH_MODE: must be oidc or dev-headers, got %q", cfg.AuthMode))
+	}
+	for _, a := range strings.Split(get("AEGIS_BOOTSTRAP_ADMINS", ""), ",") {
+		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+			cfg.BootstrapAdmins = append(cfg.BootstrapAdmins, a)
+		}
+	}
+	if len(cfg.BootstrapAdmins) > 0 && cfg.BootstrapTenant == "" {
+		errs = append(errs, errors.New("AEGIS_BOOTSTRAP_ADMINS: requires AEGIS_BOOTSTRAP_TENANT"))
+	}
 	if u, err := url.Parse(cfg.NATSURL); cfg.NATSURL != "" && (err != nil || (u.Scheme != "nats" && u.Scheme != "tls") || u.Host == "") {
 		errs = append(errs, errors.New("AEGIS_NATS_URL: must be a nats:// or tls:// URL"))
 	}

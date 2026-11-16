@@ -17,6 +17,7 @@ machine with no paid cloud services or mandatory AI API.
 |---|---|
 | Go API skeleton (health, readiness, version, structured logs, graceful shutdown) | ✅ implemented, unit-tested |
 | PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration-tested |
+| Authentication and RBAC - OIDC token verification (any provider), per-tenant roles (viewer/analyst/approver/admin) stored in Aegis, one route-permission table, local Dex profile ([docs](docs/auth.md)) | ✅ implemented; verified with real Dex tokens |
 | Observability - OpenTelemetry request spans and metrics (route-pattern labels), trace IDs in logs, Prometheus/Grafana/Jaeger profile with a provisioned dashboard ([docs](docs/observability.md)) | ✅ implemented; verified end to end locally |
 | Hash-chained, append-only audit log with verification; transactional outbox | ✅ implemented; outbox relayed to NATS JetStream with de-duplication ([docs](docs/events.md)) |
 | OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |

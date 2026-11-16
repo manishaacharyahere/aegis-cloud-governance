@@ -21,6 +21,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
@@ -118,6 +119,20 @@ func run() error {
 		log.Info("investigation model enabled", "model", m.Name(), "remote_allowed", cfg.AI.AllowRemote)
 	}
 
+	roles := &access.Store{Pool: pool}
+	if len(cfg.BootstrapAdmins) > 0 {
+		if err := roles.Bootstrap(ctx, cfg.BootstrapTenant, cfg.BootstrapAdmins); err != nil {
+			return err
+		}
+	}
+	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles}
+	if cfg.AuthMode == api.AuthOIDC {
+		auth.Verifier = &access.Verifier{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID}
+		log.Info("authentication", "mode", "oidc", "issuer", cfg.OIDCIssuer, "client_id", cfg.OIDCClientID)
+	} else {
+		log.Warn("authentication is in dev-headers mode: X-Aegis-Actor is trusted and every caller has every permission; never expose this API")
+	}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
 		Logger:     log,
 		DB:         pool,
@@ -130,6 +145,7 @@ func run() error {
 		Risk:         &risk.Service{Pool: pool, Rules: ruleInfo},
 		FinOps:       &finops.Service{Pool: pool},
 		Investigator: inv,
+		Auth:         auth,
 		Remediation:  &remediation.Service{Pool: pool, OPA: opaClient},
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
