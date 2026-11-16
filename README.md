@@ -22,7 +22,7 @@ machine with no paid cloud services or mandatory AI API.
 | Observability - OpenTelemetry request spans and metrics (route-pattern labels), trace IDs in logs, Prometheus/Grafana/Jaeger profile with a provisioned dashboard ([docs](docs/observability.md)) | ✅ implemented; verified end to end locally |
 | Hash-chained, append-only audit log with verification; transactional outbox | ✅ implemented; outbox relayed to NATS JetStream with de-duplication ([docs](docs/events.md)) |
 | OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |
-| React + TypeScript dashboard shell with live API status | ✅ implemented, unit-tested |
+| React + TypeScript dashboard: OIDC sign-in (PKCE), the five journeys (import and scan, investigate risk, compliance evidence, cost, controlled remediation), access management ([screenshots](screenshots/), [e2e](apps/web/e2e/README.md)) | ✅ implemented; 6 browser journeys pass against the real stack with real Dex sign-in |
 | Python ML package (cost generator, detectors, forecasters, benchmark, DB worker) | ✅ 27 tests |
 | A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
 | B. Terraform / IaC analysis — sandboxed offline plan, redacted plan analysis, 11 Aegis OPA rules, Trivy + Checkov, unified report, durable job queue with leases/retries ([docs](docs/modules/iac.md)) | ✅ implemented; 6/6 fixtures match ground truth |
