@@ -26,6 +26,7 @@ type Deps struct {
 	Compliance     ComplianceService
 	Catalog        *compliance.Catalog
 	Drift          DriftService
+	Risk           RiskService
 	Version        string
 	MaxBodyBytes   int64 // default per-request body limit
 	MaxImportBytes int64 // body limit for inventory imports
@@ -71,6 +72,10 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/drift/baselines", d.MaxBodyBytes, dr.listBaselines)
 	handle("POST /api/v1/drift/compare", d.MaxBodyBytes, dr.compare)
 	handle("GET /api/v1/drift/reports/{id}", d.MaxBodyBytes, dr.getReport)
+	rk := riskHandlers{svc: d.Risk}
+	handle("POST /api/v1/risk/assessments", d.MaxBodyBytes, rk.assess)
+	handle("GET /api/v1/risk/assessments/{id}", d.MaxBodyBytes, rk.getRun)
+	handle("GET /api/v1/risk/attack-paths", d.MaxBodyBytes, rk.attackPaths)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

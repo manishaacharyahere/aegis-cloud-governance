@@ -167,6 +167,15 @@ func (c *Catalog) RuleSeverities() map[string]string {
 	return out
 }
 
+// ControlCounts maps rule IDs to the number of controls they are mapped to.
+func (c *Catalog) ControlCounts() map[string]int {
+	out := map[string]int{}
+	for _, m := range c.Mappings {
+		out[m.Rule]++
+	}
+	return out
+}
+
 // Framework returns a framework by ID.
 func (c *Catalog) Framework(id string) (Framework, bool) {
 	for _, f := range c.Frameworks {

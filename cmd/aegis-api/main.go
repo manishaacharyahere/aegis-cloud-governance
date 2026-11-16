@@ -21,6 +21,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -73,6 +74,12 @@ func run() error {
 	log.Info("compliance catalog loaded", "version", catalog.Version, "sha256", catalog.SHA256)
 	opaClient := &opa.Client{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}}
 
+	ruleInfo := map[string]risk.RuleInfo{}
+	counts := catalog.ControlCounts()
+	for id, sev := range catalog.RuleSeverities() {
+		ruleInfo[id] = risk.RuleInfo{Severity: sev, Controls: counts[id]}
+	}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
 		Logger:     log,
 		DB:         pool,
@@ -82,6 +89,7 @@ func run() error {
 		Catalog:    catalog,
 		Drift: &drift.Service{Pool: pool, OPA: opaClient, Config: drift.DefaultConfig(),
 			RuleSeverity: catalog.RuleSeverities()},
+		Risk:           &risk.Service{Pool: pool, Rules: ruleInfo},
 		Version:        version,
 		MaxBodyBytes:   cfg.MaxBodyBytes,
 		MaxImportBytes: cfg.MaxImportBytes,
