@@ -17,7 +17,7 @@ machine with no paid cloud services or mandatory AI API.
 |---|---|
 | Go API skeleton (health, readiness, version, structured logs, graceful shutdown) | ✅ implemented, unit-tested |
 | PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration-tested |
-| Hash-chained, append-only audit log with verification; transactional outbox | ✅ audit implemented; outbox written, relay pending |
+| Hash-chained, append-only audit log with verification; transactional outbox | ✅ implemented; outbox relayed to NATS JetStream with de-duplication ([docs](docs/events.md)) |
 | OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |
 | React + TypeScript dashboard shell with live API status | ✅ implemented, unit-tested |
 | Python ML package (cost generator, detectors, forecasters, benchmark, DB worker) | ✅ 27 tests |

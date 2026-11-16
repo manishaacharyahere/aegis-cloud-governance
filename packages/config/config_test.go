@@ -64,6 +64,7 @@ func TestLoadErrors(t *testing.T) {
 		{"unknown AI provider", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "openai"}, "AEGIS_AI_PROVIDER"},
 		{"ollama without model", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_PROVIDER": "ollama"}, "AEGIS_AI_MODEL"},
 		{"bad AI timeout", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_TIMEOUT": "1h"}, "AEGIS_AI_TIMEOUT"},
+		{"bad NATS URL", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_NATS_URL": "http://nats:4222"}, "AEGIS_NATS_URL"},
 		{"bad AI remote flag", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_AI_ALLOW_REMOTE": "sure"}, "AEGIS_AI_ALLOW_REMOTE"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},
 		{"huge import", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_IMPORT_BYTES": "999999999999"}, "AEGIS_MAX_IMPORT_BYTES"},

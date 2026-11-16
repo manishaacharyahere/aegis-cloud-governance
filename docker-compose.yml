@@ -75,6 +75,7 @@ services:
       AEGIS_ENV: development
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
       AEGIS_OPA_URL: http://opa:8181
+      AEGIS_NATS_URL: nats://nats:4222
       AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
       AEGIS_AI_PROVIDER: ${AEGIS_AI_PROVIDER:-none}
       AEGIS_AI_URL: http://ollama:11434

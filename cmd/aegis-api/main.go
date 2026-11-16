@@ -5,16 +5,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/manishaacharyahere/aegis-cloud-governance/migrations"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/config"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
@@ -23,6 +27,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/investigator"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/outbox"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
 )
@@ -118,6 +123,12 @@ func run() error {
 		MaxImportBytes:           cfg.MaxImportBytes,
 	}), log)
 
+	if cfg.NATSURL != "" {
+		go runRelay(ctx, cfg.NATSURL, pool, log)
+	} else {
+		log.Warn("AEGIS_NATS_URL not set; outbox events are stored but not published")
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Environment, "version", version)
@@ -142,4 +153,26 @@ func run() error {
 	}
 	log.Info("shutdown complete")
 	return nil
+}
+
+// runRelay connects to NATS (retrying until it is reachable) and publishes
+// outbox events until ctx is cancelled.
+func runRelay(ctx context.Context, url string, pool *pgxpool.Pool, log *slog.Logger) {
+	wait := time.Second
+	for {
+		bus, err := natsbus.Connect(ctx, url, "aegis-api")
+		if err == nil {
+			defer bus.Close()
+			log.Info("outbox relay started", "stream", natsbus.Stream)
+			_ = (&outbox.Relay{Pool: pool, Pub: bus, Log: log}).Run(ctx)
+			return
+		}
+		log.Warn("NATS not reachable; outbox relay will retry", "error", err, "retry_in", wait)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		wait = min(wait*2, 30*time.Second)
+	}
 }

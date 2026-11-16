@@ -36,6 +36,8 @@ type Config struct {
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
+	// NATSURL enables the outbox relay when set (e.g. nats://nats:4222).
+	NATSURL string
 	// AI is the optional Module G model. Provider "none" (the default)
 	// means investigations return deterministic briefs only.
 	AI AIConfig
@@ -130,6 +132,10 @@ func Load(lookup LookupFunc) (Config, error) {
 	}
 
 	cfg.OPAURL = get("AEGIS_OPA_URL", "http://127.0.0.1:8181")
+	cfg.NATSURL = get("AEGIS_NATS_URL", "")
+	if u, err := url.Parse(cfg.NATSURL); cfg.NATSURL != "" && (err != nil || (u.Scheme != "nats" && u.Scheme != "tls") || u.Host == "") {
+		errs = append(errs, errors.New("AEGIS_NATS_URL: must be a nats:// or tls:// URL"))
+	}
 	if u, err := url.Parse(cfg.OPAURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		errs = append(errs, errors.New("AEGIS_OPA_URL: must be an http(s) URL"))
 	}
