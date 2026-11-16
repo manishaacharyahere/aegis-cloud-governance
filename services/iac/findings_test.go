@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -101,8 +102,7 @@ func TestOPAClient(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		b := make([]byte, r.ContentLength)
-		r.Body.Read(b)
+		b, _ := io.ReadAll(r.Body)
 		gotBody = string(b)
 		fmt.Fprint(w, `{"result":{"deny":[{"rule_id":"AEGIS-S3-001","severity":"high","address":"aws_s3_bucket.a"}],"warn":[]}}`)
 	}))

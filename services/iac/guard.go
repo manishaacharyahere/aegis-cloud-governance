@@ -1,8 +1,6 @@
 package iac
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -130,34 +128,4 @@ func Preflight(dir string) error {
 		return fmt.Errorf("%w: %s", ErrRejected, strings.Join(problems, "; "))
 	}
 	return nil
-}
-
-// HashPolicies returns a stable SHA-256 over the non-test .rego files under
-// dir, so every scan records exactly which policy version produced it.
-func HashPolicies(dir string) (string, error) {
-	var paths []string
-	err := filepath.WalkDir(dir, func(p string, e fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !e.IsDir() && strings.HasSuffix(p, ".rego") && !strings.HasSuffix(p, "_test.rego") {
-			paths = append(paths, p)
-		}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	sort.Strings(paths)
-	h := sha256.New()
-	for _, p := range paths {
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return "", err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		fmt.Fprintf(h, "%s\x00%d\x00", filepath.ToSlash(rel), len(b))
-		h.Write(b)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }

@@ -122,6 +122,11 @@ deny contains f if {
 
 open_cidrs := {"0.0.0.0/0", "::/0"}
 
+# IPv4 and IPv6 exposure are separate rules so each maps to its own control.
+net_rule("0.0.0.0/0") := "AEGIS-NET-001"
+
+net_rule("::/0") := "AEGIS-NET-002"
+
 covers_admin_port(protocol, _, _) if {
 	protocol in {"-1", "all"}
 }
@@ -141,7 +146,7 @@ deny contains f if {
 	some cidr in array.concat(object.get(rule, "cidr_blocks", []), object.get(rule, "ipv6_cidr_blocks", []))
 	cidr in open_cidrs
 	covers_admin_port(rule.protocol, rule.from_port, rule.to_port)
-	f := finding("AEGIS-NET-001", "critical", sg, sprintf("security group allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
+	f := finding(net_rule(cidr), "critical", sg, sprintf("security group allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
 }
 
 # Standalone ingress rule resources.
@@ -151,7 +156,7 @@ deny contains f if {
 	some cidr in [object.get(r.after, "cidr_ipv4", ""), object.get(r.after, "cidr_ipv6", "")]
 	cidr in open_cidrs
 	covers_admin_port(r.after.ip_protocol, object.get(r.after, "from_port", 0), object.get(r.after, "to_port", 65535))
-	f := finding("AEGIS-NET-001", "critical", r, sprintf("ingress rule allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
+	f := finding(net_rule(cidr), "critical", r, sprintf("ingress rule allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
 }
 
 deny contains f if {
@@ -161,7 +166,7 @@ deny contains f if {
 	some cidr in array.concat(object.get(r.after, "cidr_blocks", []), object.get(r.after, "ipv6_cidr_blocks", []))
 	cidr in open_cidrs
 	covers_admin_port(r.after.protocol, r.after.from_port, r.after.to_port)
-	f := finding("AEGIS-NET-001", "critical", r, sprintf("security group rule allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
+	f := finding(net_rule(cidr), "critical", r, sprintf("security group rule allows administrative access (ports %v) from %s", [config.admin_ports, cidr]))
 }
 
 # ---------------------------------------------------------------- logging

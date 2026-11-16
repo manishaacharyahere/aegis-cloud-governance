@@ -12,7 +12,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 )
 
 // Finding sources.
@@ -202,52 +203,37 @@ func Merge(groups ...[]Finding) []Finding {
 // PolicyEvaluator evaluates plan analyses against the policy set.
 type PolicyEvaluator interface {
 	Evaluate(ctx context.Context, a Analysis) (PolicyResult, error)
+	Bundle(ctx context.Context) (opa.Bundle, error)
 }
 
-// OPAClient evaluates policies through OPA's REST data API.
+// OPAClient evaluates the aegis.terraform policies on an OPA server.
 type OPAClient struct {
 	BaseURL string // e.g. http://127.0.0.1:8181
 	HTTP    *http.Client
 }
 
-// Evaluate posts the analysis to /v1/data/aegis/terraform.
+func (c *OPAClient) client() *opa.Client { return &opa.Client{BaseURL: c.BaseURL, HTTP: c.HTTP} }
+
+// Evaluate queries data.aegis.terraform. It fails closed: an undefined
+// document (policy not loaded) is an error, never "no findings".
 func (c *OPAClient) Evaluate(ctx context.Context, a Analysis) (PolicyResult, error) {
-	body, err := json.Marshal(map[string]any{"input": map[string]any{"resources": a.Resources}})
-	if err != nil {
-		return PolicyResult{}, err
+	var out PolicyResult
+	err := c.client().Query(ctx, "aegis.terraform", map[string]any{"resources": a.Resources}, &out)
+	return out, classifyOPA(err)
+}
+
+// Bundle returns the exact policy text OPA is serving.
+func (c *OPAClient) Bundle(ctx context.Context) (opa.Bundle, error) {
+	b, err := c.client().Bundle(ctx)
+	return b, classifyOPA(err)
+}
+
+func classifyOPA(err error) error {
+	var u *opa.UnavailableError
+	if errors.As(err, &u) {
+		return Retryable(err)
 	}
-	client := c.HTTP
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BaseURL, "/")+"/v1/data/aegis/terraform", bytes.NewReader(body))
-	if err != nil {
-		return PolicyResult{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return PolicyResult{}, Retryable(fmt.Errorf("opa request: %w", err))
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
-		return PolicyResult{}, Retryable(fmt.Errorf("opa returned %s", resp.Status))
-	}
-	if resp.StatusCode != http.StatusOK {
-		return PolicyResult{}, fmt.Errorf("opa returned %s", resp.Status)
-	}
-	var out struct {
-		Result *PolicyResult `json:"result"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&out); err != nil {
-		return PolicyResult{}, fmt.Errorf("decode opa response: %w", err)
-	}
-	if out.Result == nil {
-		// An undefined document means the policy package is not loaded: fail
-		// closed rather than report "no findings".
-		return PolicyResult{}, errors.New("opa: policy package aegis.terraform is not loaded")
-	}
-	return *out.Result, nil
+	return err
 }
 
 // RetryableError marks failures worth retrying (network, timeouts, tooling

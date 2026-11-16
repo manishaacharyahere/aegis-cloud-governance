@@ -1,5 +1,20 @@
 {
-  "must_fire": [{"rule_id": "AEGIS-IAM-001", "address": "aws_iam_policy.admin_everything"}],
-  "must_not_fire_on": [{"rule_id": "AEGIS-IAM-001", "address": "aws_iam_policy.s3_all_actions"}],
-  "must_not_fire": ["AEGIS-NET-001", "AEGIS-TAG-001", "AEGIS-REG-001"]
+  "must_fire": [
+    {
+      "rule_id": "AEGIS-IAM-001",
+      "address": "aws_iam_policy.admin_everything"
+    }
+  ],
+  "must_not_fire_on": [
+    {
+      "rule_id": "AEGIS-IAM-001",
+      "address": "aws_iam_policy.s3_all_actions"
+    }
+  ],
+  "must_not_fire": [
+    "AEGIS-NET-001",
+    "AEGIS-NET-002",
+    "AEGIS-TAG-001",
+    "AEGIS-REG-001"
+  ]
 }

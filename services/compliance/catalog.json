@@ -1,0 +1,142 @@
+{
+  "catalog_version": "2026.11.2",
+  "notice": "Aegis provides control mappings and evidence management, not certification or audit. Mappings marked 'unreviewed' have not yet been checked against the official framework text. Aegis rules are Aegis-specific and are not official framework requirements.",
+  "frameworks": [
+    {
+      "id": "nist-csf-2.0",
+      "name": "NIST Cybersecurity Framework",
+      "version": "2.0",
+      "official": true,
+      "source_url": "https://www.nist.gov/cyberframework",
+      "controls": [
+        {"id": "ID.AM-02", "title": "Inventories of software, services, and systems managed by the organization are maintained"},
+        {"id": "PR.AA-01", "title": "Identities and credentials for authorized users, services, and hardware are managed by the organization"},
+        {"id": "PR.AA-05", "title": "Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"},
+        {"id": "PR.DS-01", "title": "The confidentiality, integrity, and availability of data-at-rest are protected"},
+        {"id": "PR.DS-11", "title": "Backups of data are created, protected, maintained, and tested"},
+        {"id": "PR.IR-01", "title": "Networks and environments are protected from unauthorized logical access and usage"},
+        {"id": "PR.PS-01", "title": "Configuration management practices are established and applied"},
+        {"id": "PR.PS-04", "title": "Log records are generated and made available for continuous monitoring"},
+        {"id": "DE.CM-09", "title": "Computing hardware and software, runtime environments, and their data are monitored to find potentially adverse events"}
+      ]
+    },
+    {
+      "id": "cis-aws-foundations-3.0.0",
+      "name": "CIS Amazon Web Services Foundations Benchmark",
+      "version": "3.0.0",
+      "official": true,
+      "source_url": "https://www.cisecurity.org/benchmark/amazon_web_services",
+      "controls": [
+        {"id": "1.4", "title": "Ensure no 'root' user account access key exists"},
+        {"id": "1.5", "title": "Ensure MFA is enabled for the 'root' user account"},
+        {"id": "1.16", "title": "Ensure IAM policies that allow full \"*:*\" administrative privileges are not attached"},
+        {"id": "2.1.4", "title": "Ensure that S3 Buckets are configured with 'Block public access (bucket settings)'"},
+        {"id": "2.3.1", "title": "Ensure that encryption-at-rest is enabled for RDS Instances"},
+        {"id": "2.3.3", "title": "Ensure that public access is not given to RDS Instance"},
+        {"id": "3.1", "title": "Ensure CloudTrail is enabled in all regions"},
+        {"id": "3.2", "title": "Ensure CloudTrail log file validation is enabled"},
+        {"id": "5.2", "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to remote server administration ports"},
+        {"id": "5.3", "title": "Ensure no security groups allow ingress from ::/0 to remote server administration ports"}
+      ]
+    },
+    {
+      "id": "aegis-baseline-1",
+      "name": "Aegis Internal Cloud Security Baseline",
+      "version": "1",
+      "official": false,
+      "source_url": "",
+      "controls": [
+        {"id": "BL-01", "title": "Data stores are not publicly accessible"},
+        {"id": "BL-02", "title": "Data stores are encrypted at rest with an explicit configuration"},
+        {"id": "BL-03", "title": "Data is recoverable: versioning is enabled and stateful resources are not destroyed without approval"},
+        {"id": "BL-04", "title": "IAM permissions follow least privilege; no full-administrator policies"},
+        {"id": "BL-05", "title": "Administrative ports are not exposed to the internet"},
+        {"id": "BL-06", "title": "Audit logging is enabled with integrity validation"},
+        {"id": "BL-07", "title": "Every resource carries owner, environment and cost-center tags"},
+        {"id": "BL-08", "title": "Resources are deployed only in approved regions"}
+      ]
+    }
+  ],
+  "rules": [
+    {"id": "AEGIS-S3-001", "title": "S3 bucket blocks all public access", "severity": "high",
+     "applies_to": {"terraform": ["aws_s3_bucket"], "inventory": ["storage.bucket"]},
+     "remediation": "Add an aws_s3_bucket_public_access_block with all four settings set to true."},
+    {"id": "AEGIS-ENC-001", "title": "S3 bucket has explicit server-side encryption", "severity": "medium",
+     "applies_to": {"terraform": ["aws_s3_bucket"], "inventory": ["storage.bucket"]},
+     "remediation": "Add aws_s3_bucket_server_side_encryption_configuration (prefer aws:kms)."},
+    {"id": "AEGIS-S3-002", "title": "S3 bucket versioning is enabled", "severity": "medium",
+     "applies_to": {"terraform": ["aws_s3_bucket"], "inventory": ["storage.bucket"]},
+     "remediation": "Add aws_s3_bucket_versioning with status Enabled."},
+    {"id": "AEGIS-DB-001", "title": "Database storage is encrypted at rest", "severity": "high",
+     "applies_to": {"terraform": ["aws_db_instance", "aws_rds_cluster"], "inventory": ["database.instance"]},
+     "remediation": "Set storage_encrypted = true (requires a new instance for existing databases)."},
+    {"id": "AEGIS-DB-002", "title": "Database is not publicly accessible", "severity": "critical",
+     "applies_to": {"terraform": ["aws_db_instance", "aws_rds_cluster"], "inventory": ["database.instance"]},
+     "remediation": "Set publicly_accessible = false and reach the database through private networking."},
+    {"id": "AEGIS-IAM-001", "title": "No IAM policy grants all actions on all resources", "severity": "critical",
+     "applies_to": {"terraform": ["aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy", "aws_iam_group_policy"], "inventory": ["identity.policy"]},
+     "remediation": "Replace Action \"*\" / Resource \"*\" with the specific actions and resources required."},
+    {"id": "AEGIS-NET-001", "title": "No administrative ports open to the IPv4 internet (0.0.0.0/0)", "severity": "critical",
+     "applies_to": {"terraform": ["aws_security_group", "aws_security_group_rule", "aws_vpc_security_group_ingress_rule"], "inventory": ["network.security_group"]},
+     "remediation": "Restrict ports 22/3389 to known CIDR ranges or use a bastion/SSM Session Manager."},
+    {"id": "AEGIS-NET-002", "title": "No administrative ports open to the IPv6 internet (::/0)", "severity": "critical",
+     "applies_to": {"terraform": ["aws_security_group", "aws_security_group_rule", "aws_vpc_security_group_ingress_rule"], "inventory": ["network.security_group"]},
+     "remediation": "Restrict ports 22/3389 to known IPv6 ranges or use a bastion/SSM Session Manager."},
+    {"id": "AEGIS-LOG-001", "title": "CloudTrail logging and log file validation are enabled", "severity": "high",
+     "applies_to": {"terraform": ["aws_cloudtrail"], "inventory": ["logging.trail"]},
+     "remediation": "Set enable_logging = true and enable_log_file_validation = true."},
+    {"id": "AEGIS-TAG-001", "title": "Required ownership and cost tags are present", "severity": "medium",
+     "applies_to": {"terraform": ["*taggable"], "inventory": ["*"]},
+     "remediation": "Add owner, environment and cost_center tags (provider default_tags recommended)."},
+    {"id": "AEGIS-REG-001", "title": "Resource is in an approved region", "severity": "high",
+     "applies_to": {"terraform": ["*regional"], "inventory": ["*regional"]},
+     "remediation": "Deploy to an approved region or request a documented exception."},
+    {"id": "AEGIS-TF-001", "title": "Stateful resources are not deleted or replaced without approval", "severity": "high", "change_rule": true,
+     "applies_to": {"terraform": ["aws_db_instance", "aws_rds_cluster", "aws_s3_bucket", "aws_dynamodb_table", "aws_kms_key", "aws_efs_file_system", "aws_ebs_volume"], "inventory": []},
+     "remediation": "Avoid force-replacement (e.g. lifecycle prevent_destroy) or obtain an approved change exception."}
+  ],
+  "mappings": [
+    {"rule": "AEGIS-S3-001", "framework": "nist-csf-2.0", "control": "PR.DS-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Blocking public access protects confidentiality of data at rest in S3."},
+    {"rule": "AEGIS-S3-001", "framework": "cis-aws-foundations-3.0.0", "control": "2.1.4", "coverage": "full", "review_status": "unreviewed", "rationale": "Checks all four bucket-level Block Public Access settings."},
+    {"rule": "AEGIS-S3-001", "framework": "aegis-baseline-1", "control": "BL-01", "coverage": "partial", "review_status": "reviewed", "rationale": "Bucket half of the data-store exposure control."},
+
+    {"rule": "AEGIS-ENC-001", "framework": "nist-csf-2.0", "control": "PR.DS-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Explicit encryption configuration for data at rest."},
+    {"rule": "AEGIS-ENC-001", "framework": "aegis-baseline-1", "control": "BL-02", "coverage": "partial", "review_status": "reviewed", "rationale": "Bucket half of the encryption control."},
+
+    {"rule": "AEGIS-S3-002", "framework": "nist-csf-2.0", "control": "PR.DS-11", "coverage": "partial", "review_status": "unreviewed", "rationale": "Object versioning supports recovery of overwritten or deleted data."},
+    {"rule": "AEGIS-S3-002", "framework": "aegis-baseline-1", "control": "BL-03", "coverage": "partial", "review_status": "reviewed", "rationale": "Versioning half of the recoverability control."},
+
+    {"rule": "AEGIS-DB-001", "framework": "nist-csf-2.0", "control": "PR.DS-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Database storage encryption protects data at rest."},
+    {"rule": "AEGIS-DB-001", "framework": "cis-aws-foundations-3.0.0", "control": "2.3.1", "coverage": "full", "review_status": "unreviewed", "rationale": "Checks storage_encrypted on RDS instances."},
+    {"rule": "AEGIS-DB-001", "framework": "aegis-baseline-1", "control": "BL-02", "coverage": "partial", "review_status": "reviewed", "rationale": "Database half of the encryption control."},
+
+    {"rule": "AEGIS-DB-002", "framework": "nist-csf-2.0", "control": "PR.IR-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Prevents unauthorised network access to databases."},
+    {"rule": "AEGIS-DB-002", "framework": "cis-aws-foundations-3.0.0", "control": "2.3.3", "coverage": "full", "review_status": "unreviewed", "rationale": "Checks publicly_accessible on RDS instances."},
+    {"rule": "AEGIS-DB-002", "framework": "aegis-baseline-1", "control": "BL-01", "coverage": "partial", "review_status": "reviewed", "rationale": "Database half of the data-store exposure control."},
+
+    {"rule": "AEGIS-IAM-001", "framework": "nist-csf-2.0", "control": "PR.AA-05", "coverage": "partial", "review_status": "unreviewed", "rationale": "Detects the most extreme violation of least privilege."},
+    {"rule": "AEGIS-IAM-001", "framework": "cis-aws-foundations-3.0.0", "control": "1.16", "coverage": "partial", "review_status": "unreviewed", "rationale": "Detects full-admin policy documents; does not verify whether they are attached."},
+    {"rule": "AEGIS-IAM-001", "framework": "aegis-baseline-1", "control": "BL-04", "coverage": "partial", "review_status": "reviewed", "rationale": "Only full wildcard policies are detected."},
+
+    {"rule": "AEGIS-NET-001", "framework": "nist-csf-2.0", "control": "PR.IR-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Blocks internet-exposed administrative access."},
+    {"rule": "AEGIS-NET-001", "framework": "cis-aws-foundations-3.0.0", "control": "5.2", "coverage": "full", "review_status": "unreviewed", "rationale": "IPv4 0.0.0.0/0 to ports 22/3389."},
+    {"rule": "AEGIS-NET-001", "framework": "aegis-baseline-1", "control": "BL-05", "coverage": "partial", "review_status": "reviewed", "rationale": "IPv4 half of the control."},
+    {"rule": "AEGIS-NET-002", "framework": "nist-csf-2.0", "control": "PR.IR-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Blocks internet-exposed administrative access over IPv6."},
+    {"rule": "AEGIS-NET-002", "framework": "cis-aws-foundations-3.0.0", "control": "5.3", "coverage": "full", "review_status": "unreviewed", "rationale": "IPv6 ::/0 to ports 22/3389."},
+    {"rule": "AEGIS-NET-002", "framework": "aegis-baseline-1", "control": "BL-05", "coverage": "partial", "review_status": "reviewed", "rationale": "IPv6 half of the control."},
+
+    {"rule": "AEGIS-LOG-001", "framework": "nist-csf-2.0", "control": "PR.PS-04", "coverage": "partial", "review_status": "unreviewed", "rationale": "CloudTrail generates API audit logs."},
+    {"rule": "AEGIS-LOG-001", "framework": "cis-aws-foundations-3.0.0", "control": "3.2", "coverage": "full", "review_status": "unreviewed", "rationale": "Checks enable_log_file_validation. Control 3.1 (multi-region trail exists) is not evaluated."},
+    {"rule": "AEGIS-LOG-001", "framework": "aegis-baseline-1", "control": "BL-06", "coverage": "full", "review_status": "reviewed", "rationale": "Direct implementation."},
+
+    {"rule": "AEGIS-TAG-001", "framework": "nist-csf-2.0", "control": "ID.AM-02", "coverage": "partial", "review_status": "unreviewed", "rationale": "Ownership tags make the inventory attributable and maintainable."},
+    {"rule": "AEGIS-TAG-001", "framework": "aegis-baseline-1", "control": "BL-07", "coverage": "full", "review_status": "reviewed", "rationale": "Direct implementation."},
+
+    {"rule": "AEGIS-REG-001", "framework": "nist-csf-2.0", "control": "PR.PS-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Enforces an approved configuration baseline for deployment location."},
+    {"rule": "AEGIS-REG-001", "framework": "aegis-baseline-1", "control": "BL-08", "coverage": "full", "review_status": "reviewed", "rationale": "Direct implementation."},
+
+    {"rule": "AEGIS-TF-001", "framework": "nist-csf-2.0", "control": "PR.PS-01", "coverage": "partial", "review_status": "unreviewed", "rationale": "Change control for destructive infrastructure changes."},
+    {"rule": "AEGIS-TF-001", "framework": "nist-csf-2.0", "control": "PR.DS-11", "coverage": "partial", "review_status": "unreviewed", "rationale": "Prevents unplanned loss of stateful data."},
+    {"rule": "AEGIS-TF-001", "framework": "aegis-baseline-1", "control": "BL-03", "coverage": "partial", "review_status": "reviewed", "rationale": "Change half of the recoverability control."}
+  ]
+}

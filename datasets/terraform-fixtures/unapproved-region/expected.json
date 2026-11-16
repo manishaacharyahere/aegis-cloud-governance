@@ -1,4 +1,13 @@
 {
-  "must_fire": [{"rule_id": "AEGIS-REG-001", "address": "aws_vpc.shadow"}],
-  "must_not_fire": ["AEGIS-TAG-001", "AEGIS-NET-001"]
+  "must_fire": [
+    {
+      "rule_id": "AEGIS-REG-001",
+      "address": "aws_vpc.shadow"
+    }
+  ],
+  "must_not_fire": [
+    "AEGIS-TAG-001",
+    "AEGIS-NET-001",
+    "AEGIS-NET-002"
+  ]
 }

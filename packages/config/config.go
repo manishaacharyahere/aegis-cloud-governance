@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type Config struct {
 	MaxImportBytes  int64
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
+	OPAURL          string
 }
 
 // LookupFunc matches os.LookupEnv. It is injected so tests do not mutate the
@@ -113,6 +115,11 @@ func Load(lookup LookupFunc) (Config, error) {
 	cfg.BootstrapTenant = get("AEGIS_BOOTSTRAP_TENANT", defTenant)
 	if cfg.BootstrapTenant != "" && !tenantSlug.MatchString(cfg.BootstrapTenant) {
 		errs = append(errs, fmt.Errorf("AEGIS_BOOTSTRAP_TENANT: invalid slug %q", cfg.BootstrapTenant))
+	}
+
+	cfg.OPAURL = get("AEGIS_OPA_URL", "http://127.0.0.1:8181")
+	if u, err := url.Parse(cfg.OPAURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		errs = append(errs, errors.New("AEGIS_OPA_URL: must be an http(s) URL"))
 	}
 
 	if cfg.Environment == EnvProduction && strings.Contains(cfg.DatabaseURL, "sslmode=disable") {

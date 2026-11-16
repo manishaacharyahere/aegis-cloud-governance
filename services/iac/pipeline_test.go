@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 )
 
 const fixturesDir = "../../datasets/terraform-fixtures"
@@ -47,9 +49,13 @@ func (f *fakePolicy) Evaluate(_ context.Context, a Analysis) (PolicyResult, erro
 	return f.res, f.err
 }
 
+func (f *fakePolicy) Bundle(context.Context) (opa.Bundle, error) {
+	return opa.Bundle{SHA256: "abc", Modules: map[string]string{"p.rego": "package p"}}, f.err
+}
+
 func TestPipelineMergesAllSources(t *testing.T) {
 	pol := &fakePolicy{res: PolicyResult{Deny: []PolicyFinding{{RuleID: "AEGIS-DB-002", Severity: "critical", Address: "aws_db_instance.legacy"}}}}
-	p := &Pipeline{Tools: goldenTools{fixture: "insecure-storage"}, Policy: pol, FixturesDir: fixturesDir, PolicyBundleSHA: "abc"}
+	p := &Pipeline{Tools: goldenTools{fixture: "insecure-storage"}, Policy: pol, FixturesDir: fixturesDir}
 	res, err := p.Run(context.Background(), "insecure-storage")
 	if err != nil {
 		t.Fatal(err)
@@ -163,21 +169,6 @@ func TestResolveFixtureRejectsBadNames(t *testing.T) {
 		if _, err := ResolveFixture(fixturesDir, name); !errors.Is(err, ErrRejected) {
 			t.Errorf("%q accepted: %v", name, err)
 		}
-	}
-}
-
-func TestHashPoliciesIgnoresTestsAndIsStable(t *testing.T) {
-	dir := writeTF(t, map[string]string{"a.rego": "package a", "a_test.rego": "package a_test"})
-	h1, err := HashPolicies(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.WriteFile(filepath.Join(dir, "a_test.rego"), []byte("changed"), 0o644)
-	h2, _ := HashPolicies(dir)
-	os.WriteFile(filepath.Join(dir, "a.rego"), []byte("package a\n"), 0o644)
-	h3, _ := HashPolicies(dir)
-	if h1 != h2 || h1 == h3 {
-		t.Errorf("hash stability: %s %s %s", h1, h2, h3)
 	}
 }
 

@@ -69,12 +69,14 @@ services:
     environment:
       AEGIS_ENV: development
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
+      AEGIS_OPA_URL: http://opa:8181
       AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
     ports: ["127.0.0.1:8080:8080"]
     read_only: true
     depends_on:
       postgres: { condition: service_healthy }
       nats: { condition: service_healthy }
+      opa: { condition: service_started }
     deploy:
       resources:
         limits: { memory: 256m }

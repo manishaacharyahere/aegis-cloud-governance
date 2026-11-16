@@ -175,6 +175,12 @@ func (s *Store) Complete(ctx context.Context, j *Job, owner string, r Result) er
 		if tag.RowsAffected() == 0 {
 			return ErrLeaseLost
 		}
+		if r.PolicyBundle.SHA256 != "" && len(r.PolicyBundle.Modules) > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO policy_bundles (sha256, modules) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+				r.PolicyBundle.SHA256, mustJSON(r.PolicyBundle.Modules)); err != nil {
+				return fmt.Errorf("record policy bundle: %w", err)
+			}
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM iac_planned_changes WHERE scan_id = $1`, j.ScanID); err != nil {
 			return err
 		}

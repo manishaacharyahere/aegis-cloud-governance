@@ -24,7 +24,6 @@ type Worker struct {
 	DrainTimeout time.Duration
 	OPAURL       string
 	FixturesDir  string
-	PoliciesDir  string
 	PluginVolume string
 	Docker       string
 }
@@ -53,7 +52,6 @@ func LoadWorker(lookup LookupFunc) (Worker, error) {
 		ID:           get("AEGIS_WORKER_ID", fmt.Sprintf("%s-%d", host, os.Getpid())),
 		OPAURL:       get("AEGIS_OPA_URL", "http://127.0.0.1:8181"),
 		FixturesDir:  get("AEGIS_FIXTURES_DIR", "datasets/terraform-fixtures"),
-		PoliciesDir:  get("AEGIS_POLICIES_DIR", "policies"),
 		PluginVolume: get("AEGIS_TF_PLUGIN_VOLUME", "aegis-tf-plugins"),
 		Docker:       get("AEGIS_DOCKER", "docker"),
 		PollInterval: dur("AEGIS_WORKER_POLL", "2s", 100*time.Millisecond, time.Minute),

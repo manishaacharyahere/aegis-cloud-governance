@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 )
 
 // Result is the complete, redacted output of one scan.
@@ -13,14 +15,14 @@ type Result struct {
 	Findings           []Finding         `json:"findings"`
 	ToolVersions       map[string]string `json:"tool_versions"`
 	PolicyBundleSHA256 string            `json:"policy_bundle_sha256"`
+	PolicyBundle       opa.Bundle        `json:"-"`
 }
 
 // Pipeline wires the tools and policy engine into one scan.
 type Pipeline struct {
-	Tools           ToolRunner
-	Policy          PolicyEvaluator
-	FixturesDir     string
-	PolicyBundleSHA string
+	Tools       ToolRunner
+	Policy      PolicyEvaluator
+	FixturesDir string
 }
 
 // Run scans the named fixture. Terraform planning and both scanners run
@@ -65,6 +67,11 @@ func (p *Pipeline) Run(ctx context.Context, fixture string) (Result, error) {
 	}
 	analysis := Analyze(plan)
 
+	// Record the policy version actually served for this evaluation.
+	bundle, err := p.Policy.Bundle(ctx)
+	if err != nil {
+		return Result{}, err
+	}
 	policy, err := p.Policy.Evaluate(ctx, analysis)
 	if err != nil {
 		return Result{}, err
@@ -82,6 +89,7 @@ func (p *Pipeline) Run(ctx context.Context, fixture string) (Result, error) {
 		Analysis:           analysis,
 		Findings:           Merge(policy.Findings(), trivy, checkov),
 		ToolVersions:       p.Tools.Versions(),
-		PolicyBundleSHA256: p.PolicyBundleSHA,
+		PolicyBundleSHA256: bundle.SHA256,
+		PolicyBundle:       bundle,
 	}, nil
 }

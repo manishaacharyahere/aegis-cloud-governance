@@ -17,14 +17,14 @@ machine with no paid cloud services or mandatory AI API.
 |---|---|
 | Go API skeleton (health, readiness, version, structured logs, graceful shutdown) | ✅ implemented, unit-tested |
 | PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration-tested |
-| Append-only, hash-chain-ready audit table + transactional outbox schema | ✅ schema only |
+| Hash-chained, append-only audit log with verification; transactional outbox | ✅ audit implemented; outbox written, relay pending |
 | OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |
 | React + TypeScript dashboard shell with live API status | ✅ implemented, unit-tested |
 | Python ML package with reproducibility manifest | ✅ implemented, unit-tested |
 | A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
 | B. Terraform / IaC analysis — sandboxed offline plan, redacted plan analysis, 11 Aegis OPA rules, Trivy + Checkov, unified report, durable job queue with leases/retries ([docs](docs/modules/iac.md)) | ✅ implemented; 6/6 fixtures match ground truth |
-| C. Policy & compliance engine | ⏳ next |
-| D. Drift detection | ⏳ planned |
+| C. Policy & compliance engine — NIST CSF 2.0 / CIS AWS 3.0.0 / internal baseline catalog, reproducible evaluations (policy text + snapshot pointers), expiring exceptions with separation of duties, coverage with evidence freshness, hash-chained audit log ([docs](docs/modules/compliance.md)) | ✅ implemented; inventory ground truth 132/132, 0 false positives |
+| D. Drift detection | ⏳ next |
 | E. Risk intelligence | ⏳ planned |
 | F. FinOps intelligence | ⏳ planned |
 | G. Evidence-grounded AI assistant (optional) | ⏳ planned |

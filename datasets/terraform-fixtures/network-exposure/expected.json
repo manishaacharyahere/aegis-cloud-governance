@@ -1,8 +1,35 @@
 {
   "must_fire": [
-    {"rule_id": "AEGIS-NET-001", "address": "aws_security_group.bastion"},
-    {"rule_id": "AEGIS-NET-001", "address": "aws_vpc_security_group_ingress_rule.rdp_any"}
+    {
+      "rule_id": "AEGIS-NET-001",
+      "address": "aws_security_group.bastion"
+    },
+    {
+      "rule_id": "AEGIS-NET-002",
+      "address": "aws_vpc_security_group_ingress_rule.rdp_any"
+    }
   ],
-  "must_not_fire_on": [{"rule_id": "AEGIS-NET-001", "address": "aws_security_group.web"}],
-  "must_not_fire": ["AEGIS-IAM-001", "AEGIS-TAG-001", "AEGIS-REG-001"]
+  "must_not_fire_on": [
+    {
+      "rule_id": "AEGIS-NET-001",
+      "address": "aws_security_group.web"
+    },
+    {
+      "rule_id": "AEGIS-NET-002",
+      "address": "aws_security_group.web"
+    },
+    {
+      "rule_id": "AEGIS-NET-001",
+      "address": "aws_vpc_security_group_ingress_rule.rdp_any"
+    },
+    {
+      "rule_id": "AEGIS-NET-002",
+      "address": "aws_security_group.bastion"
+    }
+  ],
+  "must_not_fire": [
+    "AEGIS-IAM-001",
+    "AEGIS-TAG-001",
+    "AEGIS-REG-001"
+  ]
 }

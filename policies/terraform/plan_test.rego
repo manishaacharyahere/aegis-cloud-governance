@@ -80,7 +80,7 @@ test_network_not_flagged if {
 
 test_standalone_ipv6_rule if {
 	r := res("aws_vpc_security_group_ingress_rule", {"cidr_ipv6": "::/0", "ip_protocol": "tcp", "from_port": 3389, "to_port": 3389})
-	ids(terraform.deny) == {"AEGIS-NET-001"} with input as {"resources": [r]}
+	ids(terraform.deny) == {"AEGIS-NET-002"} with input as {"resources": [r]}
 }
 
 test_cloudtrail if {

@@ -52,7 +52,8 @@ decision: [ADR-008](../../architecture/architecture-decisions/ADR-008-postgres-j
 | AEGIS-DB-001 | high | deny | RDS instance/cluster `storage_encrypted` not `true` |
 | AEGIS-DB-002 | critical | deny | RDS `publicly_accessible = true` |
 | AEGIS-IAM-001 | critical | deny | an `Allow` statement with `Action "*"` and `Resource "*"` |
-| AEGIS-NET-001 | critical | deny | ingress from `0.0.0.0/0` or `::/0` covering port 22 or 3389 (inline, `aws_security_group_rule`, `aws_vpc_security_group_ingress_rule`) |
+| AEGIS-NET-002 | critical | deny | same as NET-001 but from `::/0` (IPv6); separate so CIS 5.2 and 5.3 each get only their own evidence |
+| AEGIS-NET-001 | critical | deny | ingress from `0.0.0.0/0` covering port 22 or 3389 (inline, `aws_security_group_rule`, `aws_vpc_security_group_ingress_rule`) |
 | AEGIS-LOG-001 | high | deny | CloudTrail logging or log-file validation disabled |
 | AEGIS-TAG-001 | medium | warn | taggable resource missing `owner`, `environment` or `cost_center` |
 | AEGIS-REG-001 | high | deny | provider region outside the approved list |

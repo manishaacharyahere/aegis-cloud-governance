@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool satisfies it.
@@ -22,6 +23,8 @@ type Deps struct {
 	DB             Pinger
 	Inventory      InventoryService // nil disables inventory routes (503)
 	IaC            IaCService       // nil disables IaC routes (503)
+	Compliance     ComplianceService
+	Catalog        *compliance.Catalog
 	Version        string
 	MaxBodyBytes   int64 // default per-request body limit
 	MaxImportBytes int64 // body limit for inventory imports
@@ -50,6 +53,18 @@ func NewHandler(d Deps) http.Handler {
 	scans := iacHandlers{svc: d.IaC}
 	handle("POST /api/v1/iac/scans", d.MaxBodyBytes, scans.createScan)
 	handle("GET /api/v1/iac/scans/{id}", d.MaxBodyBytes, scans.getScan)
+	comp := complianceHandlers{svc: d.Compliance, catalog: d.Catalog}
+	handle("GET /api/v1/compliance/frameworks", d.MaxBodyBytes, comp.frameworks)
+	handle("POST /api/v1/compliance/evaluations", d.MaxBodyBytes, comp.evaluate)
+	handle("GET /api/v1/compliance/coverage", d.MaxBodyBytes, comp.coverage)
+	handle("GET /api/v1/compliance/controls/{framework}/{control}", d.MaxBodyBytes, comp.control)
+	handle("GET /api/v1/compliance/exceptions", d.MaxBodyBytes, comp.listExceptions)
+	handle("POST /api/v1/compliance/exceptions", d.MaxBodyBytes, comp.requestException)
+	handle("POST /api/v1/compliance/exceptions/{id}/approve", d.MaxBodyBytes, comp.decide(compliance.DecisionApprove))
+	handle("POST /api/v1/compliance/exceptions/{id}/reject", d.MaxBodyBytes, comp.decide(compliance.DecisionReject))
+	handle("POST /api/v1/compliance/exceptions/{id}/revoke", d.MaxBodyBytes, comp.decide(compliance.DecisionRevoke))
+	handle("GET /api/v1/audit/events", d.MaxBodyBytes, comp.auditEvents)
+	handle("GET /api/v1/audit/verify", d.MaxBodyBytes, comp.verifyAudit)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,

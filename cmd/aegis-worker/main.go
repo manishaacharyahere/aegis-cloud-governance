@@ -43,14 +43,15 @@ func run() error {
 	}
 	defer pool.Close()
 
-	bundle, err := iac.HashPolicies(cfg.PoliciesDir)
-	if err != nil {
-		return fmt.Errorf("hash policies in %s: %w", cfg.PoliciesDir, err)
-	}
 	if _, err := os.Stat(cfg.FixturesDir); err != nil {
 		return fmt.Errorf("fixtures directory: %w", err)
 	}
-	log.Info("policy bundle", "sha256", bundle, "dir", cfg.PoliciesDir)
+	policy := &iac.OPAClient{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}}
+	if b, err := policy.Bundle(ctx); err != nil {
+		log.Warn("OPA not reachable yet; scans will retry", "error", err)
+	} else {
+		log.Info("policy bundle", "sha256", b.SHA256, "modules", len(b.Modules))
+	}
 
 	w := &iac.Worker{
 		Queue: iac.NewStore(pool),
@@ -59,9 +60,8 @@ func run() error {
 				Docker: cfg.Docker, Images: iac.DefaultImages,
 				PluginVolume: cfg.PluginVolume, StepTimeout: cfg.StepTimeout,
 			},
-			Policy:          &iac.OPAClient{BaseURL: cfg.OPAURL, HTTP: &http.Client{Timeout: 30 * time.Second}},
-			FixturesDir:     cfg.FixturesDir,
-			PolicyBundleSHA: bundle,
+			Policy:      policy,
+			FixturesDir: cfg.FixturesDir,
 		},
 		Log:          log,
 		ID:           cfg.ID,
