@@ -128,6 +128,7 @@ func run() error {
 	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles}
 	if cfg.AuthMode == api.AuthOIDC {
 		auth.Verifier = &access.Verifier{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID}
+		auth.Issuer, auth.ClientID = cfg.OIDCIssuer, cfg.OIDCClientID
 		log.Info("authentication", "mode", "oidc", "issuer", cfg.OIDCIssuer, "client_id", cfg.OIDCClientID)
 	} else {
 		log.Warn("authentication is in dev-headers mode: X-Aegis-Actor is trusted and every caller has every permission; never expose this API")

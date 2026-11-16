@@ -65,6 +65,7 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /readyz", d.MaxBodyBytes, handleReadiness(d.DB))
 	handle("GET /api/v1/version", d.MaxBodyBytes, handleVersion(d.Version))
 	ac := accessHandlers{auth: d.Auth}
+	handle("GET /api/v1/auth/config", d.MaxBodyBytes, ac.config)
 	handle("GET /api/v1/me", d.MaxBodyBytes, ac.me)
 	handle("GET /api/v1/access/bindings", d.MaxBodyBytes, ac.list)
 	handle("POST /api/v1/access/bindings", d.MaxBodyBytes, ac.change(true))

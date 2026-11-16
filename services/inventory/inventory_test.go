@@ -3,6 +3,7 @@ package inventory
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -282,5 +283,34 @@ func TestChangedPathsTreatsNumbersCanonically(t *testing.T) {
 	b := NormalizedResource{Configuration: map[string]any{"port": float64(22)}}
 	if p := ChangedPaths(a, b); len(p) != 0 {
 		t.Fatalf("json.Number vs float64 reported as change: %v", p)
+	}
+}
+
+// A hub resource with hundreds of edges is valid (found by the 5 000-resource
+// scale test); the snapshot-wide cap still bounds total work.
+func TestValidateRelationshipLimits(t *testing.T) {
+	s := validSnapshot()
+	hub := s.Resources[0]
+	for i := range 340 {
+		s.Resources = append(s.Resources, Resource{ResourceID: fmt.Sprintf("aws_s3_bucket.b%d", i), ResourceType: "aws_s3_bucket"})
+		hub.Relationships = append(hub.Relationships, Relationship{Type: "encrypts", TargetID: fmt.Sprintf("aws_s3_bucket.b%d", i)})
+	}
+	s.Resources[0] = hub
+	if err := Validate(s, now); err != nil {
+		t.Fatalf("hub with 340 relationships rejected: %v", err)
+	}
+	hub.Relationships = make([]Relationship, MaxRelationships+1)
+	s.Resources[0] = hub
+	if issues := issuesOf(t, Validate(s, now)); !hasIssue(issues, "resources[0].relationships", "too many relationships") {
+		t.Errorf("per-resource cap not enforced: %+v", issues[:min(3, len(issues))])
+	}
+	s = validSnapshot()
+	per := MaxRelationshipsSum/MaxRelationships + 1
+	for i := range per {
+		s.Resources = append(s.Resources, Resource{ResourceID: fmt.Sprintf("r%d", i), ResourceType: "aws_s3_bucket",
+			Relationships: make([]Relationship, MaxRelationships)})
+	}
+	if issues := issuesOf(t, Validate(s, now)); !hasIssue(issues, "resources", "too many relationships in the snapshot") {
+		t.Errorf("snapshot-wide cap not enforced")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"regexp"
 	"time"
 
@@ -301,8 +302,20 @@ func (s *Store) Import(ctx context.Context, tenantSlug string, ns NormalizedSnap
 	if err := tx.Commit(ctx); err != nil {
 		return ImportReport{}, fmt.Errorf("commit: %w", err)
 	}
+	// After a large import, refresh planner statistics now instead of waiting
+	// for autovacuum: the scale test showed reads slowing in proportion to
+	// estate size until statistics caught up. Best effort, outside the import
+	// transaction.
+	if created+updated+deleted >= analyzeAfterChanges {
+		if _, err := s.pool.Exec(ctx, `ANALYZE resources, resource_versions, resource_relationships`); err != nil {
+			logging.FromContext(ctx).Warn("analyze after import failed", "error", err)
+		}
+	}
 	return s.report(ctx, s.pool, tenantID, importID)
 }
+
+// analyzeAfterChanges is the import size that triggers an immediate ANALYZE.
+const analyzeAfterChanges = 500
 
 // GetImport returns the change report of one import.
 func (s *Store) GetImport(ctx context.Context, tenantSlug, importID string) (ImportReport, error) {

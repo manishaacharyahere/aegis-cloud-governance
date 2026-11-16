@@ -34,14 +34,17 @@ type Auth struct {
 	Mode     string // AuthOIDC or AuthDevHeaders; empty means AuthDevHeaders
 	Verifier TokenVerifier
 	Roles    RoleStore
+	Issuer   string // published to the dashboard by /api/v1/auth/config
+	ClientID string
 }
 
 // routePermissions is the single table of what each route requires.
 // NewHandler refuses to register a route that is missing here.
 var routePermissions = map[string]access.Permission{
-	"GET /healthz":        access.Public,
-	"GET /readyz":         access.Public,
-	"GET /api/v1/version": access.Public,
+	"GET /healthz":            access.Public,
+	"GET /readyz":             access.Public,
+	"GET /api/v1/version":     access.Public,
+	"GET /api/v1/auth/config": access.Public,
 
 	"GET /api/v1/me":                     access.Signed,
 	"GET /api/v1/compliance/frameworks":  access.Signed,
@@ -173,6 +176,16 @@ func (a Auth) authorize(perm access.Permission, next http.Handler) http.Handler 
 }
 
 type accessHandlers struct{ auth Auth }
+
+// config tells the dashboard how to sign in. It reveals nothing secret: the
+// issuer and client ID are public in any OIDC deployment.
+func (h accessHandlers) config(w http.ResponseWriter, _ *http.Request) {
+	out := map[string]any{"mode": AuthDevHeaders}
+	if h.auth.Mode == AuthOIDC {
+		out = map[string]any{"mode": AuthOIDC, "issuer": h.auth.Issuer, "client_id": h.auth.ClientID}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
 
 func (h accessHandlers) me(w http.ResponseWriter, r *http.Request) {
 	p, _ := access.FromContext(r.Context())

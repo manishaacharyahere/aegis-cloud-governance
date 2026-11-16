@@ -16,12 +16,15 @@ const SchemaV1 = "aegis.inventory/v1"
 
 // Limits protect the importer from oversized or abusive input.
 const (
-	MaxResources         = 50_000
-	MaxResourceIDLen     = 512
-	MaxTags              = 50
-	MaxTagKeyLen         = 128
-	MaxTagValueLen       = 256
-	MaxRelationships     = 100
+	MaxResources     = 50_000
+	MaxResourceIDLen = 512
+	MaxTags          = 50
+	MaxTagKeyLen     = 128
+	MaxTagValueLen   = 256
+	// Hub resources (KMS keys, VPCs, subnets, roles) legitimately have
+	// hundreds of edges; the per-snapshot cap bounds total work instead.
+	MaxRelationships     = 10_000
+	MaxRelationshipsSum  = 500_000
 	MaxConfigDepth       = 10
 	clockSkewAllowance   = 5 * time.Minute
 	maxReportedIssues    = 100
@@ -149,6 +152,13 @@ func Validate(s Snapshot, now time.Time) error {
 	}
 
 	seen := make(map[string]int, len(s.Resources))
+	edges := 0
+	for _, r := range s.Resources {
+		edges += len(r.Relationships)
+	}
+	if edges > MaxRelationshipsSum {
+		v.add("resources", "too many relationships in the snapshot (%d > %d)", edges, MaxRelationshipsSum)
+	}
 	for i, r := range s.Resources {
 		p := fmt.Sprintf("resources[%d]", i)
 		switch {

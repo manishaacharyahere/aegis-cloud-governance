@@ -225,8 +225,9 @@ func (s *Service) Assess(ctx context.Context, tenant, actor string, w Weights) (
 var bandRank = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 // GetRun returns a stored run, assessments ordered by score.
+// id may be "latest" for the tenant's most recent run.
 func (s *Service) GetRun(ctx context.Context, tenant, id, minBand string, limit int) (Run, error) {
-	if !uuidRe.MatchString(id) {
+	if id != "latest" && !uuidRe.MatchString(id) {
 		return Run{}, ErrNotFound
 	}
 	maxRank := 3
@@ -247,7 +248,7 @@ func (s *Service) GetRun(ctx context.Context, tenant, id, minBand string, limit 
 	var r Run
 	var weights, summary []byte
 	err = s.Pool.QueryRow(ctx, `SELECT id, compliance_run_id, weights, actor, summary, created_at FROM risk_runs
-		WHERE tenant_id = $1 AND id = $2`, tenantID, id).Scan(&r.ID, &r.ComplianceRunID, &weights, &r.Actor, &summary, &r.CreatedAt)
+		WHERE tenant_id = $1 AND ($2 = 'latest' OR id::text = $2) ORDER BY created_at DESC, id LIMIT 1`, tenantID, id).Scan(&r.ID, &r.ComplianceRunID, &weights, &r.Actor, &summary, &r.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -265,7 +266,7 @@ func (s *Service) GetRun(ctx context.Context, tenant, id, minBand string, limit 
 	rows, err := s.Pool.Query(ctx, `SELECT rule_id, subject, resource_type, rule_severity, score::float8, band, factors,
 		contributions, reasons, blast_radius, attack_path, first_seen
 		FROM risk_assessments WHERE run_id = $1 AND band = ANY($2)
-		ORDER BY score DESC, subject, rule_id LIMIT $3`, id, bands, limit)
+		ORDER BY score DESC, subject, rule_id LIMIT $3`, r.ID, bands, limit)
 	if err != nil {
 		return Run{}, err
 	}
