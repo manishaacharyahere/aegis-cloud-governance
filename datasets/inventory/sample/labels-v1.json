@@ -1,0 +1,23 @@
+{
+  "aws_db_instance.notifications_001": [
+    "unencrypted_database"
+  ],
+  "aws_iam_policy.notifications_001": [
+    "wildcard_iam"
+  ],
+  "aws_iam_policy.payments_002": [
+    "wildcard_iam"
+  ],
+  "aws_iam_policy.search_001": [
+    "missing_tags"
+  ],
+  "aws_instance.notifications_002": [
+    "missing_tags"
+  ],
+  "aws_s3_bucket.identity_data_001": [
+    "unencrypted_storage"
+  ],
+  "aws_s3_bucket.notifications_data_002": [
+    "public_bucket"
+  ]
+}

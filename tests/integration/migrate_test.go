@@ -94,7 +94,7 @@ func TestAuditEventsAreAppendOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO audit_events (tenant_id, seq, actor, action, target_type, target_id, outcome, hash)
-		VALUES ($1, 1, 'test', 'tenant.create', 'tenant', $1, 'success', '\x00')`, tenant); err != nil {
+		VALUES ($1, 1, 'test', 'tenant.create', 'tenant', $2, 'success', '\x00')`, tenant, tenant); err != nil {
 		t.Fatal(err)
 	}
 

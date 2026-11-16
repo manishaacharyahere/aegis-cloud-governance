@@ -15,7 +15,7 @@ from pinned Docker images.
 ## 1. Start the core services
 
 ```bash
-cp .env.example .env          # edit POSTGRES_PASSWORD
+cp .env.example .env          # edit POSTGRES_PASSWORD (and POSTGRES_HOST_PORT if 5432 is taken)
 docker compose --profile core up -d --build
 docker compose --profile core ps
 ```
@@ -23,7 +23,7 @@ docker compose --profile core ps
 | Service | URL (localhost only) |
 |---|---|
 | API | http://127.0.0.1:8080 |
-| PostgreSQL | 127.0.0.1:5432 |
+| PostgreSQL | 127.0.0.1:`POSTGRES_HOST_PORT` (default 5432) |
 | NATS | 127.0.0.1:4222 (monitoring :8222) |
 | OPA | http://127.0.0.1:8181 |
 
@@ -73,6 +73,8 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_MIGRATE_ON_START` | `true` (non-production) | |
 | `AEGIS_SHUTDOWN_TIMEOUT` | `15s` | max `5m` |
 | `AEGIS_MAX_BODY_BYTES` | `1048576` | 1 KiB – 64 MiB |
+| `AEGIS_MAX_IMPORT_BYTES` | `33554432` | inventory import body limit, 1 KiB – 256 MiB |
+| `AEGIS_BOOTSTRAP_TENANT` | `demo` (non-production) | tenant created at startup |
 
 ## 4. Run the tests
 

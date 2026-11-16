@@ -124,7 +124,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestBodyLimit(t *testing.T) {
 	h := newTestHandler(t, fakeDB{}, nil)
-	rec := do(h, http.MethodPost, "/anything", strings.NewReader(strings.Repeat("a", 2048)), nil)
+	rec := do(h, http.MethodPost, "/api/v1/inventory/import", strings.NewReader(strings.Repeat("a", 2048)), nil)
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("oversized body = %d, want 413", rec.Code)
 	}

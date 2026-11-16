@@ -16,13 +16,13 @@ machine with no paid cloud services or mandatory AI API.
 | Capability | Status |
 |---|---|
 | Go API skeleton (health, readiness, version, structured logs, graceful shutdown) | ✅ implemented, unit-tested |
-| PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration test in CI |
+| PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration-tested |
 | Append-only, hash-chain-ready audit table + transactional outbox schema | ✅ schema only |
-| First OPA policies (storage public access, encryption, versioning) | ✅ policies + tests (run in CI) |
+| First OPA policies (storage public access, encryption, versioning) | ✅ 7/7 policy tests pass |
 | React + TypeScript dashboard shell with live API status | ✅ implemented, unit-tested |
 | Python ML package with reproducibility manifest | ✅ implemented, unit-tested |
-| A. Cloud inventory ingestion | ⏳ next |
-| B. Terraform / IaC analysis (Trivy, Checkov, plan JSON) | ⏳ planned |
+| A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
+| B. Terraform / IaC analysis (Trivy, Checkov, plan JSON) | ⏳ next |
 | C. Policy & compliance engine | ⏳ planned |
 | D. Drift detection | ⏳ planned |
 | E. Risk intelligence | ⏳ planned |

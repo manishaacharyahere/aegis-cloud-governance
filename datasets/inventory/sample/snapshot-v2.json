@@ -1,0 +1,1375 @@
+{
+  "schema_version": "aegis.inventory/v1",
+  "source": "synthetic",
+  "captured_at": "2026-01-02T00:00:00Z",
+  "account": {
+    "provider": "aws",
+    "external_id": "123456789012",
+    "name": "aegis-synthetic"
+  },
+  "resources": [
+    {
+      "resource_id": "aws_vpc.production_001",
+      "resource_type": "aws_vpc",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "production",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.0.0.0/16",
+        "enable_dns_support": true
+      }
+    },
+    {
+      "resource_id": "aws_subnet.production_001",
+      "resource_type": "aws_subnet",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "production",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.0.0.0/24",
+        "map_public_ip_on_launch": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.production_002",
+      "resource_type": "aws_subnet",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "production",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.0.1.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.production_003",
+      "resource_type": "aws_subnet",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "production",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.0.2.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_kms_key.production_001",
+      "resource_type": "aws_kms_key",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "production",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "deletion_window_in_days": 30,
+        "enable_key_rotation": true
+      },
+      "relationships": [
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.search_data_001"
+        },
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.payments_data_001"
+        },
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.payments_data_002"
+        },
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.analytics_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_cloudwatch_log_group.production_001",
+      "resource_type": "aws_cloudwatch_log_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "production",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "retention_in_days": 90
+      }
+    },
+    {
+      "resource_id": "aws_cloudtrail.production_001",
+      "resource_type": "aws_cloudtrail",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "production",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "enable_logging": true,
+        "is_multi_region_trail": true,
+        "log_file_validation": true
+      },
+      "relationships": [
+        {
+          "type": "logs_to",
+          "target_id": "aws_cloudwatch_log_group.production_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_vpc.staging_001",
+      "resource_type": "aws_vpc",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "staging",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.1.0.0/16",
+        "enable_dns_support": true
+      }
+    },
+    {
+      "resource_id": "aws_subnet.staging_001",
+      "resource_type": "aws_subnet",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "staging",
+        "owner": "unknown"
+      },
+      "configuration": {
+        "cidr_block": "10.1.0.0/24",
+        "map_public_ip_on_launch": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.staging_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.staging_002",
+      "resource_type": "aws_subnet",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "staging",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.1.1.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.staging_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.staging_003",
+      "resource_type": "aws_subnet",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "staging",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.1.2.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.staging_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_kms_key.staging_001",
+      "resource_type": "aws_kms_key",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "staging",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "deletion_window_in_days": 30,
+        "enable_key_rotation": true
+      }
+    },
+    {
+      "resource_id": "aws_cloudwatch_log_group.staging_001",
+      "resource_type": "aws_cloudwatch_log_group",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "staging",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "retention_in_days": 90
+      }
+    },
+    {
+      "resource_id": "aws_cloudtrail.staging_001",
+      "resource_type": "aws_cloudtrail",
+      "region": "us-east-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "staging",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "enable_logging": true,
+        "is_multi_region_trail": true,
+        "log_file_validation": true
+      },
+      "relationships": [
+        {
+          "type": "logs_to",
+          "target_id": "aws_cloudwatch_log_group.staging_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_vpc.development_001",
+      "resource_type": "aws_vpc",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "development",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.2.0.0/16",
+        "enable_dns_support": true
+      }
+    },
+    {
+      "resource_id": "aws_subnet.development_001",
+      "resource_type": "aws_subnet",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "development",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.2.0.0/24",
+        "map_public_ip_on_launch": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.development_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.development_002",
+      "resource_type": "aws_subnet",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "development",
+        "owner": "unknown"
+      },
+      "configuration": {
+        "cidr_block": "10.2.1.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.development_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_subnet.development_003",
+      "resource_type": "aws_subnet",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "development",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "cidr_block": "10.2.2.0/24",
+        "map_public_ip_on_launch": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.development_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_kms_key.development_001",
+      "resource_type": "aws_kms_key",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "development",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "deletion_window_in_days": 30,
+        "enable_key_rotation": true
+      },
+      "relationships": [
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.notifications_data_001"
+        },
+        {
+          "type": "encrypts",
+          "target_id": "aws_s3_bucket.notifications_data_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_cloudwatch_log_group.development_001",
+      "resource_type": "aws_cloudwatch_log_group",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "platform",
+        "environment": "development",
+        "owner": "platform-team"
+      },
+      "configuration": {
+        "retention_in_days": 90
+      }
+    },
+    {
+      "resource_id": "aws_cloudtrail.development_001",
+      "resource_type": "aws_cloudtrail",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "security",
+        "environment": "development",
+        "owner": "security-team"
+      },
+      "configuration": {
+        "enable_logging": true,
+        "is_multi_region_trail": true,
+        "log_file_validation": true
+      },
+      "relationships": [
+        {
+          "type": "logs_to",
+          "target_id": "aws_cloudwatch_log_group.development_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_iam_role.identity_001",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "identity",
+        "environment": "production",
+        "owner": "identity-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.identity_001",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "identity",
+        "environment": "production",
+        "owner": "identity-team"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "arn:aws:s3:::identity-*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.identity_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.identity_001",
+      "resource_type": "aws_security_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "identity",
+        "environment": "production",
+        "owner": "identity-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.identity_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.identity_001",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "identity",
+        "environment": "production",
+        "owner": "identity-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "m6i.4xlarge",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_003"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.identity_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.identity_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.identity_data_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "identity",
+        "environment": "production",
+        "owner": "identity-team"
+      },
+      "configuration": {
+        "public_access_block": false,
+        "versioning": true
+      }
+    },
+    {
+      "resource_id": "aws_iam_role.search_001",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "search",
+        "environment": "production",
+        "owner": "search-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.search_001",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "environment": "production"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "arn:aws:s3:::search-*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.search_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.search_001",
+      "resource_type": "aws_security_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "search",
+        "environment": "production",
+        "owner": "search-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.search_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.search_001",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "search",
+        "environment": "production",
+        "owner": "search-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "c6i.xlarge",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_002"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.search_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.search_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.search_data_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "search",
+        "environment": "production",
+        "owner": "search-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": true,
+        "versioning": true
+      }
+    },
+    {
+      "resource_id": "aws_lb.search_001",
+      "resource_type": "aws_lb",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "search",
+        "environment": "production",
+        "owner": "search-team"
+      },
+      "configuration": {
+        "internal": false,
+        "load_balancer_type": "application"
+      },
+      "relationships": [
+        {
+          "type": "routes_to",
+          "target_id": "aws_instance.search_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_iam_role.payments_001",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.payments_001",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "arn:aws:s3:::payments-*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.payments_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.payments_001",
+      "resource_type": "aws_security_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.payments_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.payments_001",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "c6i.xlarge",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_002"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.payments_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.payments_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.payments_data_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": true,
+        "versioning": true
+      }
+    },
+    {
+      "resource_id": "aws_iam_role.notifications_001",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.notifications_001",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "*"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.notifications_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.notifications_001",
+      "resource_type": "aws_security_group",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.development_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.notifications_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.notifications_002",
+      "resource_type": "aws_instance",
+      "region": "eu-west-1",
+      "tags": {
+        "environment": "development"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "t3.small",
+        "monitoring": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.development_002"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.notifications_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.notifications_data_001"
+        },
+        {
+          "type": "reads_from",
+          "target_id": "aws_db_instance.notifications_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.notifications_data_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": true,
+        "versioning": false
+      }
+    },
+    {
+      "resource_id": "aws_db_instance.notifications_001",
+      "resource_type": "aws_db_instance",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "backup_retention_period": 7,
+        "engine": "postgres",
+        "instance_class": "db.t3.medium",
+        "multi_az": false,
+        "publicly_accessible": false,
+        "storage_encrypted": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.development_003"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_iam_role.payments_002",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.payments_002",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "*"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.payments_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.payments_002",
+      "resource_type": "aws_security_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.payments_002"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.payments_003"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.payments_002",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "t3.small",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_003"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.payments_002"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.payments_data_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.payments_003",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "t3.small",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_003"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.payments_002"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.payments_data_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.payments_data_002",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "payments",
+        "environment": "production",
+        "owner": "payments-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": true,
+        "versioning": true
+      }
+    },
+    {
+      "resource_id": "aws_iam_role.notifications_002",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "unknown"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.notifications_002",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "arn:aws:s3:::notifications-*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.notifications_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.notifications_002",
+      "resource_type": "aws_security_group",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.development_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.notifications_004"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.notifications_004",
+      "resource_type": "aws_instance",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "m6i.large",
+        "monitoring": false
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.development_003"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.notifications_002"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.notifications_data_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.notifications_data_002",
+      "resource_type": "aws_s3_bucket",
+      "region": "eu-west-1",
+      "tags": {
+        "cost_center": "notifications",
+        "environment": "development",
+        "owner": "notifications-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": false,
+        "versioning": false
+      }
+    },
+    {
+      "resource_id": "aws_iam_role.analytics_001",
+      "resource_type": "aws_iam_role",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "analytics-team"
+      },
+      "configuration": {
+        "assume_role_service": "ec2.amazonaws.com",
+        "max_session_duration": 3600
+      }
+    },
+    {
+      "resource_id": "aws_iam_policy.analytics_001",
+      "resource_type": "aws_iam_policy",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "unknown"
+      },
+      "configuration": {
+        "statements": [
+          {
+            "actions": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "effect": "Allow",
+            "resources": [
+              "arn:aws:s3:::analytics-*"
+            ]
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "attached_to",
+          "target_id": "aws_iam_role.analytics_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_security_group.analytics_001",
+      "resource_type": "aws_security_group",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "analytics-team"
+      },
+      "configuration": {
+        "ingress": [
+          {
+            "cidr_blocks": [
+              "10.0.0.0/8"
+            ],
+            "from_port": 443,
+            "protocol": "tcp",
+            "to_port": 443
+          }
+        ]
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_vpc.production_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.analytics_001"
+        },
+        {
+          "type": "attached_to",
+          "target_id": "aws_instance.analytics_002"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.analytics_001",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "analytics-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "t3.micro",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_003"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.analytics_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.analytics_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_instance.analytics_002",
+      "resource_type": "aws_instance",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "analytics-team"
+      },
+      "configuration": {
+        "ebs_encrypted": true,
+        "imdsv2_required": true,
+        "instance_type": "t3.small",
+        "monitoring": true
+      },
+      "relationships": [
+        {
+          "type": "member_of",
+          "target_id": "aws_subnet.production_002"
+        },
+        {
+          "type": "assumes",
+          "target_id": "aws_iam_role.analytics_001"
+        },
+        {
+          "type": "writes_to",
+          "target_id": "aws_s3_bucket.analytics_data_001"
+        }
+      ]
+    },
+    {
+      "resource_id": "aws_s3_bucket.analytics_data_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "tags": {
+        "cost_center": "analytics",
+        "environment": "production",
+        "owner": "analytics-team"
+      },
+      "configuration": {
+        "encryption": "aws:kms",
+        "public_access_block": true,
+        "versioning": true
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.unmanaged_001",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "configuration": {
+        "public_access_block": true,
+        "versioning": false
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.unmanaged_002",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "configuration": {
+        "public_access_block": false,
+        "versioning": false
+      }
+    },
+    {
+      "resource_id": "aws_s3_bucket.unmanaged_003",
+      "resource_type": "aws_s3_bucket",
+      "region": "ap-south-1",
+      "configuration": {
+        "public_access_block": true,
+        "versioning": false
+      }
+    }
+  ]
+}

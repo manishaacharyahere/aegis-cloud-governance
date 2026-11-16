@@ -15,6 +15,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -53,11 +54,20 @@ func run() error {
 		}
 	}
 
+	if cfg.BootstrapTenant != "" {
+		if _, err := pool.Exec(ctx, `INSERT INTO tenants (slug, name) VALUES ($1, $1) ON CONFLICT (slug) DO NOTHING`,
+			cfg.BootstrapTenant); err != nil {
+			return fmt.Errorf("bootstrap tenant: %w", err)
+		}
+	}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
-		Logger:       log,
-		DB:           pool,
-		Version:      version,
-		MaxBodyBytes: cfg.MaxBodyBytes,
+		Logger:         log,
+		DB:             pool,
+		Inventory:      inventory.NewService(inventory.NewStore(pool)),
+		Version:        version,
+		MaxBodyBytes:   cfg.MaxBodyBytes,
+		MaxImportBytes: cfg.MaxImportBytes,
 	}), log)
 
 	errCh := make(chan error, 1)

@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+var tenantSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
 // Environment names. Production enables stricter validation.
 const (
@@ -28,6 +31,9 @@ type Config struct {
 	MigrateOnStart  bool
 	ShutdownTimeout time.Duration
 	MaxBodyBytes    int64
+	MaxImportBytes  int64
+	// BootstrapTenant is created at startup if set (development default "demo").
+	BootstrapTenant string
 }
 
 // LookupFunc matches os.LookupEnv. It is injected so tests do not mutate the
@@ -90,6 +96,24 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, fmt.Errorf("AEGIS_MAX_BODY_BYTES: must be between 1KiB and 64MiB, got %d", maxBody))
 	}
 	cfg.MaxBodyBytes = maxBody
+
+	maxImport, err := strconv.ParseInt(get("AEGIS_MAX_IMPORT_BYTES", "33554432"), 10, 64)
+	switch {
+	case err != nil:
+		errs = append(errs, fmt.Errorf("AEGIS_MAX_IMPORT_BYTES: %w", err))
+	case maxImport < 1024 || maxImport > 256<<20:
+		errs = append(errs, fmt.Errorf("AEGIS_MAX_IMPORT_BYTES: must be between 1KiB and 256MiB, got %d", maxImport))
+	}
+	cfg.MaxImportBytes = maxImport
+
+	defTenant := "demo"
+	if cfg.Environment == EnvProduction {
+		defTenant = ""
+	}
+	cfg.BootstrapTenant = get("AEGIS_BOOTSTRAP_TENANT", defTenant)
+	if cfg.BootstrapTenant != "" && !tenantSlug.MatchString(cfg.BootstrapTenant) {
+		errs = append(errs, fmt.Errorf("AEGIS_BOOTSTRAP_TENANT: invalid slug %q", cfg.BootstrapTenant))
+	}
 
 	if cfg.Environment == EnvProduction && strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 		errs = append(errs, errors.New("AEGIS_DATABASE_URL: sslmode=disable is not allowed in production"))

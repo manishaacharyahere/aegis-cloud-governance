@@ -1,0 +1,27 @@
+{
+  "command": "go run ./cmd/aegis-datagen -seed 42 -resources 60 -modify 6 -delete 3 -add 3 -captured-at 2026-01-01T00:00:00Z",
+  "counts": {
+    "v1_labelled": 7,
+    "v1_resources": 63,
+    "v2_labelled": 10,
+    "v2_resources": 63
+  },
+  "dataset": "aegis-synthetic-inventory",
+  "files_sha256": {
+    "labels-v1.json": "ddbf6f6dd4c413147acc6e63015ed843293875e9e757e82b3fbfec5cf49de078",
+    "labels-v2.json": "14d14b0c555794bcf27045f91710cd03f540b3b279e69cd0a9dc43fbefe046df",
+    "mutation.json": "781f66ade36fbc2fd5817457f44be061ced2d37e82ecdcc820c1a987789a96ef",
+    "snapshot-v1.json": "d71487866424e455cf1d428eef8c455a98725b4631c8399abfce6429f974ad24",
+    "snapshot-v2.json": "7901ac4b0ad15b880df0ac37036ca809d53fdd470245d92d1e0026b60138a66d"
+  },
+  "generator_version": "1.0.0",
+  "note": "Synthetic, fictional data. Contains deliberately insecure configurations for testing.",
+  "parameters": {
+    "add": 3,
+    "captured_at": "2026-01-01T00:00:00Z",
+    "delete": 3,
+    "modify": 6,
+    "resources": 60
+  },
+  "seed": 42
+}

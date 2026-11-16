@@ -18,25 +18,40 @@ type Pinger interface {
 
 // Deps are the dependencies of the HTTP API.
 type Deps struct {
-	Logger       *slog.Logger
-	DB           Pinger
-	Version      string
-	MaxBodyBytes int64
+	Logger         *slog.Logger
+	DB             Pinger
+	Inventory      InventoryService // nil disables inventory routes (503)
+	Version        string
+	MaxBodyBytes   int64 // default per-request body limit
+	MaxImportBytes int64 // body limit for inventory imports
 }
 
-// NewHandler builds the routed, middleware-wrapped API handler.
+// NewHandler builds the routed, middleware-wrapped API handler. Every route
+// gets an explicit body limit.
 func NewHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handleLiveness)
-	mux.HandleFunc("GET /readyz", handleReadiness(d.DB))
-	mux.HandleFunc("GET /api/v1/version", handleVersion(d.Version))
+	handle := func(pattern string, limit int64, h http.HandlerFunc) {
+		mux.Handle(pattern, LimitBody(limit)(h))
+	}
+	if d.MaxImportBytes == 0 {
+		d.MaxImportBytes = d.MaxBodyBytes
+	}
+
+	handle("GET /healthz", d.MaxBodyBytes, handleLiveness)
+	handle("GET /readyz", d.MaxBodyBytes, handleReadiness(d.DB))
+	handle("GET /api/v1/version", d.MaxBodyBytes, handleVersion(d.Version))
+
+	inv := inventoryHandlers{svc: d.Inventory}
+	handle("POST /api/v1/inventory/import", d.MaxImportBytes, inv.importSnapshot)
+	handle("GET /api/v1/inventory/imports/{id}", d.MaxBodyBytes, inv.getImport)
+	handle("GET /api/v1/resources", d.MaxBodyBytes, inv.listResources)
+	handle("GET /api/v1/resources/{id}", d.MaxBodyBytes, inv.getResource)
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	return Chain(mux,
 		RequestContext(d.Logger),
 		Recover,
 		SecurityHeaders,
-		LimitBody(d.MaxBodyBytes),
 	)
 }
 

@@ -22,6 +22,9 @@ func TestLoadDefaults(t *testing.T) {
 	if !cfg.MigrateOnStart {
 		t.Error("development should migrate on start by default")
 	}
+	if cfg.BootstrapTenant != "demo" || cfg.MaxImportBytes != 32<<20 {
+		t.Errorf("unexpected import defaults: %+v", cfg)
+	}
 	if cfg.ShutdownTimeout != 15*time.Second || cfg.MaxBodyBytes != 1<<20 {
 		t.Errorf("unexpected limits: %+v", cfg)
 	}
@@ -38,6 +41,9 @@ func TestLoadProductionDefaults(t *testing.T) {
 	if cfg.MigrateOnStart {
 		t.Error("production must not migrate on start by default")
 	}
+	if cfg.BootstrapTenant != "" {
+		t.Error("production must not bootstrap a tenant by default")
+	}
 }
 
 func TestLoadErrors(t *testing.T) {
@@ -53,6 +59,8 @@ func TestLoadErrors(t *testing.T) {
 		{"bad duration", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_SHUTDOWN_TIMEOUT": "soon"}, "AEGIS_SHUTDOWN_TIMEOUT"},
 		{"zero duration", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_SHUTDOWN_TIMEOUT": "0s"}, "must be in"},
 		{"tiny body", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_BODY_BYTES": "10"}, "between 1KiB"},
+		{"huge import", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_MAX_IMPORT_BYTES": "999999999999"}, "AEGIS_MAX_IMPORT_BYTES"},
+		{"bad tenant", map[string]string{"AEGIS_DATABASE_URL": "x", "AEGIS_BOOTSTRAP_TENANT": "Bad Tenant"}, "AEGIS_BOOTSTRAP_TENANT"},
 		{"prod insecure db", map[string]string{"AEGIS_ENV": "production", "AEGIS_DATABASE_URL": "postgres://x?sslmode=disable"}, "sslmode=disable"},
 	}
 	for _, tt := range tests {

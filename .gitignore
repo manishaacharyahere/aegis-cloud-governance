@@ -38,3 +38,6 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Large generated datasets (regenerate with cmd/aegis-datagen)
+datasets/inventory/generated/

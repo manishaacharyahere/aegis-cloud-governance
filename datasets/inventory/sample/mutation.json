@@ -1,0 +1,20 @@
+{
+  "modified": [
+    "aws_iam_policy.analytics_001",
+    "aws_iam_role.notifications_002",
+    "aws_instance.identity_001",
+    "aws_s3_bucket.identity_data_001",
+    "aws_subnet.development_002",
+    "aws_subnet.staging_001"
+  ],
+  "deleted": [
+    "aws_instance.notifications_001",
+    "aws_instance.notifications_003",
+    "aws_instance.notifications_005"
+  ],
+  "added": [
+    "aws_s3_bucket.unmanaged_001",
+    "aws_s3_bucket.unmanaged_002",
+    "aws_s3_bucket.unmanaged_003"
+  ]
+}
