@@ -2,6 +2,8 @@
 #
 #   docker compose --profile core up -d --build     # postgres, nats, opa, api
 #   docker compose --profile core --profile ai up -d # + optional local model (Module G)
+#   docker compose --profile core --profile observability up -d
+#                                       # + Prometheus :9090, Grafana :3000, Jaeger :16686
 #
 # The AI profile is optional: Aegis works fully without it. To use it, pull a
 # model once (docker compose exec ollama ollama pull qwen2.5:3b) and set
@@ -76,6 +78,9 @@ services:
       AEGIS_LOG_LEVEL: ${AEGIS_LOG_LEVEL:-info}
       AEGIS_OPA_URL: http://opa:8181
       AEGIS_NATS_URL: nats://nats:4222
+      AEGIS_METRICS_ADDR: ":9464"
+      # Set AEGIS_OTLP_ENDPOINT=http://jaeger:4318 in .env with the observability profile to export traces.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${AEGIS_OTLP_ENDPOINT:-}
       AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
       AEGIS_AI_PROVIDER: ${AEGIS_AI_PROVIDER:-none}
       AEGIS_AI_URL: http://ollama:11434
@@ -100,7 +105,50 @@ services:
       resources:
         limits: { memory: 6g }
 
+  prometheus:
+    <<: *hardening
+    profiles: ["observability"]
+    image: prom/prometheus:v3.15.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  grafana:
+    <<: *hardening
+    profiles: ["observability"]
+    image: grafana/grafana:13.2.5
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports: ["127.0.0.1:3000:3000"]
+    volumes:
+      - ./infrastructure/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus]
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  jaeger:
+    <<: *hardening
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.22.0
+    ports: ["127.0.0.1:16686:16686"]   # UI only; OTLP (4318) stays on the internal network
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
 volumes:
   pgdata:
+  promdata:
+  grafanadata:
   natsdata:
   ollamadata:

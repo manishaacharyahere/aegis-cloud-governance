@@ -38,6 +38,8 @@ type Config struct {
 	OPAURL          string
 	// NATSURL enables the outbox relay when set (e.g. nats://nats:4222).
 	NATSURL string
+	// MetricsAddr serves Prometheus metrics when set (internal port, e.g. :9464).
+	MetricsAddr string
 	// AI is the optional Module G model. Provider "none" (the default)
 	// means investigations return deterministic briefs only.
 	AI AIConfig
@@ -133,6 +135,7 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	cfg.OPAURL = get("AEGIS_OPA_URL", "http://127.0.0.1:8181")
 	cfg.NATSURL = get("AEGIS_NATS_URL", "")
+	cfg.MetricsAddr = get("AEGIS_METRICS_ADDR", "")
 	if u, err := url.Parse(cfg.NATSURL); cfg.NATSURL != "" && (err != nil || (u.Scheme != "nats" && u.Scheme != "tls") || u.Host == "") {
 		errs = append(errs, errors.New("AEGIS_NATS_URL: must be a nats:// or tls:// URL"))
 	}

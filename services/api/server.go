@@ -6,7 +6,12 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
@@ -44,7 +49,7 @@ type Deps struct {
 func NewHandler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	handle := func(pattern string, limit int64, h http.HandlerFunc) {
-		mux.Handle(pattern, LimitBody(limit)(h))
+		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, h)))
 	}
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
@@ -113,11 +118,34 @@ func NewHandler(d Deps) http.Handler {
 	}))
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
-	return Chain(mux,
+	// otelhttp is outermost so the request span exists before logging, and
+	// every response (including 404/405) is measured.
+	return otelhttp.NewHandler(Chain(mux,
 		RequestContext(d.Logger),
 		Recover,
 		SecurityHeaders,
-	)
+	), "http.server",
+		// A fixed server name: the Host header is client-controlled and must not become a metric label.
+		otelhttp.WithServerName("aegis-api"),
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string { return r.Method }))
+}
+
+// routeTag names the span after the route pattern (low cardinality: IDs are
+// not in span names or metric labels) and labels the request metrics with it.
+func routeTag(pattern string, next http.Handler) http.Handler {
+	route := pattern
+	if i := strings.IndexByte(pattern, ' '); i >= 0 {
+		route = pattern[i+1:]
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		span := trace.SpanFromContext(r.Context())
+		span.SetName(pattern)
+		span.SetAttributes(semconv.HTTPRoute(route))
+		if l, ok := otelhttp.LabelerFromContext(r.Context()); ok {
+			l.Add(semconv.HTTPRoute(route))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // NewServer returns an http.Server with explicit timeouts so slow clients

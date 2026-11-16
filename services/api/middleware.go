@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"go.opentelemetry.io/otel/trace"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -47,6 +48,9 @@ func RequestContext(base *slog.Logger) Middleware {
 			w.Header().Set(RequestIDHeader, id)
 
 			log := base.With(slog.String("request_id", id))
+			if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+				log = log.With(slog.String("trace_id", sc.TraceID().String()))
+			}
 			r = r.WithContext(logging.WithLogger(r.Context(), log))
 
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}

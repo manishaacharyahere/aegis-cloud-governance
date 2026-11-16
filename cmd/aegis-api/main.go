@@ -20,6 +20,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
@@ -51,6 +52,20 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	tel, err := telemetry.Setup(ctx, "aegis-api", version)
+	if err != nil {
+		return fmt.Errorf("telemetry: %w", err)
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tel.Shutdown(sctx)
+	}()
+	log.Info("telemetry", "traces_exported", tel.TracesExported, "metrics_addr", cfg.MetricsAddr)
+	if cfg.MetricsAddr != "" {
+		go serveMetrics(ctx, cfg.MetricsAddr, tel.MetricsHandler, log)
+	}
 
 	pool, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -124,7 +139,7 @@ func run() error {
 	}), log)
 
 	if cfg.NATSURL != "" {
-		go runRelay(ctx, cfg.NATSURL, pool, log)
+		go runRelay(ctx, cfg.NATSURL, pool, log, tel)
 	} else {
 		log.Warn("AEGIS_NATS_URL not set; outbox events are stored but not published")
 	}
@@ -157,14 +172,18 @@ func run() error {
 
 // runRelay connects to NATS (retrying until it is reachable) and publishes
 // outbox events until ctx is cancelled.
-func runRelay(ctx context.Context, url string, pool *pgxpool.Pool, log *slog.Logger) {
+func runRelay(ctx context.Context, url string, pool *pgxpool.Pool, log *slog.Logger, tel *telemetry.Telemetry) {
 	wait := time.Second
 	for {
 		bus, err := natsbus.Connect(ctx, url, "aegis-api")
 		if err == nil {
 			defer bus.Close()
 			log.Info("outbox relay started", "stream", natsbus.Stream)
-			_ = (&outbox.Relay{Pool: pool, Pub: bus, Log: log}).Run(ctx)
+			r := &outbox.Relay{Pool: pool, Pub: bus, Log: log}
+			if m, err := outbox.NewOTelMetrics(tel.Meter); err == nil {
+				r.Metrics = m
+			}
+			_ = r.Run(ctx)
 			return
 		}
 		log.Warn("NATS not reachable; outbox relay will retry", "error", err, "retry_in", wait)
@@ -174,5 +193,22 @@ func runRelay(ctx context.Context, url string, pool *pgxpool.Pool, log *slog.Log
 		case <-time.After(wait):
 		}
 		wait = min(wait*2, 30*time.Second)
+	}
+}
+
+// serveMetrics exposes Prometheus metrics on an internal address, separate
+// from the public API port.
+func serveMetrics(ctx context.Context, addr string, h http.Handler, log *slog.Logger) {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", h)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second}
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(sctx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error("metrics server stopped", "error", err)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // Event is one outbox row as published.
@@ -194,3 +195,29 @@ func (r *Relay) Run(ctx context.Context) error {
 		}
 	}
 }
+
+// OTelMetrics records relay activity as OpenTelemetry instruments.
+type OTelMetrics struct {
+	published, failed metric.Int64Counter
+	backlog           metric.Int64Gauge
+}
+
+// NewOTelMetrics creates the relay instruments on m.
+func NewOTelMetrics(m metric.Meter) (*OTelMetrics, error) {
+	p, err1 := m.Int64Counter("aegis.outbox.published", metric.WithDescription("Outbox events published to the broker"))
+	f, err2 := m.Int64Counter("aegis.outbox.failed", metric.WithDescription("Outbox publish attempts that failed"))
+	b, err3 := m.Int64Gauge("aegis.outbox.backlog", metric.WithDescription("Outbox events not yet published"))
+	if err := errors.Join(err1, err2, err3); err != nil {
+		return nil, err
+	}
+	return &OTelMetrics{published: p, failed: f, backlog: b}, nil
+}
+
+// Published implements Metrics.
+func (o *OTelMetrics) Published(n int) { o.published.Add(context.Background(), int64(n)) }
+
+// Failed implements Metrics.
+func (o *OTelMetrics) Failed(n int) { o.failed.Add(context.Background(), int64(n)) }
+
+// Backlog implements Metrics.
+func (o *OTelMetrics) Backlog(n int64) { o.backlog.Record(context.Background(), n) }
