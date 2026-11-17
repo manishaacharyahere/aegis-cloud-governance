@@ -103,6 +103,7 @@ test('demo', async ({ browser }) => {
   await page.getByRole('button', { name: 'Approve' }).click()
   await expect(page.getByRole('button', { name: 'Release change set' })).toBeVisible()
   await page.getByRole('button', { name: 'Release change set' }).click()
+  await page.getByRole('button', { name: 'Yes, release change set' }).click()
   await expect(page.getByRole('heading', { name: 'Change set' })).toBeVisible()
   await page.mouse.wheel(0, 600)
   await caption(page, 'Released as a change set for the normal Terraform pipeline. Aegis never changes the cloud itself; the next import verifies it.', 5000)

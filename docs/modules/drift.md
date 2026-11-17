@@ -80,7 +80,11 @@ already-unencrypted bucket). The generator now always makes a real change
 | GET | `/api/v1/drift/reports?limit=&after=` | reports newest first, without items (paged) |
 | GET | `/api/v1/drift/reports/{id}?category=&min_severity=` | items sorted by severity, then category |
 
-`account_id` may be omitted when the tenant has exactly one account.
+`account_id` may be omitted when the tenant has exactly one account. With several, it is the account's UUID from `GET /api/v1/accounts`.
+
+The dashboard's **Drift** page shows the active baseline per account, approves a new one (approver
+role, with a confirmation), runs a check (analyst role), and lists reports, each filterable by
+category and minimum severity.
 
 ## Security
 

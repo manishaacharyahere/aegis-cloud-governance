@@ -367,6 +367,34 @@ func (s *Store) ListResources(ctx context.Context, tenantSlug string, f ListFilt
 	return page, nil
 }
 
+// AccountView is a cloud account with its live resource count.
+type AccountView struct {
+	ID         string `json:"id"`
+	Provider   string `json:"provider"`
+	ExternalID string `json:"external_id"`
+	Name       string `json:"name"`
+	Resources  int    `json:"resource_count"`
+}
+
+// ListAccounts returns the tenant's cloud accounts (at most 1000), by name.
+func (s *Store) ListAccounts(ctx context.Context, tenantSlug string) ([]AccountView, error) {
+	tenantID, err := lookupTenant(ctx, s.pool, tenantSlug)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT a.id, a.provider, a.external_id, a.name,
+		(SELECT count(*)::int FROM resources r WHERE r.tenant_id = a.tenant_id AND r.account_id = a.id AND r.deleted_at IS NULL)
+		FROM cloud_accounts a WHERE a.tenant_id = $1 ORDER BY a.name, a.id LIMIT 1000`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list accounts: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[AccountView])
+	if out == nil {
+		out = []AccountView{}
+	}
+	return out, err
+}
+
 // TypeCount is the number of live resources of one type.
 type TypeCount struct {
 	ResourceType string `json:"resource_type"`

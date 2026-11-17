@@ -279,6 +279,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cloud accounts with live resource counts */
+        get: operations["getAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resources/{id}": {
         parameters: {
             query?: never;
@@ -1032,6 +1049,14 @@ export interface components {
             admin_ports?: number[];
             approved_encryption?: string[];
         };
+        Account: {
+            /** Format: uuid */
+            id: string;
+            provider: string;
+            external_id: string;
+            name: string;
+            resource_count: number;
+        };
         TypeCount: {
             resource_type: string;
             count: number;
@@ -1633,6 +1658,33 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["TypeCount"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAccounts: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Aegis-Tenant": components["parameters"]["Tenant"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Account"][];
                     };
                 };
             };

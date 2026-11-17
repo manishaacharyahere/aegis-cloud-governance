@@ -14,7 +14,9 @@ API in OIDC mode, real Dex sign-in and the IaC worker, so nothing is mocked:
    - the change set is released;
    - verification refuses to guess before the next import.
 
-A sixth test checks that a viewer sees data but no action buttons.
+6. drift: an approver approves the e2e account's baseline, then an analyst checks it and sees no drift.
+
+A last test checks that a viewer sees data but no action buttons.
 
 ```bash
 # stack: core + auth profiles with OIDC and a bootstrap admin

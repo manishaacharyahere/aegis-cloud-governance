@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { can, type PageProps } from '../nav'
 import type { ControlDetail, Coverage, ExceptionView, Framework } from '../types'
-import { Badge, Empty, ErrorBox, Panel } from '../ui'
+import { Badge, ConfirmButton, Empty, ErrorBox, Panel } from '../ui'
 import { useAction, useLoad, when, useDraft } from '../hooks'
 
 export default function Compliance({ api, me, go }: PageProps) {
@@ -149,10 +149,10 @@ function Exceptions({ api, me }: Pick<PageProps, 'api' | 'me'>) {
                 {can(me, 'approve') && x.status === 'requested' && x.requested_by !== me.subject && (
                   <>
                     <button onClick={() => decide(x.id, 'approve')}>Approve</button>
-                    <button onClick={() => decide(x.id, 'reject')}>Reject</button>
+                    <ConfirmButton label="Reject" confirm="Reject this exception?" onConfirm={() => decide(x.id, 'reject')} />
                   </>
                 )}
-                {can(me, 'approve') && x.status === 'approved' && <button onClick={() => decide(x.id, 'revoke')}>Revoke</button>}
+                {can(me, 'approve') && x.status === 'approved' && <ConfirmButton label="Revoke" confirm="Revoke this exception? The rule fails again." onConfirm={() => decide(x.id, 'revoke')} />}
               </td>
             </tr>
           ))}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { can, type PageProps } from '../nav'
 import type { Remediation as Rem, Template } from '../types'
-import { Badge, Empty, ErrorBox, Panel } from '../ui'
+import { Badge, ConfirmButton, Empty, ErrorBox, Panel } from '../ui'
 import { useAction, useLoad, when, useDraft } from '../hooks'
 
 const fmt = (v: unknown) => (v === undefined ? '—' : JSON.stringify(v))
@@ -155,14 +155,14 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
                 <div className="row">
                   <input aria-label="Comment" placeholder="Comment (optional)" value={comment} onChange={(e) => setComment(e.target.value)} />
                   <button className="primary" disabled={act.busy} onClick={() => step('approve')}>Approve</button>
-                  <button disabled={act.busy} onClick={() => step('reject')}>Reject</button>
+                  <ConfirmButton label="Reject" confirm="Reject this change? It cannot be reopened." disabled={act.busy} onConfirm={() => step('reject')} />
                 </div>
               )
         )}
         {(x.status === 'released' || x.status === 'verification_failed') && !can(me, 'operate') && (
           <p className="muted small">Verification needs the analyst role.</p>
         )}
-        {x.status === 'approved' && can(me, 'approve') && <button className="primary" disabled={act.busy} onClick={() => step('release')}>Release change set</button>}
+        {x.status === 'approved' && can(me, 'approve') && <ConfirmButton primary label="Release change set" confirm="Release the signed change set to your pipeline?" disabled={act.busy} onConfirm={() => step('release')} />}
         {(x.status === 'released' || x.status === 'verification_failed') && can(me, 'operate') && (
           <>
             <p className="small muted">

@@ -71,3 +71,31 @@ export function useDraft(key: string, initial: string): [string, (v: string) => 
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 export const when = (s?: string) => (s ? new Date(s).toLocaleString() : '—')
 export const pct = (n: number) => `${(n * 100).toFixed(1)} %`
+
+/** Accumulating "load more" list over a keyset-paged endpoint. The loader
+ * gets the cursor ('' for the first page); changing deps starts over. */
+export function usePaged<T>(loader: (after: string) => Promise<{ items: T[]; next_cursor?: string }>, deps: DependencyList) {
+  const [state, setState] = useState<{ items: T[]; next: string; error: unknown; loading: boolean }>({ items: [], next: '', error: null, loading: true })
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    let live = true
+    loader('').then(
+      (p) => live && setState({ items: p.items, next: p.next_cursor ?? '', error: null, loading: false }),
+      (error: unknown) => live && setState((s) => ({ ...s, error, loading: false })),
+    )
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, tick])
+  const more = useCallback(() => {
+    setState((s) => ({ ...s, loading: true }))
+    loader(state.next).then(
+      (p) => setState((s) => ({ items: [...s.items, ...p.items], next: p.next_cursor ?? '', error: null, loading: false })),
+      (error: unknown) => setState((s) => ({ ...s, error, loading: false })),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.next])
+  const reload = useCallback(() => setTick((t) => t + 1), [])
+  return { ...state, more, reload }
+}

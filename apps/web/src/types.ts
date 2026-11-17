@@ -246,3 +246,78 @@ export interface AuditEvent {
   target_id: string
   outcome: string
 }
+
+export interface Paged<T> {
+  items: T[]
+  next_cursor?: string
+}
+
+export interface ScanFinding {
+  source: string
+  rule_id: string
+  severity: string
+  decision: string
+  resource_address: string
+  file_path?: string
+  start_line?: number
+  end_line?: number
+  title: string
+  fingerprint: string
+}
+
+export interface ScanReport extends Scan {
+  planned_changes: { address: string; resource_type: string; action: string; destructive: boolean; region?: string }[]
+  findings: ScanFinding[]
+  counts: Record<string, Record<string, number>>
+  blocking: number
+}
+
+export interface DriftBaseline {
+  id: string
+  account_id: string
+  import_id: string
+  status: string
+  approved_by: string
+  note: string
+  resource_count: number
+  created_at: string
+}
+
+export interface DriftItem {
+  resource_id: string
+  resource_type: string
+  category: string
+  severity: string
+  changes?: { path: string; category: string; before: unknown; after: unknown }[]
+  new_failures?: string[]
+  resolved?: string[]
+}
+
+export interface DriftReport {
+  id: string
+  account_id: string
+  baseline_id: string
+  actor: string
+  counts: { total?: number; by_category?: Record<string, number>; by_severity?: Record<string, number> }
+  created_at: string
+  items: DriftItem[]
+}
+
+export interface Membership {
+  slug: string
+  name: string
+  roles: string[]
+}
+
+export interface TypeCount {
+  resource_type: string
+  count: number
+}
+
+export interface Account {
+  id: string
+  provider: string
+  external_id: string
+  name: string
+  resource_count: number
+}

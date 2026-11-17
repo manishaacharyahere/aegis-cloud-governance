@@ -3,7 +3,9 @@ import { fetchReadiness, type Readiness } from './api'
 import { DEV_USERS, beginLogin, completeLogin, devSession, fetchAuthConfig, loadSession, logout, renew, renewIn, type AuthConfig, type Session } from './auth'
 import { describeError, makeClient } from './client'
 import { hashFor, parseHash, type PageProps } from './nav'
-import type { Me } from './types'
+import type { Me, Membership } from './types'
+import { ErrorBoundary, Toasts } from './ui'
+import Drift from './pages/Drift'
 import { Access, Health } from './pages/Admin'
 import Compliance from './pages/Compliance'
 import Cost from './pages/Cost'
@@ -18,6 +20,7 @@ const PAGES: { route: string; label: string; page: ComponentType<PageProps> }[] 
   { route: 'inventory', label: 'Import & scan', page: Inventory },
   { route: 'risk', label: 'Risk', page: Risk },
   { route: 'investigate', label: 'Investigate', page: Investigate },
+  { route: 'drift', label: 'Drift', page: Drift },
   { route: 'compliance', label: 'Compliance evidence', page: Compliance },
   { route: 'cost', label: 'Cost', page: Cost },
   { route: 'remediation', label: 'Remediation', page: Remediation },
@@ -35,7 +38,19 @@ function readTenant(): string {
   }
 }
 
+function saveTenant(t: string) {
+  try {
+    localStorage.setItem(TENANT_KEY, t)
+  } catch {
+    /* private mode: keep in memory */
+  }
+}
+
 export default function App() {
+  return <Toasts><Shell /></Toasts>
+}
+
+function Shell() {
   const [cfg, setCfg] = useState<AuthConfig | null>(null)
   const [session, setSession] = useState<Session | null>(() => loadSession())
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +58,7 @@ export default function App() {
   const [me, setMe] = useState<Me | null>(null)
   const [hash, setHash] = useState(window.location.hash)
   const [ready, setReady] = useState<Readiness | null>(null)
+  const [tenants, setTenants] = useState<Membership[] | null>(null)
 
   useEffect(() => {
     fetchAuthConfig()
@@ -74,6 +90,7 @@ export default function App() {
     logout()
     setSession(null)
     setMe(null)
+    setTenants(null)
   }
   const api = useMemo(() => makeClient({ session, tenant, onUnauthenticated: signOut }), [session, tenant])
 
@@ -81,6 +98,21 @@ export default function App() {
     if (!session) return
     api<Me>('GET', '/api/v1/me').then(setMe).catch((e) => setError(describeError(e)))
   }, [api, session])
+
+  // The tenants this user holds a role in. If the remembered tenant is not
+  // one of them, switch to the first, so nobody lands on an empty tenant.
+  useEffect(() => {
+    if (!session) return
+    api<{ items: Membership[] }>('GET', '/api/v1/me/tenants').then((r) => {
+      setTenants(r.items)
+      if (r.items.length > 0 && !r.items.some((m) => m.slug === tenant)) {
+        setTenant(r.items[0].slug)
+        saveTenant(r.items[0].slug)
+      }
+    }).catch(() => setTenants([]))
+    // Only on sign-in: switching tenants must not refetch the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
 
   // Silent renewal: refresh the ID token two minutes before it expires. If
   // renewal fails, the next API call gets 401 and the user signs in again
@@ -119,11 +151,17 @@ export default function App() {
         <div className="whoami">
           <div className="mono small">{me.subject || '(no actor)'}</div>
           <div className="small muted">{(me.roles ?? []).join(', ') || 'no roles in this tenant'}</div>
-          <label className="small muted">Tenant <input aria-label="Tenant" value={tenant} onChange={(e) => {
-            const t = e.target.value.toLowerCase()
-            setTenant(t)
-            try { localStorage.setItem(TENANT_KEY, t) } catch { /* private mode: keep in memory */ }
-          }} /></label>
+          {tenants && tenants.length > 0 ? (
+            <label className="small muted">Tenant <select aria-label="Tenant" value={tenant} onChange={(e) => {
+              setTenant(e.target.value)
+              saveTenant(e.target.value)
+              setMe(null)
+            }}>
+              {tenants.map((m) => <option key={m.slug} value={m.slug}>{m.name === m.slug ? m.slug : `${m.name} (${m.slug})`}</option>)}
+            </select></label>
+          ) : (
+            <p className="small muted">{tenants ? 'You have no role in any tenant yet. Ask an administrator.' : 'Loading tenants…'}</p>
+          )}
           <button className="link" onClick={signOut}>Sign out</button>
         </div>
       </aside>
@@ -135,7 +173,9 @@ export default function App() {
           </div>
         </header>
         {me.method === 'dev-headers' && <p className="notice small">Development mode: identities are not authenticated and every user has every permission.</p>}
-        <Page key={current.route + hash} api={api} me={me} go={go} params={params} />
+        <ErrorBoundary key={current.route + tenant}>
+          <Page key={current.route + hash + tenant} api={api} me={me} go={go} params={params} />
+        </ErrorBoundary>
       </main>
     </div>
   )

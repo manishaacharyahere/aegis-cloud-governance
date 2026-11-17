@@ -20,6 +20,7 @@ type InventoryService interface {
 	ListResources(ctx context.Context, tenant string, f inventory.ListFilter) (inventory.ResourcePage, error)
 	GetResource(ctx context.Context, tenant, id string) (inventory.ResourceDetail, error)
 	ResourceTypes(ctx context.Context, tenant string) ([]inventory.TypeCount, error)
+	ListAccounts(ctx context.Context, tenant string) ([]inventory.AccountView, error)
 }
 
 // TenantHeader selects the tenant. In OIDC mode the caller must hold a role
@@ -161,6 +162,19 @@ func (h inventoryHandlers) getResource(w http.ResponseWriter, r *http.Request) {
 
 // fail maps domain errors to HTTP responses; unknown errors become a generic
 // 500 and are logged with the request ID.
+func (h inventoryHandlers) listAccounts(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	as, err := h.svc.ListAccounts(r.Context(), tenant)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": as})
+}
+
 func (h inventoryHandlers) resourceTypes(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := h.tenant(w, r)
 	if !ok {

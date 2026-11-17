@@ -68,6 +68,7 @@ var routePermissions = map[string]access.Permission{
 	"GET /api/v1/resources":                         access.Read,
 	"GET /api/v1/resources/{id}":                    access.Read,
 	"GET /api/v1/resources/types":                   access.Read,
+	"GET /api/v1/accounts":                          access.Read,
 	"POST /api/v1/inventory/import/terraform-state": access.Operate,
 	"GET /api/v1/iac/scans":                         access.Read,
 	"POST /api/v1/iac/scans":                        access.Operate,

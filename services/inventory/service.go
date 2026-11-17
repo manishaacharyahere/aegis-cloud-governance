@@ -36,6 +36,11 @@ func (s *Service) GetResource(ctx context.Context, tenant, id string) (ResourceD
 	return s.store.GetResource(ctx, tenant, id)
 }
 
+// ListAccounts lists the tenant's cloud accounts.
+func (s *Service) ListAccounts(ctx context.Context, tenant string) ([]AccountView, error) {
+	return s.store.ListAccounts(ctx, tenant)
+}
+
 // ResourceTypes lists the tenant's live resource types with counts.
 func (s *Service) ResourceTypes(ctx context.Context, tenant string) ([]TypeCount, error) {
 	return s.store.ResourceTypes(ctx, tenant)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { fetchReadiness, fetchVersion } from '../api'
 import { can, type PageProps } from '../nav'
 import type { Binding } from '../types'
-import { Badge, ErrorBox, Panel } from '../ui'
+import { Badge, ConfirmButton, ErrorBox, Panel } from '../ui'
 import { useAction, useLoad, when } from '../hooks'
 
 export function Access({ api, me }: PageProps) {
@@ -31,7 +31,7 @@ export function Access({ api, me }: PageProps) {
               <td className="mono">{b.subject}</td>
               <td><Badge value={b.role} /></td>
               <td className="small muted">granted by {b.granted_by} · {when(b.created_at)}</td>
-              <td><button onClick={() => change('DELETE', b.subject, b.role)}>Revoke</button></td>
+              <td><ConfirmButton label="Revoke" confirm={`Remove ${b.role} from ${b.subject}?`} onConfirm={() => change('DELETE', b.subject, b.role)} /></td>
             </tr>
           ))}
         </tbody>

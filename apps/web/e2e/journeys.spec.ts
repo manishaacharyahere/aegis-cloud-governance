@@ -49,8 +49,10 @@ async function closeOpenRemediations(page: Page, resource: string, rule: string)
       if (await reject.isVisible()) {
         await page.getByLabel('Comment').fill('closed by e2e setup')
         await reject.click()
+        await page.getByRole('button', { name: 'Yes, reject' }).click()
       } else if (await release.isVisible()) {
         await release.click()
+        await page.getByRole('button', { name: 'Yes, release change set' }).click()
       } else {
         break // this approver already decided; try the next one
       }
@@ -83,6 +85,13 @@ test('1. import and scan', async ({ page }) => {
   await expect(page.locator('.scan')).toContainText(/succeeded|failed/, { timeout: 200_000 })
   await expect(page.locator('.scan')).toContainText('succeeded')
   await shot(page, '02-import-and-scan')
+
+  // The scan's findings, filterable by source and severity.
+  await page.getByRole('button', { name: 'View findings →' }).click()
+  await expect(page.getByRole('heading', { name: /^Findings \(\d+ of \d+\)/ })).toBeVisible({ timeout: 20_000 })
+  await page.getByLabel('Source').selectOption('aegis-policy')
+  await expect(page.locator('.table tbody tr').first()).toContainText('aegis-policy')
+  await expect(page.locator('.stat').first()).toContainText(/blocking/)
 })
 
 test('2. investigate risk and propose a fix', async ({ page }) => {
@@ -153,6 +162,7 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
     if (await page.getByRole('button', { name: 'Release change set' }).isVisible()) break
   }
   await page.getByRole('button', { name: 'Release change set' }).click()
+  await page.getByRole('button', { name: 'Yes, release change set' }).click()
   await expect(page.getByRole('heading', { name: 'Change set' })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByText(/Aegis has not changed any cloud resource/)).toBeVisible()
   await expect(page.getByText(/Signed \(Ed25519, key/)).toBeVisible()
@@ -167,10 +177,36 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
   await expect(page.locator('.error')).toContainText(/import/i)
 })
 
+test('6. drift: approve a baseline, then check it', async ({ page }) => {
+  // The e2e account from journey 1 (one bucket), so the check is fast.
+  await signIn(page, 'bob@aegis.local')
+  await page.getByRole('link', { name: 'Drift' }).click()
+  const account = page.getByLabel('Account')
+  await expect(account).toBeVisible({ timeout: 20_000 })
+  await account.selectOption({ label: (await account.locator('option', { hasText: '999999999999' }).first().textContent()) ?? '' })
+  await page.getByRole('button', { name: 'Approve latest import' }).click()
+  await page.getByRole('button', { name: 'Yes, approve latest import' }).click()
+  await expect(page.locator('.toast')).toContainText('Baseline approved', { timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Check for drift now' })).toHaveCount(0) // approvers do not operate
+
+  await signIn(page, 'alice@aegis.local')
+  await page.getByRole('link', { name: 'Drift' }).click()
+  const acct = page.getByLabel('Account')
+  await acct.selectOption({ label: (await acct.locator('option', { hasText: '999999999999' }).first().textContent()) ?? '' })
+  await page.getByRole('button', { name: 'Check for drift now' }).click()
+  await expect(page.getByRole('button', { name: '← All drift reports' })).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.stat').first()).toContainText('differences')
+  await expect(page.getByText('No drift matches these filters.')).toBeVisible() // nothing changed since approval
+  await shot(page, '09-drift')
+})
+
 test('a viewer sees data but no actions', async ({ page }) => {
   await signIn(page, 'viewer@aegis.local')
   await page.getByRole('link', { name: 'Risk' }).click()
   await expect(page.getByRole('button', { name: 'Run assessment' })).toHaveCount(0)
   await page.getByRole('link', { name: 'Remediation' }).click()
   await expect(page.getByRole('heading', { name: 'Propose a remediation' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Drift' }).click()
+  await expect(page.getByRole('heading', { name: 'Approved baseline' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Approve latest import|Check for drift now/ })).toHaveCount(0)
 })

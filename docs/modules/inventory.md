@@ -78,6 +78,7 @@ All endpoints require `X-Aegis-Tenant: <slug>`, and the caller must hold a role 
 | GET | `/api/v1/resources?type=&environment=&account_id=&include_deleted=&limit=&cursor=` | keyset-paginated list |
 | GET | `/api/v1/resources/{id}` | current state, incoming relationships, version history |
 | GET | `/api/v1/resources/types` | live resource types with counts (for filters) |
+| GET | `/api/v1/accounts` | the tenant's cloud accounts with live resource counts |
 | POST | `/api/v1/inventory/import/terraform-state?account_id=&account_name=&environment=` | import a Terraform state v4 file (body); `400` if the body is not state v4 |
 
 ### Importing Terraform state

@@ -41,6 +41,17 @@ func (f *fakeInventory) ResourceTypes(context.Context, string) ([]inventory.Type
 	return []inventory.TypeCount{{ResourceType: "aws_s3_bucket", Count: 3}}, nil
 }
 
+func (f *fakeInventory) ListAccounts(context.Context, string) ([]inventory.AccountView, error) {
+	return []inventory.AccountView{{ID: "a1", Provider: "aws", ExternalID: "123456789012", Name: "prod", Resources: 5}}, nil
+}
+
+func TestListAccounts(t *testing.T) {
+	rec := do(invHandler(&fakeInventory{}), http.MethodGet, "/api/v1/accounts", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"resource_count":5`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
 func TestResourceTypes(t *testing.T) {
 	rec := do(invHandler(&fakeInventory{}), http.MethodGet, "/api/v1/resources/types", nil, map[string]string{TenantHeader: "demo"})
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `{"resource_type":"aws_s3_bucket","count":3}`) {

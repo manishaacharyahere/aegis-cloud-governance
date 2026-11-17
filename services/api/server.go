@@ -112,6 +112,7 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/resources", d.MaxBodyBytes, inv.listResources)
 	handle("GET /api/v1/resources/{id}", d.MaxBodyBytes, inv.getResource)
 	handle("GET /api/v1/resources/types", d.MaxBodyBytes, inv.resourceTypes)
+	handle("GET /api/v1/accounts", d.MaxBodyBytes, inv.listAccounts)
 	// State files are large; they share the cost-import limit.
 	handle("POST /api/v1/inventory/import/terraform-state", d.MaxCostImportBytes, inv.importTerraformState)
 	scans := iacHandlers{svc: d.IaC, fixtures: d.Fixtures}

@@ -79,6 +79,13 @@ func TestResourceTypes(t *testing.T) {
 	if other, _ := inv.ResourceTypes(ctx, "other"); len(other) != 0 {
 		t.Errorf("types leak across tenants: %v", other)
 	}
+	accts, err := inv.ListAccounts(ctx, "demo")
+	if err != nil || len(accts) != 1 || accts[0].Resources != total || accts[0].ExternalID != ds.Snapshot.Account.ExternalID {
+		t.Fatalf("accounts: %+v %v", accts, err)
+	}
+	if other, _ := inv.ListAccounts(ctx, "other"); len(other) != 0 {
+		t.Errorf("accounts leak across tenants: %v", other)
+	}
 }
 
 func TestMemberships(t *testing.T) {

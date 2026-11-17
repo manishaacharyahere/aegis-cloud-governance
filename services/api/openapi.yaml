@@ -519,6 +519,35 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /api/v1/accounts:
+    get:
+      tags:
+      - inventory
+      summary: Cloud accounts with live resource counts
+      operationId: getAccounts
+      x-aegis-permission: read
+      parameters:
+      - $ref: '#/components/parameters/Tenant'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /api/v1/resources/{id}:
     get:
       tags:
@@ -1956,6 +1985,26 @@ components:
           type: array
           items:
             type: string
+    Account:
+      type: object
+      required:
+      - id
+      - provider
+      - external_id
+      - name
+      - resource_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        external_id:
+          type: string
+        name:
+          type: string
+        resource_count:
+          type: integer
     TypeCount:
       type: object
       required:
