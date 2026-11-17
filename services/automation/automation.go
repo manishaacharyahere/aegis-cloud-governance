@@ -83,6 +83,9 @@ type Automation struct {
 	}
 	Notify Notifier
 	Log    *slog.Logger
+	// Consumer is the durable JetStream consumer name; API replicas sharing
+	// it split the import events between them. Default "aegis-reactor".
+	Consumer string
 	// ApproveAfter: remediations pending longer than this trigger a reminder (default 24h).
 	ApproveAfter time.Duration
 }

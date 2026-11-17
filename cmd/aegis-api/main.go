@@ -179,6 +179,11 @@ func run() error {
 	}
 	auto := &automation.Automation{Pool: bg, Compliance: complianceSvc, Risk: riskSvc, Drift: driftSvc, Notify: notifier, Log: log}
 
+	fixtures, err := iac.ListFixtures(cfg.FixturesDir)
+	if err != nil {
+		log.Warn("no Terraform fixtures listed", "dir", cfg.FixturesDir, "error", err)
+	}
+
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
 		Logger:       log,
 		DB:           pool,
@@ -205,6 +210,7 @@ func run() error {
 		MaxBodyBytes:             cfg.MaxBodyBytes,
 		MaxImportBytes:           cfg.MaxImportBytes,
 		MaxCostImportBytes:       cfg.MaxCostImportBytes,
+		Fixtures:                 fixtures,
 	}), log)
 
 	if cfg.ScheduleEvery > 0 {

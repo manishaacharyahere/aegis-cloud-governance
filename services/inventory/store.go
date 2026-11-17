@@ -367,6 +367,31 @@ func (s *Store) ListResources(ctx context.Context, tenantSlug string, f ListFilt
 	return page, nil
 }
 
+// TypeCount is the number of live resources of one type.
+type TypeCount struct {
+	ResourceType string `json:"resource_type"`
+	Count        int    `json:"count"`
+}
+
+// ResourceTypes returns the tenant's live resource types with counts, for
+// filter pickers.
+func (s *Store) ResourceTypes(ctx context.Context, tenantSlug string) ([]TypeCount, error) {
+	tenantID, err := lookupTenant(ctx, s.pool, tenantSlug)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT resource_type, count(*)::int FROM resources
+		WHERE tenant_id = $1 AND deleted_at IS NULL GROUP BY resource_type ORDER BY resource_type`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resource types: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[TypeCount])
+	if out == nil {
+		out = []TypeCount{}
+	}
+	return out, err
+}
+
 // GetResource returns a resource with its incoming edges and version history.
 func (s *Store) GetResource(ctx context.Context, tenantSlug, id string) (ResourceDetail, error) {
 	if !IsUUID(id) {

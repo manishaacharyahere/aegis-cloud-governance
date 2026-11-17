@@ -19,11 +19,11 @@ type InventoryService interface {
 	GetImport(ctx context.Context, tenant, id string) (inventory.ImportReport, error)
 	ListResources(ctx context.Context, tenant string, f inventory.ListFilter) (inventory.ResourcePage, error)
 	GetResource(ctx context.Context, tenant, id string) (inventory.ResourceDetail, error)
+	ResourceTypes(ctx context.Context, tenant string) ([]inventory.TypeCount, error)
 }
 
-// TenantHeader selects the tenant. TEMPORARY: until authentication exists the
-// tenant is caller-asserted, which is why the API must only listen on
-// localhost (see security/threat-model.md).
+// TenantHeader selects the tenant. In OIDC mode the caller must hold a role
+// in it (see auth.go); in development header mode it is caller-asserted.
 const TenantHeader = "X-Aegis-Tenant"
 
 var tenantSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
@@ -161,6 +161,68 @@ func (h inventoryHandlers) getResource(w http.ResponseWriter, r *http.Request) {
 
 // fail maps domain errors to HTTP responses; unknown errors become a generic
 // 500 and are logged with the request ID.
+func (h inventoryHandlers) resourceTypes(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	ts, err := h.svc.ResourceTypes(r.Context(), tenant)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": ts})
+}
+
+// importTerraformState converts a Terraform state v4 file (the request body)
+// into an inventory snapshot and imports it. Query parameters account_id,
+// account_name and environment fill what the state does not say.
+func (h inventoryHandlers) importTerraformState(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", "state file exceeds the import size limit")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_body", "could not read the request body")
+		return
+	}
+	q := r.URL.Query()
+	snap, skipped, err := inventory.FromTerraformState(raw, inventory.StateOptions{
+		AccountID: q.Get("account_id"), AccountName: q.Get("account_name"), Environment: q.Get("environment")})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_state", err.Error())
+		return
+	}
+	rep, err := h.svc.Import(r.Context(), tenant, snap)
+	if err != nil {
+		var verr *inventory.ValidationError
+		if errors.As(err, &verr) {
+			var b validationErrorBody
+			b.Error.Code, b.Error.Message = "validation_failed", "converted state failed validation"
+			b.Error.Issues, b.Error.Truncated = verr.Issues, verr.Truncated
+			writeJSON(w, http.StatusUnprocessableEntity, b)
+			return
+		}
+		h.fail(w, r, err)
+		return
+	}
+	if skipped == nil {
+		skipped = []string{}
+	}
+	status := http.StatusCreated
+	if rep.Duplicate {
+		status = http.StatusOK
+	}
+	w.Header().Set("Location", "/api/v1/inventory/imports/"+rep.ImportID)
+	writeJSON(w, status, map[string]any{"import": rep, "skipped": skipped})
+}
+
 func (h inventoryHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, inventory.ErrTenantNotFound):

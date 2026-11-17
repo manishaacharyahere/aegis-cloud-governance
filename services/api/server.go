@@ -55,7 +55,9 @@ type Deps struct {
 	Version                  string
 	MaxBodyBytes             int64 // default per-request body limit
 	MaxImportBytes           int64 // body limit for inventory imports
-	MaxCostImportBytes       int64 // body limit for cost imports (CUR exports are large)
+	MaxCostImportBytes       int64 // body limit for cost and Terraform state imports (both are large)
+	// Fixtures are the Terraform fixture names a scan may use (GET /iac/fixtures).
+	Fixtures []string
 }
 
 // NewHandler builds the routed, middleware-wrapped API handler. Every route
@@ -81,6 +83,9 @@ func NewHandler(d Deps) http.Handler {
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
 	}
+	if d.Logger == nil {
+		d.Logger = slog.Default()
+	}
 	if d.MaxCostImportBytes == 0 {
 		d.MaxCostImportBytes = d.MaxImportBytes
 	}
@@ -95,6 +100,8 @@ func NewHandler(d Deps) http.Handler {
 	handle("POST /api/v1/admin/outbox/requeue", d.MaxBodyBytes, opsHandlers{requeue: d.OutboxRequeue}.requeueOutbox)
 	handle("GET /api/v1/auth/config", d.MaxBodyBytes, ac.config)
 	handle("GET /api/v1/me", d.MaxBodyBytes, ac.me)
+	handle("GET /api/v1/me/tenants", d.MaxBodyBytes, ac.tenants)
+	handle("GET /api/v1/openapi.yaml", d.MaxBodyBytes, serveOpenAPI)
 	handle("GET /api/v1/access/bindings", d.MaxBodyBytes, ac.list)
 	handle("POST /api/v1/access/bindings", d.MaxBodyBytes, ac.change(true))
 	handle("DELETE /api/v1/access/bindings", d.MaxBodyBytes, ac.change(false))
@@ -104,7 +111,12 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/inventory/imports/{id}", d.MaxBodyBytes, inv.getImport)
 	handle("GET /api/v1/resources", d.MaxBodyBytes, inv.listResources)
 	handle("GET /api/v1/resources/{id}", d.MaxBodyBytes, inv.getResource)
-	scans := iacHandlers{svc: d.IaC}
+	handle("GET /api/v1/resources/types", d.MaxBodyBytes, inv.resourceTypes)
+	// State files are large; they share the cost-import limit.
+	handle("POST /api/v1/inventory/import/terraform-state", d.MaxCostImportBytes, inv.importTerraformState)
+	scans := iacHandlers{svc: d.IaC, fixtures: d.Fixtures}
+	handle("GET /api/v1/iac/fixtures", d.MaxBodyBytes, scans.listFixtures)
+	handle("GET /api/v1/iac/scans", d.MaxBodyBytes, scans.listScans)
 	handle("POST /api/v1/iac/scans", d.MaxBodyBytes, scans.createScan)
 	handle("GET /api/v1/iac/scans/{id}", d.MaxBodyBytes, scans.getScan)
 	comp := complianceHandlers{svc: d.Compliance, catalog: d.Catalog, signer: d.Signer}
@@ -133,6 +145,7 @@ func NewHandler(d Deps) http.Handler {
 	handle("GET /api/v1/drift/baselines", d.MaxBodyBytes, dr.listBaselines)
 	handle("POST /api/v1/drift/compare", d.MaxBodyBytes, dr.compare)
 	handle("GET /api/v1/drift/reports/{id}", d.MaxBodyBytes, dr.getReport)
+	handle("GET /api/v1/drift/reports", d.MaxBodyBytes, dr.listReports)
 	rk := riskHandlers{svc: d.Risk}
 	handle("POST /api/v1/risk/assessments", d.MaxBodyBytes, rk.assess)
 	handle("GET /api/v1/risk/assessments/{id}", d.MaxBodyBytes, rk.getRun)

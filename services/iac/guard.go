@@ -34,6 +34,21 @@ var AllowedProviders = map[string]bool{"hashicorp/aws": true, "hashicorp/random"
 // ErrRejected is returned for sources that fail pre-flight checks.
 var ErrRejected = errors.New("terraform source rejected")
 
+// ListFixtures returns the fixture names (directories) under root, sorted.
+func ListFixtures(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() && fixtureName.MatchString(e.Name()) {
+			out = append(out, e.Name())
+		}
+	}
+	return out, nil // os.ReadDir sorts by name
+}
+
 // ResolveFixture maps a fixture name to a directory strictly inside root.
 func ResolveFixture(root, name string) (string, error) {
 	if !fixtureName.MatchString(name) {

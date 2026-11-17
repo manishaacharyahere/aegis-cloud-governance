@@ -41,3 +41,7 @@ The demo identities and their password exist only in `infrastructure/auth/dex.ym
 ```bash
 AEGIS_DEMO=1 npx playwright test e2e/demo.spec.ts   # writes ../../demo/*.webm (git-ignored; published as a release asset)
 ```
+
+The journeys can be run again against the same stack. Journey 2 first closes any open remediation
+an earlier run left for its resource (rejecting it if pending, releasing it if approved). Journey 5
+uses the remediation journey 2 creates, so run the two together.

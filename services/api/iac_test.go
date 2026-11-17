@@ -25,6 +25,28 @@ func (f *fakeIaC) Enqueue(_ context.Context, _, ref, key string) (iac.Scan, bool
 func (f *fakeIaC) Get(context.Context, string, string) (iac.Report, error) {
 	return iac.Report{}, f.getErr
 }
+func (f *fakeIaC) List(_ context.Context, _, after string, _ int) ([]iac.Scan, string, error) {
+	if after == "bad" {
+		return nil, "", iac.ErrInvalidCursor
+	}
+	return []iac.Scan{{ID: "s1"}}, "next", nil
+}
+
+func TestListScansAndFixtures(t *testing.T) {
+	h := NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, IaC: &fakeIaC{},
+		MaxBodyBytes: 1024, Fixtures: []string{"iam-wildcard", "secure-baseline"}})
+	rec := do(h, http.MethodGet, "/api/v1/iac/scans?limit=5", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"next_cursor":"next"`) {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodGet, "/api/v1/iac/scans?after=bad", nil, map[string]string{TenantHeader: "demo"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad cursor: %d", rec.Code)
+	}
+	rec = do(h, http.MethodGet, "/api/v1/iac/fixtures", nil, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `["iam-wildcard","secure-baseline"]`) {
+		t.Fatalf("fixtures: %d %s", rec.Code, rec.Body)
+	}
+}
 
 func iacHandler(svc IaCService) http.Handler {
 	return NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, IaC: svc, MaxBodyBytes: 1024})

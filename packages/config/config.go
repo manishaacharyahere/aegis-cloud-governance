@@ -37,6 +37,9 @@ type Config struct {
 	MaxBodyBytes         int64
 	MaxImportBytes       int64
 	MaxCostImportBytes   int64
+	// FixturesDir holds the Terraform fixtures listed by GET /iac/fixtures
+	// (the worker scans from its own copy of the same directory).
+	FixturesDir string
 	// BootstrapTenant is created at startup if set (development default "demo").
 	BootstrapTenant string
 	OPAURL          string
@@ -162,6 +165,7 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, fmt.Errorf("AEGIS_MAX_COST_IMPORT_BYTES: must be between 1KiB and 512MiB, got %d", maxCost))
 	}
 	cfg.MaxCostImportBytes = maxCost
+	cfg.FixturesDir = get("AEGIS_FIXTURES_DIR", "datasets/terraform-fixtures")
 
 	defTenant := "demo"
 	if cfg.Environment == EnvProduction {

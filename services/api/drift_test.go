@@ -32,6 +32,20 @@ func (f *fakeDrift) GetReport(_ context.Context, _, _, c, s string) (drift.Repor
 	f.gotCat, f.gotSev = c, s
 	return drift.Report{}, f.err
 }
+func (f *fakeDrift) ListReports(context.Context, string, string, int) ([]drift.Report, string, error) {
+	return []drift.Report{{ID: "r1"}}, "", f.err
+}
+
+func TestListDriftReports(t *testing.T) {
+	rec := do(driftHandler(&fakeDrift{}), http.MethodGet, "/api/v1/drift/reports", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"r1"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	rec = do(driftHandler(&fakeDrift{err: drift.ErrInvalid}), http.MethodGet, "/api/v1/drift/reports?after=x", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("invalid cursor: %d", rec.Code)
+	}
+}
 
 func driftHandler(svc DriftService) http.Handler {
 	return NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, Drift: svc, MaxBodyBytes: 4096})

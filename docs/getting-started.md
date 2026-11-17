@@ -111,7 +111,8 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_SHUTDOWN_TIMEOUT` | `15s` | max `5m` |
 | `AEGIS_MAX_BODY_BYTES` | `1048576` | 1 KiB – 64 MiB |
 | `AEGIS_MAX_IMPORT_BYTES` | `33554432` | inventory import body limit, 1 KiB – 256 MiB |
-| `AEGIS_MAX_COST_IMPORT_BYTES` | `67108864` | cost import body limit, 1 KiB – 512 MiB (a 540-day, 1 000-resource export is ~35 MiB) |
+| `AEGIS_MAX_COST_IMPORT_BYTES` | `67108864` | cost and Terraform state import body limit, 1 KiB – 512 MiB (a 540-day, 1 000-resource export is ~35 MiB) |
+| `AEGIS_FIXTURES_DIR` | `datasets/terraform-fixtures` (`/fixtures` in the image) | fixture names offered by `GET /api/v1/iac/fixtures` |
 | `AEGIS_BOOTSTRAP_TENANT` | `demo` (non-production) | tenant created at startup |
 | `AEGIS_OPA_TOKEN` | — (required by Compose; required in production) | token for the OPA API, which only allows policy evaluation |
 | `AEGIS_NATS_USER` / `AEGIS_NATS_PASSWORD` | Compose: `aegis_api` / from `.env` | NATS credentials (anonymous access is off) |

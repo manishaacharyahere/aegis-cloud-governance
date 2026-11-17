@@ -37,6 +37,36 @@ func (f *fakeInventory) ListResources(_ context.Context, _ string, lf inventory.
 func (f *fakeInventory) GetResource(context.Context, string, string) (inventory.ResourceDetail, error) {
 	return inventory.ResourceDetail{}, f.getErr
 }
+func (f *fakeInventory) ResourceTypes(context.Context, string) ([]inventory.TypeCount, error) {
+	return []inventory.TypeCount{{ResourceType: "aws_s3_bucket", Count: 3}}, nil
+}
+
+func TestResourceTypes(t *testing.T) {
+	rec := do(invHandler(&fakeInventory{}), http.MethodGet, "/api/v1/resources/types", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `{"resource_type":"aws_s3_bucket","count":3}`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestImportTerraformState(t *testing.T) {
+	f := &fakeInventory{report: inventory.ImportReport{ImportID: "i1"}}
+	state := `{"version":4,"resources":[{"mode":"managed","type":"aws_kms_key","name":"k",
+		"provider":"provider[\"registry.terraform.io/hashicorp/aws\"]",
+		"instances":[{"attributes":{"arn":"arn:aws:kms:eu-west-1:123456789012:key/k","enable_key_rotation":true}}]}]}`
+	rec := do(invHandler(f), http.MethodPost, "/api/v1/inventory/import/terraform-state?environment=production",
+		strings.NewReader(state), map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusCreated || rec.Header().Get("Location") != "/api/v1/inventory/imports/i1" {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if f.lastSnap.Source != "terraform_state" || len(f.lastSnap.Resources) != 1 || f.lastSnap.Resources[0].Environment != "production" {
+		t.Errorf("snapshot passed on: %+v", f.lastSnap)
+	}
+	rec = do(invHandler(f), http.MethodPost, "/api/v1/inventory/import/terraform-state", strings.NewReader(`{"version":3}`),
+		map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_state") {
+		t.Errorf("old state version: %d %s", rec.Code, rec.Body)
+	}
+}
 
 func invHandler(svc InventoryService) http.Handler {
 	return NewHandler(Deps{

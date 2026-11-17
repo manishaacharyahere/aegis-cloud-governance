@@ -69,7 +69,7 @@ Code: [services/inventory](../../services/inventory), API handlers in
 
 ## API
 
-All endpoints require `X-Aegis-Tenant: <slug>` (temporary, see Security).
+All endpoints require `X-Aegis-Tenant: <slug>`, and the caller must hold a role in that tenant ([auth](../auth.md)).
 
 | Method | Path | Result |
 |---|---|---|
@@ -77,6 +77,33 @@ All endpoints require `X-Aegis-Tenant: <slug>` (temporary, see Security).
 | GET | `/api/v1/inventory/imports/{id}` | change report (counts, warnings, per-resource changes) |
 | GET | `/api/v1/resources?type=&environment=&account_id=&include_deleted=&limit=&cursor=` | keyset-paginated list |
 | GET | `/api/v1/resources/{id}` | current state, incoming relationships, version history |
+| GET | `/api/v1/resources/types` | live resource types with counts (for filters) |
+| POST | `/api/v1/inventory/import/terraform-state?account_id=&account_name=&environment=` | import a Terraform state v4 file (body); `400` if the body is not state v4 |
+
+### Importing Terraform state
+
+`POST /inventory/import/terraform-state` converts a `terraform.tfstate` file (format version 4) into an
+`aegis.inventory/v1` snapshot with source `terraform_state`. The snapshot then goes through the same
+validation, redaction and change detection as any other import.
+
+- **Imported:** only managed resources of the `hashicorp/aws` provider. Data sources and other
+  providers are listed in the response's `skipped` array.
+- **Resource ID:** the Terraform address, for example `module.data.aws_s3_bucket.logs["a"]`.
+- **Region:** the `region` attribute, or else the region in the resource's ARN.
+- **Account:** the `account_id` query parameter, or else the first ARN that carries an account.
+- **Attributes:**
+    - Copied into `configuration` as they appear in the state, apart from `id`, `arn`, `region`,
+      `tags` and `tags_all`.
+    - Attributes Terraform marks sensitive are dropped.
+    - Null values are dropped.
+- **Relationships:** a `depends_on` edge is created only when the dependency names a single
+  instance. Dependencies on a counted or `for_each` resource as a whole are dropped.
+
+**Limitation:** the policies were written against the synthetic generator's attribute names. AWS
+provider state often names or places things differently; for example, S3 public-access settings are
+on a separate `aws_s3_bucket_public_access_block` resource. So an imported state can produce fewer
+compliance findings than the same estate described synthetically. Mapping provider attributes onto
+the policy model is future work.
 
 ## Alternatives and trade-offs
 

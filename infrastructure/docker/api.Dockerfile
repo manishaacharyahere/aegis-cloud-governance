@@ -13,6 +13,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/aegis-api /aegis-api
+# Only the fixture names are used (GET /api/v1/iac/fixtures); scans run in the worker.
+COPY --from=build /src/datasets/terraform-fixtures /fixtures
+ENV AEGIS_FIXTURES_DIR=/fixtures
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/aegis-api"]

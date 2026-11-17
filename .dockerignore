@@ -5,6 +5,9 @@ apps/web/dist
 ml/.venv
 research
 datasets
+# The API image lists the fixture names (GET /api/v1/iac/fixtures).
+!datasets/terraform-fixtures
+datasets/terraform-fixtures/**/.terraform
 screenshots
 benchmarks
 **/*.tfstate*

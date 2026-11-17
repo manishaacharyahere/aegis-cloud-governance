@@ -35,3 +35,8 @@ func (s *Service) ListResources(ctx context.Context, tenant string, f ListFilter
 func (s *Service) GetResource(ctx context.Context, tenant, id string) (ResourceDetail, error) {
 	return s.store.GetResource(ctx, tenant, id)
 }
+
+// ResourceTypes lists the tenant's live resource types with counts.
+func (s *Service) ResourceTypes(ctx context.Context, tenant string) ([]TypeCount, error) {
+	return s.store.ResourceTypes(ctx, tenant)
+}

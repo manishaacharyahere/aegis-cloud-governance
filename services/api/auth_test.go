@@ -37,6 +37,37 @@ func (f fakeRoles) Grant(context.Context, string, string, string, string) error 
 func (f fakeRoles) Revoke(context.Context, string, string, string, string) error {
 	return errors.New("unused")
 }
+func (f fakeRoles) Memberships(_ context.Context, subject string, all bool) ([]access.Membership, error) {
+	var out []access.Membership
+	for k, roles := range f {
+		tenant, sub, _ := strings.Cut(k, "/")
+		if all || sub == subject {
+			out = append(out, access.Membership{Slug: tenant, Name: tenant, Roles: roles})
+		}
+	}
+	return out, nil
+}
+
+func TestMeTenants(t *testing.T) {
+	h := oidcHandler(fakeVerifierForTenants{}, &fakeInvestigator{}, &fakeRemediation{})
+	rec := do(h, "GET", "/api/v1/me/tenants", nil, map[string]string{"Authorization": "Bearer valid:approver@example.com"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"roles":["approver"]`) ||
+		strings.Contains(rec.Body.String(), "admin") {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", "/api/v1/me/tenants", nil, nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous: %d", rec.Code)
+	}
+}
+
+type fakeVerifierForTenants struct{}
+
+func (fakeVerifierForTenants) Verify(_ context.Context, raw string) (access.Principal, error) {
+	if s, ok := strings.CutPrefix(raw, "valid:"); ok {
+		return access.Principal{Subject: s, Method: AuthOIDC}, nil
+	}
+	return access.Principal{}, access.ErrUnauthenticated
+}
 
 func oidcHandler(v TokenVerifier, inv *fakeInvestigator, rem *fakeRemediation) http.Handler {
 	roles := fakeRoles{

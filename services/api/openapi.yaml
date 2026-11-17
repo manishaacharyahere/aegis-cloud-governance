@@ -1,0 +1,2082 @@
+# Generated once, then maintained by hand. TestOpenAPICoversRoutes checks it against routePermissions.
+openapi: 3.1.0
+info:
+  title: AEGIS API
+  version: 1.0.0
+  description: Local-first cloud governance API. Every route lists the permission it needs in x-aegis-permission (public, signed = any authenticated
+    caller, read, operate, approve, admin); see docs/auth.md for the role mapping.
+  license:
+    name: MIT
+servers:
+- url: http://127.0.0.1:8080
+security:
+- oidc: []
+- devHeaders: []
+tags:
+- name: access
+- name: audit
+- name: compliance
+- name: drift
+- name: finops
+- name: iac
+- name: inventory
+- name: investigator
+- name: operations
+- name: remediation
+- name: risk
+- name: system
+- name: tenant
+paths:
+  /healthz:
+    get:
+      tags:
+      - system
+      summary: Liveness probe
+      operationId: getHealthz
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /readyz:
+    get:
+      tags:
+      - system
+      summary: Readiness probe (database reachable)
+      operationId: getReadyz
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/version:
+    get:
+      tags:
+      - system
+      summary: Build version
+      operationId: getVersion
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: &id001
+                type: object
+                additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/openapi.yaml:
+    get:
+      tags:
+      - system
+      summary: This document
+      operationId: getOpenapiYaml
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/yaml:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/auth/config:
+    get:
+      tags:
+      - access
+      summary: Authentication mode, issuer and client ID for the dashboard
+      operationId: getAuthConfig
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/signing-key:
+    get:
+      tags:
+      - audit
+      summary: Public Ed25519 key that signs audit anchors and change sets
+      operationId: getSigningKey
+      x-aegis-permission: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicKey'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/me:
+    get:
+      tags:
+      - access
+      summary: The caller, and their roles in the tenant when the tenant header is sent
+      operationId: getMe
+      x-aegis-permission: signed
+      parameters:
+      - $ref: '#/components/parameters/TenantOptional'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/me/tenants:
+    get:
+      tags:
+      - access
+      summary: Tenants the caller holds a role in
+      operationId: getMeTenants
+      x-aegis-permission: signed
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/access/bindings:
+    get:
+      tags:
+      - access
+      summary: Role bindings in the tenant
+      operationId: getAccessBindings
+      x-aegis-permission: admin
+      parameters:
+      - &id002
+        $ref: '#/components/parameters/Tenant'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - access
+      summary: Grant a role
+      operationId: postAccessBindings
+      x-aegis-permission: admin
+      parameters:
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindingChange'
+      responses:
+        '204':
+          description: Done
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags:
+      - access
+      summary: Revoke a role (the last admin cannot be removed)
+      operationId: deleteAccessBindings
+      x-aegis-permission: admin
+      parameters:
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindingChange'
+      responses:
+        '204':
+          description: Done
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/tenant/policy-config:
+    get:
+      tags:
+      - tenant
+      summary: Tenant policy configuration
+      operationId: getTenantPolicyConfig
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyConfig'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - tenant
+      summary: Replace the tenant policy configuration (audited)
+      operationId: putTenantPolicyConfig
+      x-aegis-permission: admin
+      parameters:
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyConfig'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyConfig'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/admin/outbox/requeue:
+    post:
+      tags:
+      - operations
+      summary: Requeue parked outbox events
+      operationId: postAdminOutboxRequeue
+      x-aegis-permission: admin
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/inventory/import:
+    post:
+      tags:
+      - inventory
+      summary: Import an inventory snapshot (aegis.inventory/v1)
+      operationId: postInventoryImport
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *id001
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/inventory/import/terraform-state:
+    post:
+      tags:
+      - inventory
+      summary: Import a Terraform state v4 file as an inventory snapshot
+      operationId: postInventoryImportTerraformState
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - name: account_id
+        in: query
+        required: false
+        description: '12-digit AWS account ID; default: the first one found in an ARN'
+        schema:
+          type: string
+      - name: account_name
+        in: query
+        required: false
+        description: Account display name
+        schema:
+          type: string
+      - name: environment
+        in: query
+        required: false
+        description: Environment for resources without an environment tag
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *id001
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  import: *id001
+                  skipped:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/inventory/imports/{id}:
+    get:
+      tags:
+      - inventory
+      summary: An import report
+      operationId: getInventoryImportsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - &id003
+        $ref: '#/components/parameters/ID'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/resources:
+    get:
+      tags:
+      - inventory
+      summary: List resources (ordered by ID)
+      operationId: getResources
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: type
+        in: query
+        required: false
+        description: Resource type
+        schema:
+          type: string
+      - name: environment
+        in: query
+        required: false
+        description: Environment
+        schema:
+          type: string
+      - name: account_id
+        in: query
+        required: false
+        description: Account UUID
+        schema:
+          type: string
+      - name: include_deleted
+        in: query
+        required: false
+        description: Include deleted resources
+        schema:
+          type: boolean
+      - &id004
+        $ref: '#/components/parameters/Limit'
+      - name: cursor
+        in: query
+        required: false
+        description: next_cursor from the previous page
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+                  next_cursor:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/resources/types:
+    get:
+      tags:
+      - inventory
+      summary: Live resource types with counts
+      operationId: getResourcesTypes
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TypeCount'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/resources/{id}:
+    get:
+      tags:
+      - inventory
+      summary: A resource with incoming edges and version history
+      operationId: getResourcesById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/iac/fixtures:
+    get:
+      tags:
+      - iac
+      summary: Terraform fixtures a scan may use
+      operationId: getIacFixtures
+      x-aegis-permission: signed
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/iac/scans:
+    post:
+      tags:
+      - iac
+      summary: Queue a scan of a Terraform fixture
+      operationId: postIacScans
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanRequest'
+      responses:
+        '202':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - iac
+      summary: List scans, newest first (without findings)
+      operationId: getIacScans
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id004
+      - &id005
+        $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+                  next_cursor:
+                    type: string
+                    description: Pass as `after` for the next page; empty on the last page.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/iac/scans/{id}:
+    get:
+      tags:
+      - iac
+      summary: A scan with planned changes and findings
+      operationId: getIacScansById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/frameworks:
+    get:
+      tags:
+      - compliance
+      summary: Control frameworks and their controls
+      operationId: getComplianceFrameworks
+      x-aegis-permission: signed
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/evaluations:
+    post:
+      tags:
+      - compliance
+      summary: Evaluate the inventory (or an IaC scan) against the policies
+      operationId: postComplianceEvaluations
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/coverage:
+    get:
+      tags:
+      - compliance
+      summary: Control coverage
+      operationId: getComplianceCoverage
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: scope
+        in: query
+        required: false
+        description: inventory or iac
+        schema:
+          type: string
+      - name: stale_after
+        in: query
+        required: false
+        description: Duration after which evidence is stale
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/controls/{framework}/{control}:
+    get:
+      tags:
+      - compliance
+      summary: Evidence for one control
+      operationId: getComplianceControlsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: framework
+        in: path
+        required: true
+        description: Framework ID
+        schema:
+          type: string
+      - name: control
+        in: path
+        required: true
+        description: Control ID
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/exceptions:
+    get:
+      tags:
+      - compliance
+      summary: List policy exceptions
+      operationId: getComplianceExceptions
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+                  next_cursor:
+                    type: string
+                    description: Pass as `after` for the next page; empty on the last page.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - compliance
+      summary: Request a policy exception
+      operationId: postComplianceExceptions
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExceptionRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/exceptions/{id}/approve:
+    post:
+      tags:
+      - compliance
+      summary: 'Approve an exception (four-eyes: not the requester)'
+      operationId: postComplianceExceptionsApprove
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/exceptions/{id}/reject:
+    post:
+      tags:
+      - compliance
+      summary: 'Reject an exception (four-eyes: not the requester)'
+      operationId: postComplianceExceptionsReject
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/compliance/exceptions/{id}/revoke:
+    post:
+      tags:
+      - compliance
+      summary: 'Revoke an exception (four-eyes: not the requester)'
+      operationId: postComplianceExceptionsRevoke
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/audit/events:
+    get:
+      tags:
+      - audit
+      summary: Audit events, newest first
+      operationId: getAuditEvents
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id004
+      - name: before_seq
+        in: query
+        required: false
+        description: Return events before this sequence number
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/audit/verify:
+    get:
+      tags:
+      - audit
+      summary: Verify the tenant hash chain
+      operationId: getAuditVerify
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/audit/head:
+    get:
+      tags:
+      - audit
+      summary: Signed anchor for the current chain head
+      operationId: getAuditHead
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/audit/anchors/verify:
+    post:
+      tags:
+      - audit
+      summary: Check a saved anchor against the chain
+      operationId: postAuditAnchorsVerify
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - seq
+              - hash
+              properties:
+                seq:
+                  type: integer
+                hash:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/drift/baselines:
+    post:
+      tags:
+      - drift
+      summary: Approve the latest import as the baseline
+      operationId: postDriftBaselines
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - drift
+      summary: Baselines, newest first
+      operationId: getDriftBaselines
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/drift/compare:
+    post:
+      tags:
+      - drift
+      summary: Compare the latest import with the baseline
+      operationId: postDriftCompare
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: string
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/drift/reports:
+    get:
+      tags:
+      - drift
+      summary: Drift reports, newest first (without items)
+      operationId: getDriftReports
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+                  next_cursor:
+                    type: string
+                    description: Pass as `after` for the next page; empty on the last page.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/drift/reports/{id}:
+    get:
+      tags:
+      - drift
+      summary: A drift report
+      operationId: getDriftReportsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      - name: category
+        in: query
+        required: false
+        description: Filter by category
+        schema:
+          type: string
+      - name: min_severity
+        in: query
+        required: false
+        description: Minimum severity
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/risk/assessments:
+    post:
+      tags:
+      - risk
+      summary: Score every resource
+      operationId: postRiskAssessments
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                weights:
+                  $ref: '#/components/schemas/Weights'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/risk/assessments/{id}:
+    get:
+      tags:
+      - risk
+      summary: A risk run
+      operationId: getRiskAssessmentsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      - name: min_band
+        in: query
+        required: false
+        description: Minimum band
+        schema:
+          type: string
+      - *id004
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/risk/attack-paths:
+    get:
+      tags:
+      - risk
+      summary: Attack paths from internet-exposed resources
+      operationId: getRiskAttackPaths
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cost/import:
+    post:
+      tags:
+      - finops
+      summary: Import a cost CSV (CUR-style)
+      operationId: postCostImport
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cost/summary:
+    get:
+      tags:
+      - finops
+      summary: Cost summary
+      operationId: getCostSummary
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: group_by
+        in: query
+        required: false
+        description: Grouping dimension
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: Start date
+        schema:
+          type: string
+      - name: to
+        in: query
+        required: false
+        description: End date
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cost/tag-coverage:
+    get:
+      tags:
+      - finops
+      summary: Share of spend with required tags
+      operationId: getCostTagCoverage
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cost/forecast:
+    get:
+      tags:
+      - finops
+      summary: Latest ML forecast
+      operationId: getCostForecast
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: entity
+        in: query
+        required: false
+        description: Entity
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/cost/anomalies:
+    get:
+      tags:
+      - finops
+      summary: Latest ML anomalies
+      operationId: getCostAnomalies
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: entity
+        in: query
+        required: false
+        description: Entity
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/recommendations:
+    post:
+      tags:
+      - finops
+      summary: Generate savings recommendations
+      operationId: postRecommendations
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                as_of:
+                  type: string
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - finops
+      summary: List recommendations
+      operationId: getRecommendations
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: status
+        in: query
+        required: false
+        description: Status
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/recommendations/{id}/accept:
+    post:
+      tags:
+      - finops
+      summary: Accept a recommendation
+      operationId: postRecommendationsAccept
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/recommendations/{id}/dismiss:
+    post:
+      tags:
+      - finops
+      summary: Dismiss a recommendation
+      operationId: postRecommendationsDismiss
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/recommendations/{id}/implement:
+    post:
+      tags:
+      - finops
+      summary: Implement a recommendation
+      operationId: postRecommendationsImplement
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                implemented_at:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/assistant/status:
+    get:
+      tags:
+      - investigator
+      summary: Whether the optional local model is available
+      operationId: getAssistantStatus
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/investigations:
+    post:
+      tags:
+      - investigator
+      summary: Investigate a resource (deterministic evidence; optional model summary)
+      operationId: postInvestigations
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigationRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/investigations/{id}:
+    get:
+      tags:
+      - investigator
+      summary: An investigation
+      operationId: getInvestigationsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediation/templates:
+    get:
+      tags:
+      - remediation
+      summary: Remediation templates per rule
+      operationId: getRemediationTemplates
+      x-aegis-permission: signed
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations:
+    post:
+      tags:
+      - remediation
+      summary: Propose a change set
+      operationId: postRemediations
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - remediation
+      summary: List remediations, newest first
+      operationId: getRemediations
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - name: status
+        in: query
+        required: false
+        description: Status
+        schema:
+          type: string
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items: *id001
+                  next_cursor:
+                    type: string
+                    description: Pass as `after` for the next page; empty on the last page.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}:
+    get:
+      tags:
+      - remediation
+      summary: A remediation with approvals and the signed change set
+      operationId: getRemediationsById
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}/approve:
+    post:
+      tags:
+      - remediation
+      summary: 'Approve (four-eyes: not the proposer)'
+      operationId: postRemediationsApprove
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}/reject:
+    post:
+      tags:
+      - remediation
+      summary: 'Reject (four-eyes: not the proposer)'
+      operationId: postRemediationsReject
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}/release:
+    post:
+      tags:
+      - remediation
+      summary: Release an approved change set (signs it)
+      operationId: postRemediationsRelease
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}/verify:
+    post:
+      tags:
+      - remediation
+      summary: Check whether the latest inventory shows the change applied
+      operationId: postRemediationsVerify
+      x-aegis-permission: operate
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    oidc:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC ID token (AEGIS_AUTH_MODE=oidc).
+    devHeaders:
+      type: apiKey
+      in: header
+      name: X-Aegis-Actor
+      description: Development mode only, loopback clients only; every caller has every role.
+  parameters:
+    Tenant:
+      name: X-Aegis-Tenant
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z0-9][a-z0-9-]{1,62}$
+    TenantOptional:
+      name: X-Aegis-Tenant
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: ^[a-z0-9][a-z0-9-]{1,62}$
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+    After:
+      name: after
+      in: query
+      required: false
+      description: Opaque cursor (next_cursor of the previous page).
+      schema:
+        type: string
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Replays within 24h return the stored response; reuse with a different body is 422.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{1,128}$
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            issues:
+              type: array
+              items: *id001
+    PublicKey:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        key_id:
+          type: string
+        public_key:
+          type: string
+    Membership:
+      type: object
+      required:
+      - slug
+      - name
+      - roles
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - viewer
+            - analyst
+            - approver
+            - admin
+    BindingChange:
+      type: object
+      required:
+      - subject
+      - role
+      properties:
+        subject:
+          type: string
+        role:
+          type: string
+          enum:
+          - viewer
+          - analyst
+          - approver
+          - admin
+    PolicyConfig:
+      type: object
+      properties:
+        approved_regions:
+          type: array
+          items:
+            type: string
+        required_tags:
+          type: array
+          items:
+            type: string
+        admin_ports:
+          type: array
+          items:
+            type: integer
+        approved_encryption:
+          type: array
+          items:
+            type: string
+    TypeCount:
+      type: object
+      required:
+      - resource_type
+      - count
+      properties:
+        resource_type:
+          type: string
+        count:
+          type: integer
+    ScanRequest:
+      type: object
+      required:
+      - source
+      properties:
+        source:
+          type: object
+          required:
+          - type
+          - ref
+          properties:
+            type:
+              type: string
+              enum:
+              - fixture
+            ref:
+              type: string
+              pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+    EvaluationRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum:
+          - inventory
+          - iac
+        scan_id:
+          type: string
+    ExceptionRequest:
+      type: object
+      required:
+      - rule_id
+      - subject
+      - justification
+      - expires_at
+      properties:
+        rule_id:
+          type: string
+        subject:
+          type: string
+        justification:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    Comment:
+      type: object
+      properties:
+        comment:
+          type: string
+    Weights:
+      type: object
+      properties:
+        severity:
+          type: number
+        exposure:
+          type: number
+        privilege:
+          type: number
+        criticality:
+          type: number
+        data_sensitivity:
+          type: number
+        age:
+          type: number
+    InvestigationRequest:
+      type: object
+      required:
+      - resource_id
+      properties:
+        resource_id:
+          type: string
+        account_id:
+          type: string
+        question:
+          type: string
+    ProposeRequest:
+      type: object
+      required:
+      - source
+      - resource_id
+      - operations
+      - justification
+      properties:
+        source:
+          type: string
+          enum:
+          - finding
+          - manual
+        rule_id:
+          type: string
+        resource_id:
+          type: string
+        account_id:
+          type: string
+        operations:
+          type: array
+          items:
+            type: object
+            required:
+            - op
+            - path
+            properties:
+              op:
+                type: string
+                enum:
+                - set
+                - remove
+              path:
+                type: string
+              value: {}
+        justification:
+          type: string
+

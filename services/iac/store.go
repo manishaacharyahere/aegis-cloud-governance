@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 )
 
 // Scan statuses.
@@ -27,6 +29,7 @@ var (
 	ErrTenantNotFound = errors.New("tenant not found")
 	ErrNotFound       = errors.New("not found")
 	ErrLeaseLost      = errors.New("scan lease lost to another worker")
+	ErrInvalidCursor  = errors.New("invalid cursor")
 )
 
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -320,21 +323,16 @@ func (s *Store) Get(ctx context.Context, tenantSlug, id string) (Report, error) 
 	return rep, nil
 }
 
-func (s *Store) get(ctx context.Context, tenantID, id string) (Scan, error) {
+const scanCols = `id, source_type, source_ref, status, attempts, max_attempts, last_error, error_class,
+	tool_versions, policy_bundle_sha256, plan_summary, created_at, started_at, finished_at`
+
+func scanRow(row pgx.Row) (Scan, error) {
 	var sc Scan
 	var versions, summary []byte
 	var lastErr, class, bundle *string
-	err := s.pool.QueryRow(ctx, `
-		SELECT id, source_type, source_ref, status, attempts, max_attempts, last_error, error_class,
-		       tool_versions, policy_bundle_sha256, plan_summary, created_at, started_at, finished_at
-		FROM iac_scans WHERE tenant_id = $1 AND id = $2`, tenantID, id).Scan(
-		&sc.ID, &sc.SourceType, &sc.SourceRef, &sc.Status, &sc.Attempts, &sc.MaxAttempts, &lastErr, &class,
-		&versions, &bundle, &summary, &sc.CreatedAt, &sc.StartedAt, &sc.FinishedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Scan{}, ErrNotFound
-	}
-	if err != nil {
-		return Scan{}, fmt.Errorf("get scan: %w", err)
+	if err := row.Scan(&sc.ID, &sc.SourceType, &sc.SourceRef, &sc.Status, &sc.Attempts, &sc.MaxAttempts, &lastErr, &class,
+		&versions, &bundle, &summary, &sc.CreatedAt, &sc.StartedAt, &sc.FinishedAt); err != nil {
+		return Scan{}, err
 	}
 	sc.LastError, sc.ErrorClass, sc.PolicyBundleSHA256 = deref(lastErr), deref(class), deref(bundle)
 	_ = json.Unmarshal(versions, &sc.ToolVersions)
@@ -343,6 +341,61 @@ func (s *Store) get(ctx context.Context, tenantID, id string) (Scan, error) {
 		_ = json.Unmarshal(summary, sc.PlanSummary)
 	}
 	return sc, nil
+}
+
+func (s *Store) get(ctx context.Context, tenantID, id string) (Scan, error) {
+	sc, err := scanRow(s.pool.QueryRow(ctx, `SELECT `+scanCols+` FROM iac_scans WHERE tenant_id = $1 AND id = $2`, tenantID, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Scan{}, ErrNotFound
+	}
+	if err != nil {
+		return Scan{}, fmt.Errorf("get scan: %w", err)
+	}
+	return sc, nil
+}
+
+// List returns a tenant's scans newest first (without findings), with an
+// opaque cursor for the next page ("" when there is none).
+func (s *Store) List(ctx context.Context, tenantSlug, after string, limit int) ([]Scan, string, error) {
+	at, id, hasCursor, err := paging.Decode(after)
+	if err != nil || (hasCursor && !uuidRe.MatchString(id)) {
+		return nil, "", ErrInvalidCursor
+	}
+	var tenantID string
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = $1`, tenantSlug).Scan(&tenantID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrTenantNotFound
+		}
+		return nil, "", err
+	}
+	if !hasCursor {
+		id = "00000000-0000-0000-0000-000000000000"
+	}
+	limit = paging.Limit(limit)
+	rows, err := s.pool.Query(ctx, `SELECT `+scanCols+` FROM iac_scans WHERE tenant_id = $1
+		AND (NOT $2 OR (created_at, id) < ($3, $4::uuid)) ORDER BY created_at DESC, id DESC LIMIT $5`,
+		tenantID, hasCursor, at, id, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	out := []Scan{}
+	for rows.Next() {
+		sc, err := scanRow(rows)
+		if err != nil {
+			return nil, "", err
+		}
+		out = append(out, sc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(out) > limit {
+		out = out[:limit]
+		next = paging.Encode(out[limit-1].CreatedAt, out[limit-1].ID)
+	}
+	return out, next, nil
 }
 
 func deref(s *string) string {

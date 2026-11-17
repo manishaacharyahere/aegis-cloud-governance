@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "api:types": "npx --yes -p openapi-typescript@7.13.0 -p typescript@5.9.3 openapi-typescript ../../services/api/openapi.yaml -o src/api.gen.ts",
+    "api:check": "npx --yes -p openapi-typescript@7.13.0 -p typescript@5.9.3 openapi-typescript ../../services/api/openapi.yaml -o src/api.gen.ts --check"
   },
   "dependencies": {
     "react": "^18.3.1",

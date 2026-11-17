@@ -143,6 +143,22 @@ func TestDriftLifecycle(t *testing.T) {
 		t.Fatalf("drift after re-approval: %d", len(rep.Items))
 	}
 
+	// Three successful compares, listed newest first across pages.
+	page1, next, err := svc.ListReports(ctx, "demo", "", 2)
+	if err != nil || len(page1) != 2 || next == "" || len(page1[0].Items) != 0 {
+		t.Fatalf("reports page 1: %d %q %v", len(page1), next, err)
+	}
+	page2, next2, err := svc.ListReports(ctx, "demo", next, 2)
+	if err != nil || len(page2) != 1 || next2 != "" || page2[0].ID == page1[0].ID || page2[0].ID == page1[1].ID {
+		t.Fatalf("reports page 2: %d %q %v", len(page2), next2, err)
+	}
+	if other, _, _ := svc.ListReports(ctx, "other", "", 10); len(other) != 0 {
+		t.Errorf("reports leak across tenants: %d", len(other))
+	}
+	if _, _, err := svc.ListReports(ctx, "demo", "not-a-cursor", 10); !errors.Is(err, drift.ErrInvalid) {
+		t.Errorf("bad cursor: %v", err)
+	}
+
 	var audited int
 	pool.QueryRow(ctx, `SELECT count(*) FROM audit_events WHERE action IN ('drift.baseline.approve', 'drift.compare')`).Scan(&audited)
 	if audited != 5 {

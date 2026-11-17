@@ -122,6 +122,9 @@ func TestAutomationReactor(t *testing.T) {
 		t.Skip("AEGIS_TEST_OPA_URL and AEGIS_TEST_NATS_URL not set")
 	}
 	a, _ := newAutomation(t, opaURL)
+	// Own consumer: a locally running API shares the default one and would
+	// take the event.
+	a.Consumer = "aegis-reactor-test"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	bus, err := natsbus.Connect(ctx, natsURL, "aegis-test-reactor", natsbus.Credentials{

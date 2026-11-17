@@ -77,6 +77,7 @@ already-unencrypted bucket). The generator now always makes a real change
 | POST | `/api/v1/drift/baselines` | `{"account_id"?: …, "note"?: …}` + `X-Aegis-Actor`; approves the current inventory |
 | GET | `/api/v1/drift/baselines` | newest first |
 | POST | `/api/v1/drift/compare` | `{"account_id"?: …}`; 409 if no baseline; 503 if OPA is down (nothing recorded) |
+| GET | `/api/v1/drift/reports?limit=&after=` | reports newest first, without items (paged) |
 | GET | `/api/v1/drift/reports/{id}?category=&min_severity=` | items sorted by severity, then category |
 
 `account_id` may be omitted when the tenant has exactly one account.

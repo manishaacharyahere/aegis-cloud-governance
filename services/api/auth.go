@@ -28,6 +28,7 @@ type RoleStore interface {
 	List(ctx context.Context, tenant string) ([]access.Binding, error)
 	Grant(ctx context.Context, tenant, actor, subject, role string) error
 	Revoke(ctx context.Context, tenant, actor, subject, role string) error
+	Memberships(ctx context.Context, subject string, all bool) ([]access.Membership, error)
 }
 
 // Auth configures authentication and authorization.
@@ -50,21 +51,27 @@ var routePermissions = map[string]access.Permission{
 	"GET /api/v1/audit/head":            access.Read,
 	"POST /api/v1/audit/anchors/verify": access.Read,
 
-	"GET /api/v1/me":                     access.Signed,
-	"GET /api/v1/compliance/frameworks":  access.Signed,
-	"GET /api/v1/remediation/templates":  access.Signed,
-	"GET /api/v1/access/bindings":        access.Admin,
-	"POST /api/v1/admin/outbox/requeue":  access.Admin,
-	"GET /api/v1/tenant/policy-config":   access.Read,
-	"PUT /api/v1/tenant/policy-config":   access.Admin,
-	"POST /api/v1/access/bindings":       access.Admin,
-	"DELETE /api/v1/access/bindings":     access.Admin,
-	"POST /api/v1/inventory/import":      access.Operate,
-	"GET /api/v1/inventory/imports/{id}": access.Read,
-	"GET /api/v1/resources":              access.Read,
-	"GET /api/v1/resources/{id}":         access.Read,
-	"POST /api/v1/iac/scans":             access.Operate,
-	"GET /api/v1/iac/scans/{id}":         access.Read,
+	"GET /api/v1/me":                                access.Signed,
+	"GET /api/v1/me/tenants":                        access.Signed,
+	"GET /api/v1/iac/fixtures":                      access.Signed,
+	"GET /api/v1/openapi.yaml":                      access.Public,
+	"GET /api/v1/compliance/frameworks":             access.Signed,
+	"GET /api/v1/remediation/templates":             access.Signed,
+	"GET /api/v1/access/bindings":                   access.Admin,
+	"POST /api/v1/admin/outbox/requeue":             access.Admin,
+	"GET /api/v1/tenant/policy-config":              access.Read,
+	"PUT /api/v1/tenant/policy-config":              access.Admin,
+	"POST /api/v1/access/bindings":                  access.Admin,
+	"DELETE /api/v1/access/bindings":                access.Admin,
+	"POST /api/v1/inventory/import":                 access.Operate,
+	"GET /api/v1/inventory/imports/{id}":            access.Read,
+	"GET /api/v1/resources":                         access.Read,
+	"GET /api/v1/resources/{id}":                    access.Read,
+	"GET /api/v1/resources/types":                   access.Read,
+	"POST /api/v1/inventory/import/terraform-state": access.Operate,
+	"GET /api/v1/iac/scans":                         access.Read,
+	"POST /api/v1/iac/scans":                        access.Operate,
+	"GET /api/v1/iac/scans/{id}":                    access.Read,
 
 	"POST /api/v1/compliance/evaluations":                   access.Operate,
 	"GET /api/v1/compliance/coverage":                       access.Read,
@@ -81,6 +88,7 @@ var routePermissions = map[string]access.Permission{
 	"GET /api/v1/drift/baselines":       access.Read,
 	"POST /api/v1/drift/compare":        access.Operate,
 	"GET /api/v1/drift/reports/{id}":    access.Read,
+	"GET /api/v1/drift/reports":         access.Read,
 	"POST /api/v1/risk/assessments":     access.Operate,
 	"GET /api/v1/risk/assessments/{id}": access.Read,
 	"GET /api/v1/risk/attack-paths":     access.Read,
@@ -228,6 +236,21 @@ func (h accessHandlers) me(w http.ResponseWriter, r *http.Request) {
 		out["tenant"], out["roles"] = t, roles
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// tenants lists the tenants the caller holds a role in (for the tenant picker).
+func (h accessHandlers) tenants(w http.ResponseWriter, r *http.Request) {
+	if h.auth.Roles == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []access.Membership{}})
+		return
+	}
+	p, _ := access.FromContext(r.Context())
+	ms, err := h.auth.Roles.Memberships(r.Context(), p.Subject, p.Method == AuthDevHeaders)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": ms})
 }
 
 func (h accessHandlers) list(w http.ResponseWriter, r *http.Request) {

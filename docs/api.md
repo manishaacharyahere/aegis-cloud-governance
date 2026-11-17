@@ -93,3 +93,35 @@ not rewritten. Changes are audited.
 | `POST /api/v1/audit/anchors/verify` `{"seq": n, "hash": "..."}` | checks a stored head against the live chain |
 
 Verify outside Aegis with `go run ./cmd/aegis-verify -key <public key> file.json`.
+
+## OpenAPI contract
+
+The contract is [`services/api/openapi.yaml`](https://github.com/manishaacharyahere/aegis-cloud-governance/blob/main/services/api/openapi.yaml)
+(OpenAPI 3.1). A running API serves it at `GET /api/v1/openapi.yaml`, without authentication.
+
+Each operation carries `x-aegis-permission`, the permission it needs (`public`, `signed`, `read`,
+`operate`, `approve` or `admin`). `TestOpenAPICoversRoutes` fails the build when a route is missing
+from the spec, when the spec documents a route that does not exist, or when the two disagree on a
+permission. Request bodies and parameters are described fully; most response bodies are described
+only as JSON objects, so check the module pages for their fields.
+
+The dashboard's TypeScript types are generated from the spec:
+
+```bash
+cd apps/web
+npm run api:types   # writes src/api.gen.ts
+npm run api:check   # CI: fails if src/api.gen.ts is out of date
+```
+
+## Lists and paging
+
+Lists return `{"items": [...], "next_cursor": "..."}`. Pass `next_cursor` as `after` to get the next
+page; it is empty on the last page. Cursors are opaque, and the pages stay stable while new rows
+are inserted. The page size is `limit`: 50 by default, 500 at most. Paged lists:
+
+- remediations
+- exceptions
+- IaC scans (`GET /iac/scans`)
+- drift reports (`GET /drift/reports`)
+
+Resources page by ID with `cursor`; see [inventory](modules/inventory.md).

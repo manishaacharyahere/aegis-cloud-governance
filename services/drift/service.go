@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
@@ -412,6 +413,55 @@ func (s *Service) GetReport(ctx context.Context, tenant, id, category, minSeveri
 }
 
 // ListBaselines lists a tenant's baselines, newest first.
+// ListReports returns a tenant's drift reports newest first, without their
+// items (GET /drift/reports/{id} has those), and the next-page cursor.
+func (s *Service) ListReports(ctx context.Context, tenant, after string, limit int) ([]Report, string, error) {
+	at, id, hasCursor, err := paging.Decode(after)
+	if err != nil || (hasCursor && !uuidRe.MatchString(id)) {
+		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+	}
+	var tenantID string
+	if err := s.Pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = $1`, tenant).Scan(&tenantID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrTenantNotFound
+		}
+		return nil, "", err
+	}
+	if !hasCursor {
+		id = "00000000-0000-0000-0000-000000000000"
+	}
+	limit = paging.Limit(limit)
+	rows, err := s.Pool.Query(ctx, `SELECT id, account_id, baseline_id, observed_import_id, config_sha256, policy_bundle_sha256,
+		actor, counts, created_at FROM drift_reports WHERE tenant_id = $1
+		AND (NOT $2 OR (created_at, id) < ($3, $4::uuid)) ORDER BY created_at DESC, id DESC LIMIT $5`,
+		tenantID, hasCursor, at, id, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	out := []Report{}
+	for rows.Next() {
+		var r Report
+		var counts []byte
+		if err := rows.Scan(&r.ID, &r.AccountID, &r.BaselineID, &r.ObservedImportID, &r.ConfigSHA256, &r.PolicyBundleSHA256,
+			&r.Actor, &counts, &r.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		_ = json.Unmarshal(counts, &r.Counts)
+		r.Items = []Item{}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(out) > limit {
+		out = out[:limit]
+		next = paging.Encode(out[limit-1].CreatedAt, out[limit-1].ID)
+	}
+	return out, next, nil
+}
+
 func (s *Service) ListBaselines(ctx context.Context, tenant string) ([]Baseline, error) {
 	var tenantID string
 	if err := s.Pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = $1`, tenant).Scan(&tenantID); err != nil {

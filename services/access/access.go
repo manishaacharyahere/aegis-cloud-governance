@@ -158,6 +158,34 @@ func (s *Store) invalidate() {
 	s.mu.Unlock()
 }
 
+// Membership is a tenant the subject can use and their roles in it.
+type Membership struct {
+	Slug  string   `json:"slug"`
+	Name  string   `json:"name"`
+	Roles []string `json:"roles"`
+}
+
+// Memberships lists the tenants subject holds a role in. With all set
+// (development header mode, where every caller has every role) it lists
+// every tenant.
+func (s *Store) Memberships(ctx context.Context, subject string, all bool) ([]Membership, error) {
+	q := `SELECT t.slug, t.name, array_agg(b.role ORDER BY b.role) FROM role_bindings b
+		JOIN tenants t ON t.id = b.tenant_id WHERE b.subject = $1 GROUP BY t.slug, t.name ORDER BY t.slug`
+	args := []any{subject}
+	if all {
+		q, args = `SELECT slug, name, $1::text[] FROM tenants ORDER BY slug LIMIT 1000`, []any{Roles()}
+	}
+	rows, err := s.Pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Membership])
+	if out == nil {
+		out = []Membership{}
+	}
+	return out, err
+}
+
 // Binding is one role grant.
 type Binding struct {
 	Subject   string `json:"subject"`

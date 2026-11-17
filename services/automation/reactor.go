@@ -24,8 +24,12 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 	if debounce <= 0 {
 		debounce = 10 * time.Second
 	}
+	durable := a.Consumer
+	if durable == "" {
+		durable = "aegis-reactor"
+	}
 	cons, err := js.CreateOrUpdateConsumer(ctx, natsbus.Stream, jetstream.ConsumerConfig{
-		Durable: "aegis-reactor", FilterSubject: ImportSubject, AckPolicy: jetstream.AckExplicitPolicy,
+		Durable: durable, FilterSubject: ImportSubject, AckPolicy: jetstream.AckExplicitPolicy,
 		DeliverPolicy: jetstream.DeliverNewPolicy, MaxDeliver: 5, AckWait: 30 * time.Second,
 	})
 	if err != nil {

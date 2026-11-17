@@ -27,6 +27,38 @@ async function signIn(page: Page, email: string) {
   await expect(page.locator('.whoami')).toContainText(email)
 }
 
+// Journey 2 proposes a fix that only one open remediation may hold. Close any
+// left by an earlier run (rejected if pending, released if approved), so the
+// journeys can run again against the same stack.
+async function closeOpenRemediations(page: Page, resource: string, rule: string) {
+  for (const approver of ['bob@aegis.local', 'carol@aegis.local']) {
+    await signIn(page, approver)
+    for (let i = 0; i < 5; i++) {
+      await page.goto('/#/remediation')
+      const row = page.locator('.table tbody tr', { hasText: resource })
+        .filter({ hasText: rule }).filter({ hasText: /pending approval|approved/ }).first()
+      try {
+        await row.waitFor({ timeout: 5_000 })
+      } catch {
+        return // nothing open
+      }
+      await row.click()
+      const reject = page.getByRole('button', { name: 'Reject' })
+      const release = page.getByRole('button', { name: 'Release change set' })
+      await expect(reject.or(release).or(page.getByText('You have already decided.'))).toBeVisible({ timeout: 20_000 })
+      if (await reject.isVisible()) {
+        await page.getByLabel('Comment').fill('closed by e2e setup')
+        await reject.click()
+      } else if (await release.isVisible()) {
+        await release.click()
+      } else {
+        break // this approver already decided; try the next one
+      }
+      await expect(page.locator('.badge').filter({ hasText: /^(rejected|released)$/ }).first()).toBeVisible({ timeout: 20_000 })
+    }
+  }
+}
+
 let remediationURL = ''
 
 test('1. import and scan', async ({ page }) => {
@@ -54,6 +86,7 @@ test('1. import and scan', async ({ page }) => {
 })
 
 test('2. investigate risk and propose a fix', async ({ page }) => {
+  await closeOpenRemediations(page, 'aws_db_instance.checkout_002', 'AEGIS-DB-002')
   await signIn(page, 'alice@aegis.local')
   await page.getByRole('link', { name: 'Risk' }).click()
   await expect(page.locator('.table tbody tr').first()).toBeVisible({ timeout: 20_000 })
@@ -114,7 +147,9 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
     await page.goto('/' + path)
     await page.getByLabel('Comment').fill(`reviewed by ${approver}`)
     await page.getByRole('button', { name: 'Approve' }).click()
-    await expect(page.locator('.small').filter({ hasText: approver }).first()).toBeVisible({ timeout: 20_000 })
+    // Wait for the recorded decision itself (the sidebar also shows the
+    // email), so the next sign-in cannot cancel the request in flight.
+    await expect(page.locator('ul.small li').filter({ hasText: approver }).filter({ hasText: 'approved' })).toBeVisible({ timeout: 20_000 })
     if (await page.getByRole('button', { name: 'Release change set' }).isVisible()) break
   }
   await page.getByRole('button', { name: 'Release change set' }).click()

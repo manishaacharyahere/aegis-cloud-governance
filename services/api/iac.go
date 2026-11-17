@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
@@ -15,6 +16,7 @@ import (
 type IaCService interface {
 	Enqueue(ctx context.Context, tenant, fixture, idempotencyKey string) (iac.Scan, bool, error)
 	Get(ctx context.Context, tenant, id string) (iac.Report, error)
+	List(ctx context.Context, tenant, after string, limit int) ([]iac.Scan, string, error)
 }
 
 var (
@@ -22,7 +24,33 @@ var (
 	idempotencyKey = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 )
 
-type iacHandlers struct{ svc IaCService }
+type iacHandlers struct {
+	svc      IaCService
+	fixtures []string
+}
+
+// listFixtures returns the Terraform fixtures a scan may name.
+func (h iacHandlers) listFixtures(w http.ResponseWriter, _ *http.Request) {
+	fs := h.fixtures
+	if fs == nil {
+		fs = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": fs})
+}
+
+func (h iacHandlers) listScans(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	scans, next, err := h.svc.List(r.Context(), tenant, r.URL.Query().Get("after"), limit)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": scans, "next_cursor": next})
+}
 
 type scanRequest struct {
 	Source struct {
@@ -96,6 +124,8 @@ func (h iacHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, iac.ErrTenantNotFound):
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
+	case errors.Is(err, iac.ErrInvalidCursor):
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
 	case errors.Is(err, iac.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "scan not found")
 	case errors.Is(err, context.Canceled):

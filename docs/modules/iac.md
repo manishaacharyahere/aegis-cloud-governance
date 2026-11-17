@@ -144,4 +144,6 @@ later scans reuse it.
 | Trivy and Checkov integrated | real outputs parsed; counts asserted in tests |
 | Planned changes extracted; plan data passed to OPA | `Analyze` + `OPAClient`; ground-truth test |
 | Unified report | `GET /api/v1/iac/scans/{id}`: changes, findings, counts per source/severity, blocking count |
+| Scan history | `GET /api/v1/iac/scans?limit=&after=`: scans newest first, without findings (paged) |
+| Fixture list | `GET /api/v1/iac/fixtures`: the fixture names a scan may use |
 | Sensitive plan data redacted | `TestRedactionUsesSensitiveMaskAndKeyNames` |

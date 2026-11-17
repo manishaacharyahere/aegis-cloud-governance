@@ -52,6 +52,7 @@ removed.
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/api/v1/me` | any signed-in caller; includes roles in `X-Aegis-Tenant` |
+| GET | `/api/v1/me/tenants` | any signed-in caller; the tenants they hold a role in (every tenant in development header mode) |
 | GET | `/api/v1/access/bindings` | admin |
 | POST / DELETE | `/api/v1/access/bindings` with `{"subject": "...", "role": "..."}` | admin |
 

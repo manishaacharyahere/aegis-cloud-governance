@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
@@ -16,6 +17,7 @@ type DriftService interface {
 	ListBaselines(ctx context.Context, tenant string) ([]drift.Baseline, error)
 	Compare(ctx context.Context, tenant, accountID, actor string) (drift.Report, error)
 	GetReport(ctx context.Context, tenant, id, category, minSeverity string) (drift.Report, error)
+	ListReports(ctx context.Context, tenant, after string, limit int) ([]drift.Report, string, error)
 }
 
 type driftHandlers struct{ svc DriftService }
@@ -69,6 +71,20 @@ func (h driftHandlers) listBaselines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+func (h driftHandlers) listReports(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, next, err := h.svc.ListReports(r.Context(), tenant, r.URL.Query().Get("after"), limit)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": list, "next_cursor": next})
 }
 
 func (h driftHandlers) compare(w http.ResponseWriter, r *http.Request) {
