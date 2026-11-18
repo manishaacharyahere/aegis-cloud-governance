@@ -1,0 +1,15 @@
+// The AEGIS component library. Pages import from here only, so every screen
+// shares the same building blocks and looks consistent.
+export { AnimatedNumber } from './animated-number'
+export { Chip, StatusBadge } from './badge'
+export { Button, buttonVariants, type ButtonProps } from './button'
+export { Card, KeyValue } from './card'
+export { AreaChart, BarList, Meter } from './charts'
+export { ConfirmAction } from './confirm-action'
+export { CopyButton, Mono } from './copy-button'
+export { DataTable, Pager, type Column } from './data-table'
+export { Callout, EmptyState, ErrorState, Skeleton } from './feedback'
+export { Field, Input, RadioGroup, Select, Textarea } from './field'
+export { BackLink, DiffList, ErrorBoundary, SectionTitle, Segmented, ThemeToggle, Timeline, type ThemeChoice } from './misc'
+export { StatCard, StatGrid } from './stat-card'
+export { Toaster, useToast } from './toast'

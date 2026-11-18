@@ -35,3 +35,18 @@ export function hashFor(route: string, params?: Record<string, string>): string 
   const q = params ? new URLSearchParams(params).toString() : ''
   return `#/${route}${q ? '?' + q : ''}`
 }
+
+/** The URL parameters for route after applying patch to the current ones
+ * (empty values are dropped), so filters live in the URL: bookmarkable, and
+ * Back works. */
+export function patchParams(params: URLSearchParams, patch: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  params.forEach((v, k) => {
+    out[k] = v
+  })
+  for (const [k, v] of Object.entries(patch)) {
+    if (v) out[k] = v
+    else delete out[k]
+  }
+  return out
+}

@@ -1,8 +1,12 @@
 import { useState } from 'react'
-import { can, type PageProps } from '../nav'
+import { GitCompareArrows, ShieldCheck } from 'lucide-react'
+import { can, patchParams, type PageProps } from '../nav'
 import type { Account, DriftBaseline, DriftReport, Paged } from '../types'
-import { Badge, ConfirmButton, Empty, ErrorBox, Panel, rowLink, Skeleton, Stat, useToast } from '../ui'
-import { useAction, useLoad, usePaged, when } from '../hooks'
+import {
+  BackLink, Button, Callout, Card, ConfirmAction, DataTable, DiffList, EmptyState, ErrorState, Input, Mono, Pager, Select,
+  Skeleton, StatCard, StatGrid, StatusBadge, Timeline, useToast,
+} from '@/components/ui'
+import { ago, useAction, useLoad, usePaged, when } from '../hooks'
 
 const CATEGORIES = ['security', 'deleted', 'unmanaged', 'cost', 'configuration', 'tagging']
 const SEVERITIES = ['critical', 'high', 'medium', 'low']
@@ -10,6 +14,11 @@ const SEVERITIES = ['critical', 'high', 'medium', 'low']
 export default function Drift(props: PageProps) {
   const id = props.params.get('id')
   return id ? <ReportView {...props} id={id} /> : <DriftHome {...props} />
+}
+
+function fmtCounts(c: Record<string, number> | undefined, order: string[]): string {
+  if (!c) return '—'
+  return order.filter((k) => c[k]).map((k) => `${c[k]} ${k}`).join(', ') || 'none'
 }
 
 function DriftHome({ api, me, go }: PageProps) {
@@ -27,32 +36,32 @@ function DriftHome({ api, me, go }: PageProps) {
   const name = (id: string) => acctList.find((a) => a.id === id)?.name ?? id.slice(0, 8)
 
   return (
-    <div className="stack">
-      <div className="grid2">
-        <Panel title="Approved baseline" actions={acctList.length > 1 && (
-          <select aria-label="Account" value={account} onChange={(e) => setChosen(e.target.value)}>
-            {acctList.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.external_id}, {a.resource_count} resources)</option>)}
-          </select>
-        )}>
-          <p className="muted small">
-            A baseline is an approved copy of an account's latest inventory. Drift is any difference between it and a later
-            import, with the policy rules that newly fail or now pass.
-          </p>
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[3fr_2fr]">
+        <Card title="Approved baseline" icon={<ShieldCheck />}
+          description="An approved copy of an account's inventory. Drift is any later difference, with the rules that newly fail or now pass."
+          actions={acctList.length > 1 && (
+            <Select aria-label="Cloud account" value={account} onChange={(e) => setChosen(e.target.value)}>
+              {acctList.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.external_id}, {a.resource_count} resources)</option>)}
+            </Select>
+          )}>
           {(baselines.loading && !baselines.data) || (accounts.loading && !accounts.data) ? <Skeleton rows={2} /> : acctList.length === 0 ? (
-            <Empty>No inventory yet. Import a snapshot under Import & scan first.</Empty>
+            <EmptyState icon={<GitCompareArrows />} title="No inventory yet" action={<Button size="sm" onClick={() => go('inventory')}>Import a snapshot</Button>} />
           ) : active ? (
-            <p>
-              <Badge value="active" /> {active.resource_count} resources in <b>{name(account)}</b>, approved by <b>{active.approved_by}</b> {when(active.created_at)}
-              {active.note && <span className="muted small"> · “{active.note}”</span>}
-            </p>
-          ) : <Empty>No baseline for {name(account)} yet. Approve its latest import as the baseline.</Empty>}
-          <ErrorBox error={accounts.error ?? baselines.error ?? act.error} />
-          {acctList.length > 0 && (
-            <div className="row">
+            <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
+              <StatusBadge value="active" /> <b className="tabular-nums">{active.resource_count}</b> resources in <b>{name(account)}</b>, approved by <b>{active.approved_by}</b>
+              <span className="text-fg-subtle" title={when(active.created_at)}>{ago(active.created_at)}</span>
+              {active.note && <span className="w-full text-[13px] text-fg-muted">“{active.note}”</span>}
+            </div>
+          ) : <Callout tone="info" title={`No baseline for ${name(account)} yet`}>Approve its latest import to start detecting drift.</Callout>}
+          <ErrorState error={accounts.error ?? baselines.error ?? act.error} className="mt-3" />
+          {acctList.length > 0 && (can(me, 'approve') || can(me, 'operate')) && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               {can(me, 'approve') && (
                 <>
-                  <input aria-label="Baseline note" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-                  <ConfirmButton label="Approve latest import" confirm={`Make the latest import of ${name(account)} the baseline?`} disabled={act.busy}
+                  <Input aria-label="Baseline note" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} className="max-w-[260px]" />
+                  <ConfirmAction tone="primary" variant="secondary" label="Approve latest import" title={`Make the latest import of ${name(account)} the baseline?`}
+                    description="Later imports are compared against it. The approval is recorded in the audit log." disabled={act.busy}
                     onConfirm={async () => {
                       const b = await act.run(() => api<DriftBaseline>('POST', '/api/v1/drift/baselines', { account_id: account, note }))
                       if (b) {
@@ -64,56 +73,42 @@ function DriftHome({ api, me, go }: PageProps) {
                 </>
               )}
               {can(me, 'operate') && (
-                <button className="primary" disabled={act.busy || !active} onClick={async () => {
+                <Button variant="primary" loading={act.busy} disabled={!active} onClick={async () => {
                   const r = await act.run(() => api<DriftReport>('POST', '/api/v1/drift/compare', { account_id: account }))
                   if (r) {
                     toast(`Drift check done: ${r.counts.total ?? r.items.length} differences.`)
                     go('drift', { id: r.id })
                   }
-                }}>Check for drift now</button>
+                }}><GitCompareArrows />Check for drift now</Button>
               )}
             </div>
           )}
-        </Panel>
-        <Panel title="Baseline history">
-          {mine.length === 0 ? <Empty>None for this account.</Empty> : (
-            <ul className="small">
-              {mine.slice(0, 8).map((b) => (
-                <li key={b.id}><Badge value={b.status} /> {b.resource_count} resources · {b.approved_by} · {when(b.created_at)}</li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+        </Card>
+        <Card title="Baseline history">
+          <Timeline empty="None for this account." items={mine.slice(0, 6).map((b) => ({
+            key: b.id, status: b.status, title: <span className="tabular-nums">{b.resource_count} resources</span>,
+            meta: `${b.approved_by} · ${when(b.created_at)}`, body: b.note || undefined,
+          }))} />
+        </Card>
       </div>
 
-      <Panel title="Drift reports">
-        <ErrorBox error={reports.error} />
-        {reports.loading && reports.items.length === 0 ? <Skeleton /> : reports.items.length === 0 ? <Empty>No drift checks yet.</Empty> : (
-          <table className="table">
-            <thead><tr><th>When</th><th>Account</th><th>By</th><th className="num">Differences</th><th>By severity</th><th>By category</th></tr></thead>
-            <tbody>
-              {reports.items.map((r) => (
-                <tr key={r.id} {...rowLink(() => go('drift', { id: r.id }))}>
-                  <td>{when(r.created_at)}</td>
-                  <td>{name(r.account_id)}</td>
-                  <td>{r.actor}</td>
-                  <td className="num">{r.counts.total ?? 0}</td>
-                  <td className="small">{fmtCounts(r.counts.by_severity, SEVERITIES)}</td>
-                  <td className="small">{fmtCounts(r.counts.by_category, CATEGORIES)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {reports.next && <div className="pager"><button disabled={reports.loading} onClick={reports.more}>Load more</button></div>}
-      </Panel>
+      <Card title="Drift reports" description="Each check compares the latest import with the approved baseline.">
+        <DataTable rows={reports.items} loading={reports.loading} error={reports.error} onRetry={reports.reload}
+          getRowId={(r) => r.id} onRowOpen={(r) => go('drift', { id: r.id })} rowLabel={(r) => `Open drift report of ${when(r.created_at)}`}
+          rowTone={(r) => ((r.counts.by_severity?.critical ?? 0) > 0 ? 'danger' : (r.counts.by_severity?.high ?? 0) > 0 ? 'high' : undefined)}
+          empty={<EmptyState icon={<GitCompareArrows />} title="No drift checks yet">Approve a baseline, then run a check.</EmptyState>}
+          columns={[
+            { key: 'when', header: 'When', cell: (r) => <span title={when(r.created_at)}>{ago(r.created_at)}</span> },
+            { key: 'acct', header: 'Account', cell: (r) => name(r.account_id) },
+            { key: 'by', header: 'By', cell: (r) => <span className="text-fg-muted">{r.actor}</span>, hideOnMobile: true },
+            { key: 'n', header: 'Differences', align: 'right', cell: (r) => r.counts.total ?? 0 },
+            { key: 'sev', header: 'By severity', cell: (r) => <span className="text-fg-muted">{fmtCounts(r.counts.by_severity, SEVERITIES)}</span>, hideOnMobile: true },
+            { key: 'cat', header: 'By category', cell: (r) => <span className="text-fg-muted">{fmtCounts(r.counts.by_category, CATEGORIES)}</span>, hideOnMobile: true },
+          ]} />
+        <Pager mode="more" hasNext={!!reports.next} onNext={reports.more} loading={reports.loading} />
+      </Card>
     </div>
   )
-}
-
-function fmtCounts(c: Record<string, number> | undefined, order: string[]): string {
-  if (!c) return '—'
-  return order.filter((k) => c[k]).map((k) => `${c[k]} ${k}`).join(', ') || 'none'
 }
 
 function ReportView({ api, go, params, id }: PageProps & { id: string }) {
@@ -121,63 +116,52 @@ function ReportView({ api, go, params, id }: PageProps & { id: string }) {
   const severity = params.get('min_severity') ?? ''
   const q = new URLSearchParams({ ...(category && { category }), ...(severity && { min_severity: severity }) })
   const rep = useLoad(() => api<DriftReport>('GET', `/api/v1/drift/reports/${id}?${q}`), [api, id, category, severity])
-  const set = (k: string, v: string) => go('drift', { id, ...(category && { category }), ...(severity && { min_severity: severity }), [k]: v })
+  const set = (k: string, v: string) => go('drift', patchParams(params, { [k]: v }))
   const r = rep.data
 
   return (
-    <div className="stack">
-      <button className="link" onClick={() => go('drift')}>← All drift reports</button>
-      <ErrorBox error={rep.error} />
-      {!r ? <Skeleton rows={5} /> : (
+    <div className="space-y-5">
+      <BackLink onClick={() => go('drift')}>All drift reports</BackLink>
+      <ErrorState error={rep.error} onRetry={rep.reload} />
+      {!r ? !rep.error && <Skeleton rows={6} /> : (
         <>
-          <div className="stats">
-            <Stat label="differences" value={r.counts.total ?? 0} tone={(r.counts.total ?? 0) > 0 ? 'warn' : 'ok'} />
-            {SEVERITIES.map((s) => <Stat key={s} label={s} value={r.counts.by_severity?.[s] ?? 0} tone={s === 'critical' || s === 'high' ? 'bad' : undefined} />)}
-          </div>
-          <Panel title={`Drift found ${when(r.created_at)} by ${r.actor}`} actions={
+          <StatGrid>
+            <StatCard label="differences" value={r.counts.total ?? 0} tone="auto" autoTone="warning" />
+            {SEVERITIES.map((s) => (
+              <StatCard key={s} label={s} value={r.counts.by_severity?.[s] ?? 0} tone="auto" autoTone={s === 'critical' ? 'danger' : s === 'high' ? 'high' : s === 'medium' ? 'warning' : 'info'} />
+            ))}
+          </StatGrid>
+          <Card title={`Drift found ${ago(r.created_at)}`} description={`Checked by ${r.actor} · ${when(r.created_at)}`} actions={
             <>
-              <select aria-label="Category" value={category} onChange={(e) => set('category', e.target.value)}>
+              <Select aria-label="Category" value={category} onChange={(e) => set('category', e.target.value)}>
                 <option value="">All categories</option>
                 {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
-              <select aria-label="Minimum severity" value={severity} onChange={(e) => set('min_severity', e.target.value)}>
+              </Select>
+              <Select aria-label="Minimum severity" value={severity} onChange={(e) => set('min_severity', e.target.value)}>
                 <option value="">Any severity</option>
                 {SEVERITIES.map((s) => <option key={s}>{s}</option>)}
-              </select>
+              </Select>
             </>
           }>
-            {r.items.length === 0 ? <Empty>No drift matches these filters.</Empty> : (
-              <table className="table">
-                <thead><tr><th>Resource</th><th>Category</th><th>Severity</th><th>What changed</th><th /></tr></thead>
-                <tbody>
-                  {r.items.map((it) => (
-                    <tr key={it.resource_id + it.category}>
-                      <td className="mono">{it.resource_id}<div className="muted small">{it.resource_type}</div></td>
-                      <td>{it.category}</td>
-                      <td><Badge value={it.severity} /></td>
-                      <td className="small">
-                        {(it.changes ?? []).slice(0, 4).map((c) => (
-                          <div key={c.path}><code>{c.path}</code>: {show(c.before)} → {show(c.after)}</div>
-                        ))}
-                        {(it.changes?.length ?? 0) > 4 && <div className="muted">and {it.changes!.length - 4} more</div>}
-                        {(it.new_failures ?? []).length > 0 && <div className="error">Now failing: {it.new_failures!.join(', ')}</div>}
-                        {(it.resolved ?? []).length > 0 && <div className="ok-text">Now passing: {it.resolved!.join(', ')}</div>}
-                      </td>
-                      <td><button className="link" onClick={() => go('investigate', { resource: it.resource_id })}>Investigate</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
+            <DataTable rows={r.items} getRowId={(it) => it.resource_id + it.category}
+              empty={<EmptyState icon={<ShieldCheck />} title="No drift matches these filters." />}
+              rowTone={(it) => (it.severity === 'critical' ? 'danger' : it.severity === 'high' ? 'high' : undefined)}
+              columns={[
+                { key: 'res', header: 'Resource', cell: (it) => <><Mono value={it.resource_id} /><div className="text-xs text-fg-subtle">{it.resource_type}</div></> },
+                { key: 'cat', header: 'Category', cell: (it) => it.category },
+                { key: 'sev', header: 'Severity', cell: (it) => <StatusBadge value={it.severity} /> },
+                { key: 'what', header: 'What changed', className: 'min-w-[320px]', cell: (it) => (
+                  <div className="space-y-1.5">
+                    {(it.changes?.length ?? 0) > 0 && <DiffList changes={it.changes!} max={4} />}
+                    {(it.new_failures ?? []).length > 0 && <div className="text-[12.5px] text-danger">Now failing: {it.new_failures!.join(', ')}</div>}
+                    {(it.resolved ?? []).length > 0 && <div className="text-[12.5px] text-success">Now passing: {it.resolved!.join(', ')}</div>}
+                  </div>
+                ) },
+                { key: 'go', header: <span className="sr-only">Actions</span>, align: 'right', cell: (it) => <Button size="sm" variant="ghost" onClick={() => go('investigate', { resource: it.resource_id, run: '1' })}>Investigate</Button> },
+              ]} />
+          </Card>
         </>
       )}
     </div>
   )
-}
-
-function show(v: unknown): string {
-  if (v === undefined || v === null) return '—'
-  const s = typeof v === 'string' ? v : JSON.stringify(v)
-  return s.length > 60 ? s.slice(0, 57) + '…' : s
 }

@@ -91,14 +91,18 @@ test('1. import and scan', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /^Findings \(\d+ of \d+\)/ })).toBeVisible({ timeout: 20_000 })
   await page.getByLabel('Source').selectOption('aegis-policy')
   await expect(page.locator('.table tbody tr').first()).toContainText('aegis-policy')
-  await expect(page.locator('.stat').first()).toContainText(/blocking/)
+  await expect(page.locator('.stat').first()).toContainText(/blocking/i)
 })
 
 test('2. investigate risk and propose a fix', async ({ page }) => {
   await closeOpenRemediations(page, 'aws_db_instance.checkout_002', 'AEGIS-DB-002')
   await signIn(page, 'alice@aegis.local')
   await page.getByRole('link', { name: 'Risk' }).click()
-  await expect(page.locator('.table tbody tr').first()).toBeVisible({ timeout: 20_000 })
+  // Each finding is a disclosure button; opening one shows its score factors.
+  const finding = page.locator('main li button[aria-expanded]').first()
+  await expect(finding).toBeVisible({ timeout: 20_000 })
+  await finding.click()
+  await expect(finding).toHaveAttribute('aria-expanded', 'true')
   await shot(page, '03-risk')
 
   await page.goto('/#/investigate?resource=aws_db_instance.checkout_002&run=1')
@@ -158,7 +162,7 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
     await page.getByRole('button', { name: 'Approve' }).click()
     // Wait for the recorded decision itself (the sidebar also shows the
     // email), so the next sign-in cannot cancel the request in flight.
-    await expect(page.locator('ul.small li').filter({ hasText: approver }).filter({ hasText: 'approved' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator('.timeline li').filter({ hasText: approver }).filter({ hasText: 'approved' })).toBeVisible({ timeout: 20_000 })
     if (await page.getByRole('button', { name: 'Release change set' }).isVisible()) break
   }
   await page.getByRole('button', { name: 'Release change set' }).click()
@@ -181,7 +185,7 @@ test('6. drift: approve a baseline, then check it', async ({ page }) => {
   // The e2e account from journey 1 (one bucket), so the check is fast.
   await signIn(page, 'bob@aegis.local')
   await page.getByRole('link', { name: 'Drift' }).click()
-  const account = page.getByLabel('Account')
+  const account = page.getByLabel('Cloud account')
   await expect(account).toBeVisible({ timeout: 20_000 })
   await account.selectOption({ label: (await account.locator('option', { hasText: '999999999999' }).first().textContent()) ?? '' })
   await page.getByRole('button', { name: 'Approve latest import' }).click()
@@ -191,10 +195,10 @@ test('6. drift: approve a baseline, then check it', async ({ page }) => {
 
   await signIn(page, 'alice@aegis.local')
   await page.getByRole('link', { name: 'Drift' }).click()
-  const acct = page.getByLabel('Account')
+  const acct = page.getByLabel('Cloud account')
   await acct.selectOption({ label: (await acct.locator('option', { hasText: '999999999999' }).first().textContent()) ?? '' })
   await page.getByRole('button', { name: 'Check for drift now' }).click()
-  await expect(page.getByRole('button', { name: '← All drift reports' })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'All drift reports' })).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.stat').first()).toContainText('differences')
   await expect(page.getByText('No drift matches these filters.')).toBeVisible() // nothing changed since approval
   await shot(page, '09-drift')

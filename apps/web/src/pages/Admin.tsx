@@ -1,42 +1,65 @@
 import { useState } from 'react'
+import { Activity, KeyRound, UserRound } from 'lucide-react'
 import { fetchReadiness, fetchVersion } from '../api'
 import { can, type PageProps } from '../nav'
 import type { Binding } from '../types'
-import { Badge, ConfirmButton, ErrorBox, Panel } from '../ui'
-import { useAction, useLoad, when } from '../hooks'
+import { Button, Callout, Card, ConfirmAction, DataTable, ErrorState, Field, Input, KeyValue, Select, StatusBadge, useToast } from '@/components/ui'
+import { ago, useAction, useLoad, when } from '../hooks'
+
+const ROLES = [
+  { role: 'viewer', can: 'Read everything in the tenant.' },
+  { role: 'analyst', can: 'Read, import, scan, evaluate, investigate and propose changes.' },
+  { role: 'approver', can: 'Read, approve or reject exceptions, baselines and remediations, and release change sets.' },
+  { role: 'admin', can: 'Everything, including granting and revoking roles.' },
+]
 
 export function Access({ api, me }: PageProps) {
   const list = useLoad(() => api<{ items: Binding[] }>('GET', '/api/v1/access/bindings'), [api])
   const [subject, setSubject] = useState('')
   const [role, setRole] = useState('viewer')
   const act = useAction()
-  if (!can(me, 'admin')) return <Panel title="Access"><p className="muted">Managing access needs the admin role.</p></Panel>
+  const toast = useToast()
+  if (!can(me, 'admin')) {
+    return <Callout tone="info" title="Admin role needed">Managing access needs the admin role in tenant {me.tenant}.</Callout>
+  }
   const change = async (method: string, s: string, r: string) => {
-    await act.run(() => api(method, '/api/v1/access/bindings', { subject: s, role: r }))
+    const out = await act.run(() => api(method, '/api/v1/access/bindings', { subject: s, role: r }))
+    if (out !== undefined || method === 'DELETE') toast(method === 'POST' ? `Granted ${r} to ${s}.` : `Removed ${r} from ${s}.`)
     list.reload()
   }
   return (
-    <Panel title={`Who can do what in tenant ${me.tenant}`}>
-      <p className="muted small">viewer: read · analyst: read and operate · approver: read and approve · admin: everything. Every change is audited.</p>
-      <form className="row" onSubmit={(e) => { e.preventDefault(); void change('POST', subject.trim().toLowerCase(), role) }}>
-        <input aria-label="Email" type="email" required placeholder="person@example.com" value={subject} onChange={(e) => setSubject(e.target.value)} />
-        <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>{['viewer', 'analyst', 'approver', 'admin'].map((r) => <option key={r}>{r}</option>)}</select>
-        <button className="primary" disabled={act.busy}>Grant</button>
-      </form>
-      <ErrorBox error={act.error ?? list.error} />
-      <table className="table">
-        <tbody>
-          {(list.data?.items ?? []).map((b) => (
-            <tr key={b.subject + b.role}>
-              <td className="mono">{b.subject}</td>
-              <td><Badge value={b.role} /></td>
-              <td className="small muted">granted by {b.granted_by} · {when(b.created_at)}</td>
-              <td><ConfirmButton label="Revoke" confirm={`Remove ${b.role} from ${b.subject}?`} onConfirm={() => change('DELETE', b.subject, b.role)} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
+    <div className="grid gap-5 xl:grid-cols-[3fr_2fr]">
+      <Card title={`Who can do what in tenant ${me.tenant}`} icon={<KeyRound />} description="Every change is recorded in the audit log.">
+        <form className="mb-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); void change('POST', subject.trim().toLowerCase(), role) }}>
+          <Field label="Email" className="min-w-[240px] flex-1">
+            {(p) => <Input {...p} aria-label="Email" type="email" required placeholder="person@example.com" value={subject} onChange={(e) => setSubject(e.target.value)} />}
+          </Field>
+          <Field label="Role">
+            {(p) => <Select {...p} aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r.role}>{r.role}</option>)}</Select>}
+          </Field>
+          <Button type="submit" variant="primary" loading={act.busy}>Grant</Button>
+        </form>
+        <ErrorState error={act.error} className="mb-3" />
+        <DataTable rows={list.data?.items} loading={list.loading} error={list.error} onRetry={list.reload} getRowId={(b) => b.subject + b.role}
+          empty="No role bindings."
+          columns={[
+            { key: 'who', header: 'Person', cell: (b) => <span className="font-mono text-[12.5px]">{b.subject}</span> },
+            { key: 'role', header: 'Role', cell: (b) => <StatusBadge value="info" icon={false} label={b.role} /> },
+            { key: 'by', header: 'Granted', cell: (b) => <span className="text-fg-subtle" title={when(b.created_at)}>{b.granted_by} · {ago(b.created_at)}</span>, hideOnMobile: true },
+            { key: 'act', header: <span className="sr-only">Actions</span>, align: 'right', cell: (b) => (
+              <ConfirmAction size="sm" label="Revoke" title={`Remove ${b.role} from ${b.subject}?`}
+                description={b.subject === me.subject ? 'This is your own role: you may lose access to this page.' : 'They lose these permissions at once.'}
+                onConfirm={() => change('DELETE', b.subject, b.role)} />
+            ) },
+          ]} />
+      </Card>
+      <Card title="Roles">
+        <DataTable rows={ROLES} getRowId={(r) => r.role} dense columns={[
+          { key: 'role', header: 'Role', cell: (r) => <b>{r.role}</b> },
+          { key: 'can', header: 'Can', cell: (r) => <span className="text-fg-muted">{r.can}</span> },
+        ]} />
+      </Card>
+    </div>
   )
 }
 
@@ -44,18 +67,25 @@ export function Health({ me }: PageProps) {
   const ready = useLoad(() => fetchReadiness(), [])
   const ver = useLoad(() => fetchVersion(), [])
   return (
-    <div className="grid2">
-      <Panel title="Dependencies">
-        <p><Badge value={ready.data?.state === 'ready' ? 'passing' : 'failing'} /> {ready.data?.state}</p>
-        <table className="table"><tbody>{Object.entries(ready.data?.checks ?? {}).map(([k, v]) => <tr key={k}><td>{k}</td><td><Badge value={v === 'ok' ? 'pass' : 'fail'} /></td></tr>)}</tbody></table>
-        <p className="muted small">API version {ver.data?.version ?? '—'}. Metrics and traces: see docs/observability.md.</p>
-        <ErrorBox error={ready.error} />
-      </Panel>
-      <Panel title="You">
-        <p className="mono">{me.subject}</p>
-        <p className="small">Signed in with {me.method === 'oidc' ? 'OIDC' : 'development headers (no real authentication)'} · tenant {me.tenant}</p>
-        <p>{(me.roles ?? []).map((r) => <Badge key={r} value={r} />)}</p>
-      </Panel>
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card title="Dependencies" icon={<Activity />} actions={<Button size="sm" variant="ghost" onClick={ready.reload}>Re-check</Button>}
+        description={`API version ${ver.data?.version ?? '—'}. Metrics and traces: see docs/observability.md.`}>
+        <ErrorState error={ready.error} onRetry={ready.reload} />
+        <div className="mb-3 flex items-center gap-2"><StatusBadge value={ready.data?.state === 'ready' ? 'passing' : 'failing'} label={ready.data?.state ?? 'checking'} /></div>
+        <DataTable rows={Object.entries(ready.data?.checks ?? {})} loading={ready.loading} getRowId={([k]) => k} dense empty="No checks reported."
+          columns={[
+            { key: 'dep', header: 'Dependency', cell: ([k]) => k },
+            { key: 'state', header: 'State', cell: ([, v]) => <StatusBadge value={v === 'ok' ? 'pass' : 'fail'} label={String(v)} /> },
+          ]} />
+      </Card>
+      <Card title="You" icon={<UserRound />}>
+        <KeyValue items={[
+          { label: 'Identity', value: <span className="font-mono text-[12.5px]">{me.subject}</span> },
+          { label: 'Signed in with', value: me.method === 'oidc' ? 'OIDC' : 'development headers (no real authentication)' },
+          { label: 'Tenant', value: me.tenant ?? '—' },
+          { label: 'Roles', value: <span className="flex flex-wrap gap-1">{(me.roles ?? []).map((r) => <StatusBadge key={r} value="info" icon={false} label={r} />)}</span> },
+        ]} />
+      </Card>
     </div>
   )
 }

@@ -61,9 +61,10 @@ test('demo', async ({ browser }) => {
   await caption(page, 'The scan ran on the durable job queue and finished. Findings map to compliance controls.')
 
   await page.getByRole('link', { name: 'Risk' }).click()
-  await expect(page.locator('.table tbody tr').first()).toBeVisible()
+  const finding = page.locator('main li button[aria-expanded]').first()
+  await expect(finding).toBeVisible()
   await caption(page, 'Journey 2: findings ranked by context (exposure, data sensitivity, privilege), not just severity.')
-  await page.locator('.table tbody tr').first().click()
+  await finding.click()
   await caption(page, 'Each score explains itself: the reasons and the attack path from the internet.')
 
   await page.goto('/#/investigate?resource=aws_db_instance.checkout_002&run=1')
