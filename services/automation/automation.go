@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -39,7 +41,7 @@ type Webhook struct {
 
 // Notify implements Notifier.
 func (w Webhook) Notify(ctx context.Context, text string) error {
-	body, _ := json.Marshal(map[string]string{"text": text})
+	body, _ := json.Marshal(map[string]string{"text": escapeChat(text)})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -51,7 +53,13 @@ func (w Webhook) Notify(ctx context.Context, text string) error {
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return err
+		// *url.Error embeds the full URL, and a chat webhook's path is its
+		// secret; keep only the operation and the cause.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			return fmt.Errorf("webhook %s: %w", ue.Op, ue.Err)
+		}
+		return errors.New("webhook request failed")
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 300 {
@@ -99,10 +107,32 @@ func (a *Automation) log() *slog.Logger {
 
 // Evaluate refreshes compliance and risk for one tenant and alerts when the
 // number of critical or high risks grew. A tenant without inventory is skipped.
+//
+// Evaluations of one tenant never overlap (the reactor and the scheduler,
+// even on different replicas): a session advisory lock makes the second one
+// wait and then evaluate the newer state.
 func (a *Automation) Evaluate(ctx context.Context, tenant string) error {
+	conn, err := a.Pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(hashtext('aegis:evaluate:' || $1))`, tenant); err != nil {
+		return fmt.Errorf("evaluation lock: %w", err)
+	}
+	defer func() {
+		if _, err := conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtext('aegis:evaluate:' || $1))`, tenant); err != nil {
+			conn.Conn().Close(context.WithoutCancel(ctx)) // never return a connection that still holds the lock
+		}
+	}()
+
 	var before int
-	_ = a.Pool.QueryRow(ctx, `SELECT coalesce((r.summary->'by_band'->>'critical')::int, 0) + coalesce((r.summary->'by_band'->>'high')::int, 0)
+	err = a.Pool.QueryRow(ctx, `SELECT coalesce((r.summary->'by_band'->>'critical')::int, 0) + coalesce((r.summary->'by_band'->>'high')::int, 0)
 		FROM risk_runs r JOIN tenants t ON t.id = r.tenant_id WHERE t.slug = $1 ORDER BY r.created_at DESC LIMIT 1`, tenant).Scan(&before)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		// Without the previous count an alert could only be a guess.
+		return fmt.Errorf("previous risk count: %w", err)
+	}
 	if _, err := a.Compliance.EvaluateInventory(ctx, tenant, Actor); err != nil {
 		if errors.Is(err, compliance.ErrInvalid) { // no inventory yet
 			return nil
@@ -142,11 +172,20 @@ func (a *Automation) CompareDrift(ctx context.Context, tenant string) error {
 
 // once records that key was notified for tenant; it returns false if it
 // already was within the period, so the caller skips sending.
-func (a *Automation) once(ctx context.Context, tenantID, key string, period time.Duration) (bool, error) {
-	tag, err := a.Pool.Exec(ctx, `INSERT INTO notifications_sent (tenant_id, key) VALUES ($1, $2)
-		ON CONFLICT (tenant_id, key) DO UPDATE SET sent_at = now() WHERE notifications_sent.sent_at < now() - $3::interval`,
-		tenantID, key, fmt.Sprintf("%d seconds", int64(period.Seconds())))
-	return tag.RowsAffected() == 1, err
+func (a *Automation) due(ctx context.Context, tenantID, key string, period time.Duration) (bool, error) {
+	var sent bool
+	err := a.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM notifications_sent
+		WHERE tenant_id = $1 AND key = $2 AND sent_at >= now() - $3::interval)`,
+		tenantID, key, fmt.Sprintf("%d seconds", int64(period.Seconds()))).Scan(&sent)
+	return !sent, err
+}
+
+// markSent records a delivered notification (only after delivery succeeded,
+// so a failed send is retried on the next pass).
+func (a *Automation) markSent(ctx context.Context, tenantID, key string) error {
+	_, err := a.Pool.Exec(ctx, `INSERT INTO notifications_sent (tenant_id, key) VALUES ($1, $2)
+		ON CONFLICT (tenant_id, key) DO UPDATE SET sent_at = now()`, tenantID, key)
+	return err
 }
 
 // Remind sends at most one reminder per item per day: remediations waiting
@@ -180,6 +219,10 @@ func (a *Automation) Remind(ctx context.Context, tenant string) (int, error) {
 			fmt.Sprintf("[Aegis/%s] remediation %s (%s on %s, requested by %s) is waiting for approval.", tenant, id, rule, res, by)})
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
 	rows, err = a.Pool.Query(ctx, `SELECT e.tenant_id, e.id, e.rule_id, e.subject, e.expires_at FROM policy_exceptions e JOIN tenants t ON t.id = e.tenant_id
 		WHERE t.slug = $1 AND e.status = 'approved' AND e.expires_at > now() AND e.expires_at < now() + interval '7 days'`, tenant)
 	if err != nil {
@@ -196,21 +239,31 @@ func (a *Automation) Remind(ctx context.Context, tenant string) (int, error) {
 			fmt.Sprintf("[Aegis/%s] exception for %s on %s expires %s; renew it or fix the finding.", tenant, rule, subj, exp.UTC().Format(time.RFC3339))})
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
 	sent := 0
+	var errs []error
 	for _, it := range items {
-		ok, err := a.once(ctx, it.tenantID, it.key, 24*time.Hour)
+		ok, err := a.due(ctx, it.tenantID, it.key, 24*time.Hour)
 		if err != nil {
-			return sent, err
+			errs = append(errs, err)
+			continue
 		}
 		if !ok {
 			continue
 		}
 		if err := a.Notify.Notify(ctx, it.text); err != nil {
-			return sent, err
+			errs = append(errs, err) // not recorded: retried on the next pass
+			continue
+		}
+		if err := a.markSent(ctx, it.tenantID, it.key); err != nil {
+			errs = append(errs, err)
 		}
 		sent++
 	}
-	return sent, nil
+	return sent, errors.Join(errs...)
 }
 
 // tenants lists every tenant slug.
@@ -223,8 +276,9 @@ func (a *Automation) tenants(ctx context.Context) ([]string, error) {
 }
 
 // RunScheduler refreshes every tenant every interval: compliance and risk,
-// drift for accounts with a baseline, and reminders. A transaction-scoped
-// advisory lock keeps several API replicas from doing the same pass.
+// drift for accounts with a baseline, and reminders. A session advisory lock
+// (released at the end of the pass) keeps several API replicas from doing
+// the same pass.
 func (a *Automation) RunScheduler(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -250,7 +304,11 @@ func (a *Automation) pass(ctx context.Context) error {
 	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtext('aegis:scheduler'))`).Scan(&got); err != nil || !got {
 		return err
 	}
-	defer conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtext('aegis:scheduler'))`) //nolint:errcheck
+	defer func() {
+		if _, err := conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtext('aegis:scheduler'))`); err != nil {
+			conn.Conn().Close(context.WithoutCancel(ctx)) // drop the session so the lock is released
+		}
+	}()
 	tenants, err := a.tenants(ctx)
 	if err != nil {
 		return err
@@ -263,4 +321,11 @@ func (a *Automation) pass(ctx context.Context) error {
 	}
 	a.log().Info("scheduled evaluation pass done", "tenants", len(tenants))
 	return errors.Join(errs...)
+}
+
+// escapeChat escapes the characters Slack, Mattermost and Teams treat as
+// markup (<link|text>, <!channel>), so imported resource names cannot turn
+// into links or mentions.
+func escapeChat(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }

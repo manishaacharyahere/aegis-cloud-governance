@@ -38,6 +38,9 @@ type Auth struct {
 	Roles    RoleStore
 	Issuer   string // published to the dashboard by /api/v1/auth/config
 	ClientID string
+	// DevTrustPrivateNetwork lets development mode accept clients on private
+	// networks (the Docker bridge). Off by default: only loopback is local.
+	DevTrustPrivateNetwork bool
 }
 
 // routePermissions is the single table of what each route requires.
@@ -147,15 +150,32 @@ func (a Auth) authenticate(next http.Handler) http.Handler {
 
 type providerDownKey struct{}
 
-// localClient reports whether the direct peer is on loopback or a private
-// network (RFC 1918 / RFC 4193, e.g. the Docker network).
-func localClient(r *http.Request) bool {
+// localClient reports whether the direct peer is on loopback, or on a
+// private network (RFC 1918 / RFC 4193, e.g. the Docker bridge) when that is
+// explicitly trusted.
+func localClient(r *http.Request, trustPrivate bool) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
 	ip := net.ParseIP(host)
-	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
+	return ip != nil && (ip.IsLoopback() || (trustPrivate && ip.IsPrivate()))
+}
+
+// localHost reports whether the Host header names this machine. In
+// development mode this blocks DNS rebinding: a web page whose domain was
+// re-pointed at 127.0.0.1 still sends its own name as Host.
+func localHost(r *http.Request) bool {
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || host == "api" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // authorize enforces the route's permission for the tenant in X-Aegis-Tenant.
@@ -175,9 +195,9 @@ func (a Auth) authorize(perm access.Permission, next http.Handler) http.Handler 
 			return
 		}
 		// Development mode trusts the actor header and grants everything, so it
-		// only accepts clients on loopback or private networks: an accidentally
-		// exposed development API is not open to the internet.
-		if p.Method == AuthDevHeaders && !localClient(r) {
+		// only accepts local clients (loopback; private networks only when
+		// trusted) that address it by a local name.
+		if p.Method == AuthDevHeaders && (!localClient(r, a.DevTrustPrivateNetwork) || !localHost(r)) {
 			writeError(w, http.StatusForbidden, "dev_mode_local_only", "this API runs in development mode and only accepts local clients")
 			return
 		}

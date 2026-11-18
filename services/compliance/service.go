@@ -728,10 +728,12 @@ func (s *Service) DecideException(ctx context.Context, tenant, actor, id, decisi
 	})
 	if denied {
 		// Record the refused attempt in its own transaction (the main one rolled back).
-		_ = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		if aerr := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 			return audit.Append(ctx, tx, tenantID, audit.Event{Actor: actor, Action: "exception." + decision,
 				TargetType: "policy_exception", TargetID: id, Outcome: "denied", Details: map[string]any{"reason": "self-approval"}})
-		})
+		}); aerr != nil {
+			logging.FromContext(ctx).Error("could not audit a refused self-approval", "actor", actor, "exception", id, "error", aerr)
+		}
 	}
 	if err != nil {
 		return ExceptionView{}, err

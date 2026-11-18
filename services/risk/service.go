@@ -174,7 +174,9 @@ func (s *Service) Assess(ctx context.Context, tenant, actor string, w Weights) (
 		return Run{}, err
 	}
 	var excepted int
-	_ = s.Pool.QueryRow(ctx, `SELECT count(*) FROM compliance_evaluations WHERE run_id = $1 AND result = 'excepted'`, compRun).Scan(&excepted)
+	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM compliance_evaluations WHERE run_id = $1 AND result = 'excepted'`, compRun).Scan(&excepted); err != nil {
+		return Run{}, fmt.Errorf("excepted count: %w", err)
+	}
 
 	g, nEdges, err := s.LoadGraph(ctx, tenantID)
 	if err != nil {

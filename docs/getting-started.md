@@ -105,9 +105,10 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 |---|---|---|
 | `AEGIS_DATABASE_URL` | — (required) | `sslmode=disable` rejected in production |
 | `AEGIS_ENV` | `development` | `development`, `test`, `production` |
-| `AEGIS_HTTP_ADDR` | `:8080` | |
+| `AEGIS_HTTP_ADDR` | `127.0.0.1:8080` (`:8080` in production) | outside production the API listens on loopback only; containers set `:8080` |
+| `AEGIS_DEV_TRUST_PRIVATE_NETWORK` | `false` | development header mode also accepts private-network peers (needed behind the Docker bridge; Compose sets it) |
 | `AEGIS_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `AEGIS_MIGRATE_ON_START` | `true` (non-production) | |
+| `AEGIS_MIGRATE_ON_START` | `true` (non-production) | Compose sets `false`: its one-shot `migrate` service runs `aegis-api migrate` with the schema-owner URL first, so the API itself never holds owner credentials |
 | `AEGIS_SHUTDOWN_TIMEOUT` | `15s` | max `5m` |
 | `AEGIS_MAX_BODY_BYTES` | `1048576` | 1 KiB – 64 MiB |
 | `AEGIS_MAX_IMPORT_BYTES` | `33554432` | inventory import body limit, 1 KiB – 256 MiB |
@@ -121,7 +122,7 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_AI_MAX_CONCURRENT` | `2` | concurrent model calls; extra investigations return the brief without the model |
 | `AEGIS_SCHEDULE_EVERY` | `6h` | re-evaluate compliance, risk and drift for every tenant, and send reminders (0 disables); imports also trigger an evaluation within ~10 s through NATS |
 | `AEGIS_NOTIFY_WEBHOOK_URL` | — (log only) | alerts (more critical or high risks) and reminders (remediations awaiting approval for over 24 h, exceptions expiring within 7 days) as `{"text": ...}`; https in production |
-| `AEGIS_RETENTION_INTERVAL` | `1h` | retention job period (0 disables): published events 7 days, investigations 180 days, latest 50 compliance/risk/drift runs, 20 ML runs |
+| `AEGIS_RETENTION_INTERVAL` | `1h` | retention job period (0 disables): published events 7 days, investigations 180 days, compliance/risk/drift runs beyond the latest 50 per key once older than 31 days, 20 ML runs. Evidence is deleted only through the `aegis_retention_purge` database function, which enforces minimums |
 
 ## 4. Run the tests
 

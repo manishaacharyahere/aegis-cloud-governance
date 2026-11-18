@@ -186,3 +186,46 @@ func TestOutboxRelay(t *testing.T) {
 		}
 	}
 }
+
+type outageErr struct{}
+
+func (outageErr) Error() string   { return "broker unavailable: no responders" }
+func (outageErr) Transient() bool { return true }
+
+type downPub struct{ calls int }
+
+func (p *downPub) Publish(context.Context, string, string, []byte) error {
+	p.calls++
+	return outageErr{}
+}
+
+// A broker outage (transient errors) never parks events, however long it
+// lasts, and the relay stops a batch at the first transient failure.
+func TestOutboxOutageDoesNotPark(t *testing.T) {
+	pool, _ := migratedPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events (tenant_id, aggregate_type, aggregate_id, event_type, payload)
+		SELECT (SELECT id FROM tenants WHERE slug = 'demo'), 'test', g::text, 'test.event', '{}' FROM generate_series(1, 5) g`); err != nil {
+		t.Fatal(err)
+	}
+	down := &downPub{}
+	r := &outbox.Relay{Pool: pool, Pub: down, MaxAttempts: 2}
+	for range 10 {
+		if _, _, err := r.RunOnce(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if down.calls != 10 {
+		t.Errorf("publish calls = %d, want one per batch (stop at the first outage error)", down.calls)
+	}
+	if n, err := r.Parked(ctx); err != nil || n != 0 {
+		t.Fatalf("outage parked %d events (%v)", n, err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM outbox_events WHERE attempts = 0 AND claimed_by IS NULL AND published_at IS NULL`); n != 5 {
+		t.Fatalf("events not left ready for retry: %d of 5", n)
+	}
+	up := &recordingPub{ids: map[string]int{}}
+	if pub, _, err := (&outbox.Relay{Pool: pool, Pub: up}).RunOnce(ctx); err != nil || pub != 5 {
+		t.Fatalf("after the outage: %d %v", pub, err)
+	}
+}

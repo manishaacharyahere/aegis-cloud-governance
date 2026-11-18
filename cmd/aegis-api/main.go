@@ -58,6 +58,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// "aegis-api migrate" applies migrations and exits. Run it as a one-shot
+	// job with the schema-owner URL, so the long-running API never holds
+	// owner credentials (it then runs with AEGIS_MIGRATE_ON_START=false).
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		return migrateOnly(ctx, cfg, log)
+	}
+
 	tel, err := telemetry.Setup(ctx, "aegis-api", version)
 	if err != nil {
 		return fmt.Errorf("telemetry: %w", err)
@@ -161,7 +168,7 @@ func run() error {
 			return err
 		}
 	}
-	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles}
+	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles, DevTrustPrivateNetwork: cfg.DevTrustPrivateNetwork}
 	if cfg.AuthMode == api.AuthOIDC {
 		auth.Verifier = &access.Verifier{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID}
 		auth.Issuer, auth.ClientID = cfg.OIDCIssuer, cfg.OIDCClientID
@@ -265,9 +272,22 @@ func runBus(ctx context.Context, url string, creds natsbus.Credentials, pool *pg
 			if m, err := outbox.NewOTelMetrics(tel.Meter); err == nil {
 				r.Metrics = m
 			}
+			// The reactor restarts with backoff after a failure (e.g. JetStream
+			// not ready yet), so post-import evaluation is never lost for good.
 			go func() {
-				if err := auto.RunReactor(ctx, bus.JetStream(), 10*time.Second); err != nil {
-					log.Warn("import reactor stopped", "error", err)
+				wait := time.Second
+				for ctx.Err() == nil {
+					err := auto.RunReactor(ctx, bus.JetStream(), 10*time.Second)
+					if ctx.Err() != nil {
+						return
+					}
+					log.Warn("import reactor stopped; restarting", "error", err, "in", wait)
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(wait):
+					}
+					wait = min(2*wait, time.Minute)
 				}
 			}()
 			_ = r.Run(ctx)
@@ -281,4 +301,27 @@ func runBus(ctx context.Context, url string, creds natsbus.Credentials, pool *pg
 		}
 		wait = min(wait*2, 30*time.Second)
 	}
+}
+
+// migrateOnly applies pending migrations with the migration URL (or the
+// database URL when none is set) and returns.
+func migrateOnly(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	url := cfg.MigrationDatabaseURL
+	if url == "" {
+		url = cfg.DatabaseURL
+	}
+	pool, err := database.OpenWith(ctx, url, database.Options{MaxConns: 2, AppName: "aegis-migrate"})
+	if err != nil {
+		return fmt.Errorf("migration database: %w", err)
+	}
+	defer pool.Close()
+	migs, err := database.LoadMigrations(migrations.FS)
+	if err != nil {
+		return err
+	}
+	if err := database.Migrate(ctx, pool, migs, log); err != nil {
+		return err
+	}
+	log.Info("migrations applied; exiting")
+	return nil
 }

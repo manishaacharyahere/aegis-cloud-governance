@@ -235,3 +235,26 @@ def test_parse_every():
     for bad in ["", "6", "h", "10s", "1.5h", "-1h"]:
         with pytest.raises(ValueError):
             parse_every(bad)
+
+
+def test_spend_from_zero_history_is_flagged():
+    from aegis_ml import anomaly
+
+    idx = pd.date_range("2026-01-01", periods=60, freq="D")
+    values = np.zeros(60)
+    values[-1] = 10_000.0
+    score = anomaly.rolling_mad(pd.Series(values, index=idx))
+    assert np.isfinite(score.iloc[-1]) and score.iloc[-1] > 3.5
+
+
+def test_short_series_fall_back_instead_of_failing():
+    from aegis_ml import worker
+
+    idx = pd.date_range("2026-01-01", periods=5, freq="D")
+    frame = pd.DataFrame({"team-a": [10.0, 11, 12, 13, 14], "total": [10.0, 11, 12, 13, 14]}, index=idx)
+    for model in ("seasonal_naive", "holt_winters", "sarimax"):
+        fallbacks: dict[str, str] = {}
+        out = worker.predict(frame, model, 7, fallbacks)
+        assert len(out) == 14
+        assert all(np.isfinite(o["predicted"]) and o["predicted"] >= 0 for o in out)
+        assert set(fallbacks) == {"team-a", "total"}

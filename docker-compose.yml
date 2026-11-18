@@ -79,9 +79,29 @@ services:
       resources:
         limits: { memory: 256m }
 
+  # One-shot job: applies migrations as the schema owner, then exits. The API
+  # starts after it succeeded and never receives the owner credentials.
+  migrate:
+    <<: *hardening
+    profiles: ["core"]
+    image: aegis-api:local
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      AEGIS_ENV: development
+      AEGIS_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+      AEGIS_MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+    read_only: true
+    depends_on:
+      postgres: { condition: service_healthy }
+
   api:
     <<: *hardening
     profiles: ["core"]
+    image: aegis-api:local
     build:
       context: .
       dockerfile: infrastructure/docker/api.Dockerfile
@@ -95,21 +115,26 @@ services:
       AEGIS_NATS_USER: aegis_api
       AEGIS_NATS_PASSWORD: ${AEGIS_NATS_PASSWORD}
       AEGIS_METRICS_ADDR: ":9464"
+      # Inside the container the API listens on all interfaces; the host port
+      # below is bound to 127.0.0.1, so only this machine reaches it.
+      AEGIS_HTTP_ADDR: ":8080"
+      AEGIS_DEV_TRUST_PRIVATE_NETWORK: "true"
       AEGIS_AUTH_MODE: ${AEGIS_AUTH_MODE:-dev-headers}
       AEGIS_OIDC_ISSUER: ${AEGIS_OIDC_ISSUER:-http://dex.localhost:5556/dex}
       AEGIS_OIDC_CLIENT_ID: ${AEGIS_OIDC_CLIENT_ID:-aegis-web}
       AEGIS_BOOTSTRAP_ADMINS: ${AEGIS_BOOTSTRAP_ADMINS:-}
       # Set AEGIS_OTLP_ENDPOINT=http://jaeger:4318 in .env with the observability profile to export traces.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${AEGIS_OTLP_ENDPOINT:-}
-      # Runtime: least-privilege aegis_app role. Migrations: the schema owner.
+      # Least-privilege aegis_app role only; the migrate job ran the migrations.
       AEGIS_DATABASE_URL: postgres://aegis_app:${AEGIS_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
-      AEGIS_MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable
+      AEGIS_MIGRATE_ON_START: "false"
       AEGIS_AI_PROVIDER: ${AEGIS_AI_PROVIDER:-none}
       AEGIS_AI_URL: http://ollama:11434
       AEGIS_AI_MODEL: ${AEGIS_AI_MODEL:-}
     ports: ["127.0.0.1:8080:8080"]
     read_only: true
     depends_on:
+      migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       nats: { condition: service_healthy }
       opa: { condition: service_started }

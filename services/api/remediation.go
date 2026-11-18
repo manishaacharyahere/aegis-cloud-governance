@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 )
 
@@ -139,7 +140,11 @@ func (h remediationHandlers) step(fn func(RemediationService) func(context.Conte
 }
 
 func (h remediationHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
+	var unavailable *opa.UnavailableError
 	switch {
+	case errors.As(err, &unavailable):
+		logging.FromContext(r.Context()).Error("policy engine unavailable", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "policy_engine_unavailable", "policy engine unavailable; nothing was changed")
 	case errors.Is(err, remediation.ErrTenantNotFound):
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
 	case errors.Is(err, remediation.ErrNotFound):

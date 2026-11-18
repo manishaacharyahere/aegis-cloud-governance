@@ -241,7 +241,7 @@ func (s *Store) Grant(ctx context.Context, tenant, actor, subject, role string) 
 	if err := validate(subject, role); err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		tid, err := s.tenantID(ctx, tx, tenant)
 		if err != nil {
 			return err
@@ -254,10 +254,15 @@ func (s *Store) Grant(ctx context.Context, tenant, actor, subject, role string) 
 		if tag.RowsAffected() == 0 {
 			return nil
 		}
-		defer s.invalidate()
 		return audit.Append(ctx, tx, tid, audit.Event{Actor: actor, Action: "access.granted", TargetType: "role_binding",
 			TargetID: subject, Outcome: "success", Details: map[string]any{"role": role}})
 	})
+	if err == nil {
+		// After COMMIT: a lookup between invalidation and commit would
+		// otherwise re-cache the old roles for the cache TTL.
+		s.invalidate()
+	}
+	return err
 }
 
 // Revoke removes a binding. The last admin of a tenant cannot be removed, so
@@ -266,7 +271,7 @@ func (s *Store) Revoke(ctx context.Context, tenant, actor, subject, role string)
 	if err := validate(subject, role); err != nil {
 		return err
 	}
-	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		tid, err := s.tenantID(ctx, tx, tenant)
 		if err != nil {
 			return err
@@ -291,10 +296,15 @@ func (s *Store) Revoke(ctx context.Context, tenant, actor, subject, role string)
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
-		defer s.invalidate()
 		return audit.Append(ctx, tx, tid, audit.Event{Actor: actor, Action: "access.revoked", TargetType: "role_binding",
 			TargetID: subject, Outcome: "success", Details: map[string]any{"role": role}})
 	})
+	if err == nil {
+		// After COMMIT: a lookup between invalidation and commit would
+		// otherwise re-cache the old roles for the cache TTL.
+		s.invalidate()
+	}
+	return err
 }
 
 // Bootstrap grants admin to subjects in tenant at startup (idempotent).

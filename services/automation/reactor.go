@@ -15,11 +15,21 @@ import (
 // ImportSubject matches every tenant's completed inventory imports.
 const ImportSubject = "aegis.*.inventory_import.inventory_import_completed"
 
+// reactorAckWait bounds how long an import event may wait for its debounced
+// evaluation before JetStream redelivers it. Evaluations of large estates
+// take tens of seconds, so this is generous; a redelivery only re-arms the
+// debounce timer.
+const reactorAckWait = 5 * time.Minute
+
 // RunReactor re-evaluates a tenant shortly after each completed inventory
 // import, so compliance and risk are never older than the latest inventory.
-// Imports arriving within Debounce of each other cause one evaluation.
-// Messages are acknowledged after the tenant is scheduled; the durable
-// consumer resumes where it stopped after a restart.
+// Imports arriving within debounce of each other cause one evaluation.
+//
+// Messages are acknowledged only after that evaluation succeeded. If it
+// fails (OPA down, database error) they are negatively acknowledged with a
+// delay, so JetStream delivers them again (up to MaxDeliver). If the process
+// stops first, they are redelivered after the ack wait: an import never
+// silently loses its evaluation.
 func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, debounce time.Duration) error {
 	if debounce <= 0 {
 		debounce = 10 * time.Second
@@ -30,35 +40,66 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 	}
 	cons, err := js.CreateOrUpdateConsumer(ctx, natsbus.Stream, jetstream.ConsumerConfig{
 		Durable: durable, FilterSubject: ImportSubject, AckPolicy: jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverNewPolicy, MaxDeliver: 5, AckWait: 30 * time.Second,
+		DeliverPolicy: jetstream.DeliverNewPolicy, MaxDeliver: 5, AckWait: reactorAckWait,
 	})
 	if err != nil {
 		return err
 	}
 	var mu sync.Mutex
-	timers := map[string]*time.Timer{}
-	schedule := func(tenantID string) {
+	type pending struct {
+		timer *time.Timer
+		msgs  []jetstream.Msg
+	}
+	waiting := map[string]*pending{}
+	var inflight sync.WaitGroup
+
+	evaluate := func(tenantID string) {
+		defer inflight.Done()
 		mu.Lock()
-		defer mu.Unlock()
-		if t, ok := timers[tenantID]; ok {
-			t.Reset(debounce)
+		p := waiting[tenantID]
+		delete(waiting, tenantID)
+		mu.Unlock()
+		if p == nil {
 			return
 		}
-		timers[tenantID] = time.AfterFunc(debounce, func() {
-			mu.Lock()
-			delete(timers, tenantID)
-			mu.Unlock()
-			var slug string
-			if err := a.Pool.QueryRow(ctx, `SELECT slug FROM tenants WHERE id = $1`, tenantID).Scan(&slug); err != nil {
-				a.log().Warn("reactor: unknown tenant", "tenant_id", tenantID, "error", err)
-				return
+		settle := func(ok bool) {
+			for _, m := range p.msgs {
+				if ok {
+					_ = m.Ack()
+				} else {
+					_ = m.NakWithDelay(30 * time.Second)
+				}
 			}
-			if err := a.Evaluate(ctx, slug); err != nil && ctx.Err() == nil {
-				a.log().Warn("reactor: evaluation after import failed", "tenant", slug, "error", err)
-				return
+		}
+		var slug string
+		if err := a.Pool.QueryRow(ctx, `SELECT slug FROM tenants WHERE id = $1`, tenantID).Scan(&slug); err != nil {
+			a.log().Warn("reactor: unknown tenant", "tenant_id", tenantID, "error", err)
+			settle(ctx.Err() == nil) // a deleted tenant will never succeed: do not redeliver
+			return
+		}
+		if err := a.Evaluate(ctx, slug); err != nil {
+			if ctx.Err() == nil {
+				a.log().Warn("reactor: evaluation after import failed; will retry", "tenant", slug, "error", err)
 			}
-			a.log().Info("reactor: re-evaluated after import", "tenant", slug)
-		})
+			settle(false)
+			return
+		}
+		settle(true)
+		a.log().Info("reactor: re-evaluated after import", "tenant", slug, "events", len(p.msgs))
+	}
+
+	schedule := func(tenantID string, m jetstream.Msg) {
+		mu.Lock()
+		defer mu.Unlock()
+		if p, ok := waiting[tenantID]; ok {
+			p.msgs = append(p.msgs, m)
+			if p.timer.Stop() {
+				p.timer.Reset(debounce)
+			}
+			return
+		}
+		inflight.Add(1)
+		waiting[tenantID] = &pending{msgs: []jetstream.Msg{m}, timer: time.AfterFunc(debounce, func() { evaluate(tenantID) })}
 	}
 	cc, err := cons.Consume(func(m jetstream.Msg) {
 		var e outbox.Event
@@ -66,8 +107,7 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 			_ = m.Term() // malformed: never redeliver
 			return
 		}
-		schedule(e.TenantID)
-		_ = m.Ack()
+		schedule(e.TenantID, m)
 	})
 	if err != nil {
 		return err
@@ -75,9 +115,12 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 	<-ctx.Done()
 	cc.Stop()
 	mu.Lock()
-	for _, t := range timers {
-		t.Stop()
+	for _, p := range waiting {
+		if p.timer.Stop() {
+			inflight.Done() // never fired; its messages are redelivered after the ack wait
+		}
 	}
 	mu.Unlock()
+	inflight.Wait()
 	return nil
 }

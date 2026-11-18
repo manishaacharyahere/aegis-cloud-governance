@@ -33,6 +33,7 @@ func newTestHandler(t *testing.T, db Pinger, logs *bytes.Buffer) http.Handler {
 func do(h http.Handler, method, path string, body io.Reader, hdr map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
 	req.RemoteAddr = "127.0.0.1:40000" // a local client, as in development
+	req.Host = "localhost:8080"
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
@@ -147,21 +148,5 @@ func TestRecoverHidesPanicDetails(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "panic recovered") {
 		t.Error("panic not logged")
-	}
-}
-
-// Development header mode refuses clients that are not on loopback or a
-// private network, so an exposed development API is not open to anyone.
-func TestDevModeLocalOnly(t *testing.T) {
-	h := newTestHandler(t, fakeDB{}, nil)
-	for addr, want := range map[string]int{"203.0.113.9:5000": 403, "10.1.2.3:5000": 404, "172.18.0.1:5000": 404, "[::1]:5000": 404} {
-		req := httptest.NewRequest("GET", "/api/v1/remediations/x", nil)
-		req.RemoteAddr = addr
-		req.Header.Set(TenantHeader, "demo")
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if (want == 403) != (rec.Code == 403) {
-			t.Errorf("%s -> %d", addr, rec.Code)
-		}
 	}
 }

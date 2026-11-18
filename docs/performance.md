@@ -92,7 +92,7 @@ assessment since the third fix below.
 |---|---|---|
 | PostgreSQL connection lost during a 3 000-resource import | `TestResilienceDatabaseLoss`: an in-test TCP proxy cuts every connection after 256 KiB of client traffic, deterministically mid-transaction | The import returns an error and **no rows** exist in `inventory_imports`, `resources`, `resource_versions` or `outbox_events`. `/readyz` returns 503 during the outage and 200 once the database is reachable. The same import, retried, succeeds. |
 | OPA unreachable | `TestResiliencePolicyEngineDown` | Compliance evaluation and remediation simulation return errors. **No** compliance run and **no** remediation is stored (fail closed). |
-| NATS unreachable | `TestOutboxRelay` | Publish failures are recorded per event with attempts and the last error. Events are parked after the retry limit, and nothing is lost. |
+| NATS unreachable | `TestOutboxOutageDoesNotPark`, `TestOutboxRelay` | During an outage the last error is recorded per event but no attempt is counted, so nothing is parked or lost; events are published when the broker returns. Messages the broker refuses are parked after the retry limit and can be requeued. |
 | Identity provider unreachable | `TestVerifier`, `TestOIDCAuthorization` | Every token is rejected (503 to the caller) until discovery succeeds, then verification recovers automatically. |
 | IaC worker crash mid-scan | `services/iac` worker tests (Module B) | Leases expire and another worker reclaims the scan; attempts and backoff are recorded. |
 | Concurrent relays | `TestOutboxRelay` | `SKIP LOCKED` claiming: 500 events published exactly once by two relays. |

@@ -113,5 +113,11 @@ The automated tests cover the following:
 
 - Tokens are verified on every request, but there is no revocation list: a token
   stays valid until it expires (Dex issues 1-hour ID tokens).
-- Role lookups query PostgreSQL on each request; there is no cache yet.
+- Role lookups are cached per API process for 30 seconds. A grant or revoke
+  clears the cache of the process that made it (after the change commits);
+  other replicas see it within 30 seconds.
+- Development header mode accepts only loopback clients that address the API as
+  `localhost` or a loopback address, so neither a LAN peer nor a DNS-rebound web
+  page can use it. Behind the Docker bridge, `AEGIS_DEV_TRUST_PRIVATE_NETWORK=true`
+  also accepts private-network peers; Compose sets it and binds the port to 127.0.0.1.
 - The IaC worker and ML worker are not callers of the API, so they are unaffected.

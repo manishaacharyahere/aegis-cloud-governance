@@ -33,10 +33,14 @@ type Config struct {
 	MigrationDatabaseURL string
 	LogLevel             slog.Level
 	MigrateOnStart       bool
-	ShutdownTimeout      time.Duration
-	MaxBodyBytes         int64
-	MaxImportBytes       int64
-	MaxCostImportBytes   int64
+	// DevTrustPrivateNetwork: development mode also accepts private-network
+	// peers (needed behind the Docker bridge; compose binds the host port to
+	// 127.0.0.1). Default false: loopback only.
+	DevTrustPrivateNetwork bool
+	ShutdownTimeout        time.Duration
+	MaxBodyBytes           int64
+	MaxImportBytes         int64
+	MaxCostImportBytes     int64
 	// FixturesDir holds the Terraform fixtures listed by GET /iac/fixtures
 	// (the worker scans from its own copy of the same directory).
 	FixturesDir string
@@ -104,7 +108,7 @@ func Load(lookup LookupFunc) (Config, error) {
 	var errs []error
 	cfg := Config{
 		Environment:          get("AEGIS_ENV", EnvDevelopment),
-		HTTPAddr:             get("AEGIS_HTTP_ADDR", ":8080"),
+		HTTPAddr:             get("AEGIS_HTTP_ADDR", ""),
 		DatabaseURL:          get("AEGIS_DATABASE_URL", ""),
 		MigrationDatabaseURL: get("AEGIS_MIGRATION_DATABASE_URL", ""),
 	}
@@ -117,6 +121,20 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	if cfg.DatabaseURL == "" {
 		errs = append(errs, errors.New("AEGIS_DATABASE_URL: required"))
+	}
+	// Outside production the API binds to loopback unless told otherwise, so a
+	// development instance (no real authentication) is not reachable from the
+	// network by accident. Containers set AEGIS_HTTP_ADDR=:8080 explicitly.
+	if cfg.HTTPAddr == "" {
+		cfg.HTTPAddr = "127.0.0.1:8080"
+		if cfg.Environment == EnvProduction {
+			cfg.HTTPAddr = ":8080"
+		}
+	}
+	if v, err := strconv.ParseBool(get("AEGIS_DEV_TRUST_PRIVATE_NETWORK", "false")); err != nil {
+		errs = append(errs, fmt.Errorf("AEGIS_DEV_TRUST_PRIVATE_NETWORK: %w", err))
+	} else {
+		cfg.DevTrustPrivateNetwork = v
 	}
 
 	if err := cfg.LogLevel.UnmarshalText([]byte(get("AEGIS_LOG_LEVEL", "info"))); err != nil {
@@ -309,6 +327,9 @@ func Load(lookup LookupFunc) (Config, error) {
 
 	if cfg.Environment == EnvProduction && strings.Contains(cfg.DatabaseURL, "sslmode=disable") {
 		errs = append(errs, errors.New("AEGIS_DATABASE_URL: sslmode=disable is not allowed in production"))
+	}
+	if cfg.Environment == EnvProduction && strings.Contains(cfg.MigrationDatabaseURL, "sslmode=disable") {
+		errs = append(errs, errors.New("AEGIS_MIGRATION_DATABASE_URL: sslmode=disable is not allowed in production"))
 	}
 
 	return cfg, errors.Join(errs...)

@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
@@ -67,7 +69,7 @@ func (h complianceHandlers) auditHead(w http.ResponseWriter, r *http.Request) {
 		Hash       string `json:"hash"`
 		ChainValid bool   `json:"chain_valid"`
 		SignedAt   string `json:"signed_at"`
-	}{"aegis.audit-head/v1", tenant, v.Checked, v.HeadHash, v.Valid, time.Now().UTC().Format(time.RFC3339)})
+	}{"aegis.audit-head/v1", tenant, v.HeadSeq, v.HeadHash, v.Valid, time.Now().UTC().Format(time.RFC3339)})
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -99,9 +101,9 @@ func (h complianceHandlers) verifyAnchor(w http.ResponseWriter, r *http.Request)
 		h.fail(w, r, err)
 		return
 	}
-	matches := err == nil && stored == req.Hash
+	matches := err == nil && subtle.ConstantTimeCompare([]byte(stored), []byte(strings.ToLower(req.Hash))) == 1
 	writeJSON(w, http.StatusOK, map[string]any{"matches": matches, "event_exists": err == nil,
-		"chain_valid": v.Valid, "current_head_seq": v.Checked, "anchored_and_intact": matches && v.Valid})
+		"chain_valid": v.Valid, "current_head_seq": v.HeadSeq, "anchored_and_intact": matches && v.Valid})
 }
 
 func (h complianceHandlers) tenant(w http.ResponseWriter, r *http.Request) (string, bool) {

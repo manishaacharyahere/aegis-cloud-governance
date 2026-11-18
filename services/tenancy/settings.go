@@ -3,6 +3,8 @@ package tenancy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,6 +74,14 @@ func (c PolicyConfig) Validate() error {
 }
 
 // Input returns the config as the OPA input.config object (only set fields).
+// SHA256 identifies this configuration. encoding/json writes struct fields
+// in declaration order, so equal configurations hash equally.
+func (c PolicyConfig) SHA256() string {
+	raw, _ := json.Marshal(c)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
 func (c PolicyConfig) Input() map[string]any {
 	raw, _ := json.Marshal(c)
 	out := map[string]any{}

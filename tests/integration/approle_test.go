@@ -70,10 +70,19 @@ func TestAppRolePrivileges(t *testing.T) {
 		`DELETE FROM schema_migrations`,
 		`TRUNCATE outbox_events`,
 		`DROP TABLE investigations`,
+		// Evidence is deleted only through aegis_retention_purge (0023): the
+		// custom setting the append-only trigger honours no longer helps.
+		`DO $$ BEGIN PERFORM set_config('aegis.retention', 'on', true); DELETE FROM investigations; END $$`,
+		`DELETE FROM compliance_runs`,
+		`DELETE FROM compliance_evaluations`,
+		`UPDATE risk_runs SET summary = '{}'`,
+		`SELECT setval('audit_events_id_seq', 1)`,
+		// The purge function refuses settings below its floors.
+		`SELECT aegis_retention_purge(1, interval '1 second', NULL, NULL)`,
 	} {
 		_, err := app.Exec(ctx, stmt)
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || (pgErr.Code != "42501" && !strings.Contains(pgErr.Message, "must be owner")) {
+		if !errors.As(err, &pgErr) || (pgErr.Code != "42501" && pgErr.Code != "P0001" && !strings.Contains(pgErr.Message, "must be owner")) {
 			t.Errorf("%s: want a permission error, got %v", stmt, err)
 		}
 	}

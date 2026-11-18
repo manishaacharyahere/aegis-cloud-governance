@@ -42,6 +42,15 @@ type Publisher interface {
 	Publish(ctx context.Context, subject, msgID string, data []byte) error
 }
 
+// transient is implemented by publisher errors that mean "the broker is
+// unavailable" rather than "this message was refused".
+type transient interface{ Transient() bool }
+
+func isTransient(err error) bool {
+	var t transient
+	return errors.As(err, &t) && t.Transient()
+}
+
 // Relay moves outbox rows to the publisher.
 type Relay struct {
 	Pool        *pgxpool.Pool
@@ -123,19 +132,30 @@ func (r *Relay) RunOnce(ctx context.Context) (published, failed int, err error) 
 		return 0, 0, err
 	}
 	var ok []string
-	type failure struct{ id, msg string }
+	type failure struct {
+		id, msg string
+		count   bool // counts toward MaxAttempts (parking)
+	}
 	var bad []failure
-	for _, e := range events {
+	var release []string // claimed but not attempted: free them at once
+	for i, e := range events {
 		data, _ := json.Marshal(e)
 		if perr := r.Pub.Publish(ctx, Subject(e), e.ID, data); perr != nil {
 			msg := perr.Error()
 			if len(msg) > 500 {
 				msg = msg[:500]
 			}
-			bad = append(bad, failure{e.ID, msg})
-			if errors.Is(perr, context.Canceled) || errors.Is(perr, context.DeadlineExceeded) {
-				break // leave the rest claimed; their lease expires
+			// A broker outage is not the message's fault: record the error but
+			// do not count the attempt, or a few minutes of downtime would park
+			// every pending event. Stop the batch; the rest is retried later.
+			if isTransient(perr) || ctx.Err() != nil {
+				bad = append(bad, failure{e.ID, msg, false})
+				for _, rest := range events[i+1:] {
+					release = append(release, rest.ID)
+				}
+				break
 			}
+			bad = append(bad, failure{e.ID, msg, true})
 			continue
 		}
 		ok = append(ok, e.ID)
@@ -151,8 +171,14 @@ func (r *Relay) RunOnce(ctx context.Context) (published, failed int, err error) 
 		}
 	}
 	for _, f := range bad {
-		if _, err := r.Pool.Exec(mctx, `UPDATE outbox_events SET attempts = attempts + 1, last_error = $2,
-			claimed_until = NULL, claimed_by = NULL WHERE id = $1 AND claimed_by = $3`, f.id, f.msg, r.ID); err != nil {
+		if _, err := r.Pool.Exec(mctx, `UPDATE outbox_events SET attempts = attempts + CASE WHEN $4 THEN 1 ELSE 0 END, last_error = $2,
+			claimed_until = NULL, claimed_by = NULL WHERE id = $1 AND claimed_by = $3`, f.id, f.msg, r.ID, f.count); err != nil {
+			return len(ok), len(bad), err
+		}
+	}
+	if len(release) > 0 {
+		if _, err := r.Pool.Exec(mctx, `UPDATE outbox_events SET claimed_until = NULL, claimed_by = NULL
+			WHERE id = ANY($1) AND claimed_by = $2`, release, r.ID); err != nil {
 			return len(ok), len(bad), err
 		}
 	}
@@ -210,19 +236,32 @@ func RequeueParked(ctx context.Context, pool *pgxpool.Pool, tenantSlug string, m
 func (r *Relay) Run(ctx context.Context) error {
 	r.defaults()
 	backoff := r.Interval
+	var lastParked int64
+	var sampled time.Time
 	for {
 		pub, failed, err := r.RunOnce(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}
-		var backlog int64
-		if qerr := r.Pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE published_at IS NULL`).Scan(&backlog); qerr == nil {
-			r.Metrics.Backlog(backlog)
-		}
-		if parked, perr := r.Parked(ctx); perr == nil {
-			r.Metrics.Parked(parked)
-			if parked > 0 {
-				r.Log.Warn("outbox events parked after repeated failures; requeue with POST /api/v1/admin/outbox/requeue", "parked", parked)
+		// Gauges are sampled every 15 s, not after every batch: draining a big
+		// import would otherwise run two counts per 100 events. The parked
+		// warning is logged when the number changes, not every loop.
+		if time.Since(sampled) >= 15*time.Second {
+			sampled = time.Now()
+			var backlog int64
+			if qerr := r.Pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE published_at IS NULL`).Scan(&backlog); qerr == nil {
+				r.Metrics.Backlog(backlog)
+			} else if ctx.Err() == nil {
+				r.Log.Warn("outbox backlog count failed", "error", qerr)
+			}
+			if parked, perr := r.Parked(ctx); perr == nil {
+				r.Metrics.Parked(parked)
+				if parked > 0 && parked != lastParked {
+					r.Log.Warn("outbox events parked after repeated failures; requeue with POST /api/v1/admin/outbox/requeue", "parked", parked)
+				}
+				lastParked = parked
+			} else if ctx.Err() == nil {
+				r.Log.Warn("outbox parked count failed", "error", perr)
 			}
 		}
 		wait := r.Interval

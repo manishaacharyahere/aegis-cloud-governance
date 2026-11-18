@@ -32,6 +32,11 @@ var expensiveRoutes = map[string]bool{
 	"POST /api/v1/recommendations":        true,
 	"POST /api/v1/investigations":         true,
 	"POST /api/v1/remediations":           true,
+	// Large uploads and full audit-chain recomputations.
+	"POST /api/v1/inventory/import/terraform-state": true,
+	"GET /api/v1/audit/head":                        true,
+	"GET /api/v1/audit/verify":                      true,
+	"POST /api/v1/audit/anchors/verify":             true,
 }
 
 type bucket struct {

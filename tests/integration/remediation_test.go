@@ -16,6 +16,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/tenancy"
 )
 
 // applyToSnapshot plays the role of the cloud: it applies released change
@@ -321,6 +322,23 @@ func TestRemediationControls(t *testing.T) {
 	}
 	if got, _ := psvc.Get(ctx, "demo", pv.ID); got.Status != remediation.StatusStale || got.StaleReason != "the policies changed since the simulation" {
 		t.Errorf("stale after policy change: %s %q", got.Status, got.StaleReason)
+	}
+
+	// The tenant's policy configuration changes after the simulation: the
+	// simulation ran under other thresholds, so the plan is stale too.
+	cv, err := svc.Propose(ctx, "demo", "alice", remediation.ProposeRequest{Source: "finding", RuleID: "AEGIS-S3-001",
+		ResourceID: "aws_s3_bucket.logs", Justification: "config change test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (&tenancy.Store{Pool: pool}).Put(ctx, "demo", "admin", tenancy.PolicyConfig{RequiredTags: []string{"owner", "team"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Decide(ctx, "demo", "bob", cv.ID, "approve", ""); !errors.Is(err, remediation.ErrStale) {
+		t.Fatalf("approving after a policy configuration change: %v", err)
+	}
+	if got, _ := svc.Get(ctx, "demo", cv.ID); got.StaleReason != "the tenant policy configuration changed since the simulation" {
+		t.Errorf("stale reason: %q", got.StaleReason)
 	}
 }
 

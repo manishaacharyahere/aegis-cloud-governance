@@ -2,6 +2,8 @@ package integration
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +46,7 @@ func TestRetention(t *testing.T) {
 	audit := count(t, pool, `SELECT count(*) FROM audit_events`)
 
 	res, err := retention.RunOnce(ctx, pool, retention.Policy{OutboxPublishedFor: 7 * 24 * time.Hour,
-		InvestigationsFor: 180 * 24 * time.Hour, RunsPerTenant: 50, MLRunsPerKind: 2})
+		InvestigationsFor: 180 * 24 * time.Hour, RunsPerTenant: 50, RunsMinAge: 31 * 24 * time.Hour, MLRunsPerKind: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,5 +62,49 @@ func TestRetention(t *testing.T) {
 	// A second run has nothing to do.
 	if res, err := retention.RunOnce(ctx, pool, retention.DefaultPolicy()); err != nil || res["investigations"]+res["outbox_events"] != 0 {
 		t.Errorf("second run: %v %v", res, err)
+	}
+}
+
+// Retention keeps the newest compliance run for every source key (C22) and
+// never deletes runs younger than RunsMinAge (C21).
+func TestRetentionKeepsLatestRunPerKeyAndRecentHistory(t *testing.T) {
+	pool, _ := migratedPool(t)
+	ctx := context.Background()
+	var tid string
+	if err := pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = 'demo'`).Scan(&tid); err != nil {
+		t.Fatal(err)
+	}
+	sha := strings.Repeat("a", 64)
+	if _, err := pool.Exec(ctx, `INSERT INTO policy_bundles (sha256, modules) VALUES ($1, '{}')`, sha); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO catalog_versions (sha256, version, content) VALUES ($1, 'v', '{}')`, sha); err != nil {
+		t.Fatal(err)
+	}
+	run := func(key string, age string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO compliance_runs (tenant_id, source, source_key, source_ref, policy_bundle_sha256,
+			catalog_sha256, actor, evaluated_at, pass_count, fail_count, excepted_count)
+			VALUES ($1, 'iac_scan', $2, 'r', $3, $3, 'a', now() - $4::interval, 0, 0, 0)`, tid, key, sha, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("fixture-a", "90 days") // the only run for fixture-a: must survive
+	for i := range 5 {
+		run("fixture-b", fmt.Sprintf("%d days", 60+i)) // old runs of fixture-b beyond the count: deleted
+	}
+	for i := range 5 {
+		run("fixture-b", fmt.Sprintf("%d days", i+1)) // recent runs: kept by age
+	}
+	p := retention.DefaultPolicy()
+	p.RunsPerTenant = 2
+	if _, err := retention.RunOnce(ctx, pool, p); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM compliance_runs WHERE source_key = 'fixture-a'`); n != 1 {
+		t.Errorf("only run for fixture-a deleted: %d left", n)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM compliance_runs WHERE source_key = 'fixture-b'`); n != 5 {
+		t.Errorf("fixture-b runs left = %d, want the 5 recent ones", n)
 	}
 }

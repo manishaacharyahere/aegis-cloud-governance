@@ -63,13 +63,39 @@ def detect(frame: pd.DataFrame, lookback_days: int, threshold: float) -> list[di
     return out
 
 
-def predict(frame: pd.DataFrame, model: str, horizon: int) -> list[dict[str, Any]]:
+# Shortest history each model can be fitted on; shorter series fall back.
+MIN_HISTORY = {"seasonal_naive": 7, "holt_winters": 14, "sarimax": 14}
+FALLBACK_MODEL = "moving_average_28"
+
+
+def predict(
+    frame: pd.DataFrame, model: str, horizon: int, fallbacks: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """Forecasts every entity. A series too short for the model, a model that
+    fails, or one that returns non-finite values falls back to a moving
+    average for that entity only (recorded in fallbacks), so one short or
+    odd series never aborts the whole run."""
     fn = forecast.MODELS[model]
     out = []
     start = frame.index.max() + pd.Timedelta(days=1)
     dates = pd.date_range(start, periods=horizon, freq="D")
     for entity in frame.columns:
-        pred = fn(frame[entity], horizon)
+        series = frame[entity]
+        reason = ""
+        pred = None
+        if len(series) < MIN_HISTORY.get(model, 1):
+            reason = f"{len(series)} days of history; {model} needs {MIN_HISTORY[model]}"
+        else:
+            try:
+                pred = np.asarray(fn(series, horizon), dtype=float)
+                if not np.isfinite(pred).all():
+                    reason, pred = f"{model} returned non-finite values", None
+            except Exception as e:  # noqa: BLE001 - any model failure falls back
+                reason = f"{model} failed: {type(e).__name__}"
+        if pred is None:
+            pred = np.asarray(forecast.MODELS[FALLBACK_MODEL](series, horizon), dtype=float)
+            if fallbacks is not None:
+                fallbacks[str(entity)] = reason
         for d, v in zip(dates, pred, strict=True):
             out.append({"entity": entity, "usage_date": d.date(), "predicted": max(0.0, float(v))})
     return out
@@ -91,7 +117,8 @@ def run(dsn: str, tenant: str, model: str, horizon: int, lookback: int, threshol
     with psycopg.connect(dsn) as conn:
         row = conn.execute("SELECT id FROM tenants WHERE slug = %s", (tenant,)).fetchone()
         if row is None:
-            raise SystemExit(f"tenant {tenant!r} not found")
+            # A normal exception: the --every loop logs it and keeps running.
+            raise ValueError(f"tenant {tenant!r} not found")
         tenant_id = row[0]
         rows = conn.execute(
             "SELECT usage_date, CASE WHEN team = '' THEN 'unallocated' ELSE team END, sum(cost_usd) "
@@ -100,7 +127,8 @@ def run(dsn: str, tenant: str, model: str, horizon: int, lookback: int, threshol
         ).fetchall()
         frame = daily_frame(rows)
         anomalies = detect(frame, lookback, threshold)
-        forecasts = predict(frame, model, horizon)
+        fallbacks: dict[str, str] = {}
+        forecasts = predict(frame, model, horizon, fallbacks)
         lo, hi = frame.index.min().date(), frame.index.max().date()
         with conn.transaction():
             a_id = conn.execute(
@@ -123,7 +151,14 @@ def run(dsn: str, tenant: str, model: str, horizon: int, lookback: int, threshol
             f_id = conn.execute(
                 "INSERT INTO ml_runs (tenant_id, kind, model, params, data_from, data_to, versions) "
                 "VALUES (%s, 'forecast', %s, %s, %s, %s, %s) RETURNING id",
-                (tenant_id, model, json.dumps({"horizon_days": horizon}), lo, hi, json.dumps(versions())),
+                (
+                    tenant_id,
+                    model,
+                    json.dumps({"horizon_days": horizon, "fallbacks": fallbacks, "fallback_model": FALLBACK_MODEL}),
+                    lo,
+                    hi,
+                    json.dumps(versions()),
+                ),
             ).fetchone()[0]
             with conn.cursor() as cur:
                 cur.executemany(

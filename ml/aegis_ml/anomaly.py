@@ -11,6 +11,10 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 
 MAD_SCALE = 1.4826  # makes MAD a consistent estimator of sigma for normal data
+# Scale used when the history is all zeros (median and MAD both 0): spend that
+# appears from nothing is scored against one dollar, so it is flagged instead
+# of producing an undefined score.
+ZERO_HISTORY_SCALE_USD = 1.0
 
 
 def rolling_mad_frame(series: pd.Series, window: int = 28, min_periods: int = 14) -> pd.DataFrame:
@@ -28,8 +32,10 @@ def rolling_mad_frame(series: pd.Series, window: int = 28, min_periods: int = 14
         med = hist.median()
         mad = hist.apply(lambda x: np.median(np.abs(x - np.median(x))), raw=True)
         scale = (MAD_SCALE * mad).where(MAD_SCALE * mad > 1e-9, other=np.nan)
-        # Fall back to 1 % of the median when the history is perfectly flat.
+        # Fall back to 1 % of the median when the history is perfectly flat,
+        # and to a fixed dollar amount when that history is all zeros.
         scale = scale.fillna(0.01 * med.abs()).replace(0, np.nan)
+        scale = scale.where(~(scale.isna() & (med == 0)), ZERO_HISTORY_SCALE_USD)
         score[mask] = ((sub - med) / scale).to_numpy()
         expected[mask] = med.to_numpy()
     return pd.DataFrame({"score": score, "expected": expected})

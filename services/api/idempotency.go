@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -84,6 +85,7 @@ type captureWriter struct {
 	http.ResponseWriter
 	status int
 	buf    bytes.Buffer
+	tooBig bool
 }
 
 func (c *captureWriter) WriteHeader(s int) {
@@ -91,12 +93,19 @@ func (c *captureWriter) WriteHeader(s int) {
 	c.ResponseWriter.WriteHeader(s)
 }
 
+// maxReplayBody is the largest response stored for replay.
+const maxReplayBody = 1 << 20
+
 func (c *captureWriter) Write(b []byte) (int, error) {
 	if c.status == 0 {
 		c.status = http.StatusOK
 	}
-	if c.buf.Len() < 1<<20 { // replays keep at most 1 MiB
-		c.buf.Write(b)
+	if !c.tooBig {
+		if c.buf.Len()+len(b) > maxReplayBody {
+			c.tooBig, c.buf = true, bytes.Buffer{} // never store (or replay) a truncated body
+		} else {
+			c.buf.Write(b)
+		}
 	}
 	return c.ResponseWriter.Write(b)
 }
@@ -155,10 +164,34 @@ func idempotent(store IdempotencyStore, pattern string, next http.Handler) http.
 			return
 		}
 		cw := &captureWriter{ResponseWriter: w}
-		next.ServeHTTP(cw, r)
 		ctx := context.WithoutCancel(r.Context())
+		abort := func() {
+			if err := store.Abort(ctx, k); err != nil {
+				logging.FromContext(r.Context()).Error("idempotency abort failed; the key stays in progress until it expires", "error", err)
+			}
+		}
+		// A panic must not leave the key "in progress" for a day: release it,
+		// then let the recovery middleware answer.
+		defer func() {
+			if rec := recover(); rec != nil {
+				abort()
+				panic(rec)
+			}
+		}()
+		next.ServeHTTP(cw, r)
+		// Failed requests release the key so the client can retry.
 		if cw.status >= 500 || cw.status == 0 {
-			_ = store.Abort(ctx, k) // let the client retry a failed request
+			abort()
+			return
+		}
+		// A response too large to store is never replayed truncated, and the
+		// request is not run twice: a retry learns it already succeeded.
+		if cw.tooBig {
+			body, _ := json.Marshal(map[string]any{"error": map[string]string{"code": "response_not_replayable",
+				"message": "this request already succeeded, but its response was too large to keep for replay; read the result with a GET"}})
+			if err := store.Complete(ctx, k, http.StatusConflict, "application/json", body); err != nil {
+				logging.FromContext(r.Context()).Error("idempotency store failed", "error", err)
+			}
 			return
 		}
 		if err := store.Complete(ctx, k, cw.status, w.Header().Get("Content-Type"), cw.buf.Bytes()); err != nil {

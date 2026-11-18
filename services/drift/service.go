@@ -236,6 +236,10 @@ func (s *Service) Compare(ctx context.Context, tenant, accountID, actor string) 
 		approved[st.ResourceID] = st
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return Report{}, err
+	}
 	live, err := s.observed(ctx, s.Pool, tenantID, account)
 	if err != nil {
 		return Report{}, err

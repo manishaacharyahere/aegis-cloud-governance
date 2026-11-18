@@ -313,9 +313,9 @@ func (s *Service) simulate(ctx context.Context, r resource, ops []Op, target str
 	return sim, nil
 }
 
-func planSHA(r resource, ops []Op, bundleSHA string) string {
+func planSHA(r resource, ops []Op, bundleSHA, configSHA string) string {
 	raw, _ := json.Marshal(map[string]any{"resource_pk": r.pk, "version": r.version, "content_sha256": r.sha,
-		"operations": ops, "policy_bundle_sha256": bundleSHA})
+		"operations": ops, "policy_bundle_sha256": bundleSHA, "policy_config_sha256": configSHA})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
@@ -439,17 +439,17 @@ func (s *Service) Propose(ctx context.Context, tenant, actor string, req Propose
 	}
 	v := View{Source: req.Source, RuleID: req.RuleID, ResourceID: r.id, AccountID: r.account, Operations: ops,
 		Justification: req.Justification, RequestedBy: actor, Status: status, RequiredApprovals: required,
-		Disruptive: tmpl.Disruptive, Simulation: sim, PlanSHA256: planSHA(r, ops, bundle.SHA256),
+		Disruptive: tmpl.Disruptive, Simulation: sim, PlanSHA256: planSHA(r, ops, bundle.SHA256, pcfg.SHA256()),
 		ResourceVersion: r.version, PolicyBundleSHA: bundle.SHA256, Approvals: []Approval{}}
 	opsJSON, _ := json.Marshal(ops)
 	simJSON, _ := json.Marshal(sim)
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `INSERT INTO remediations (tenant_id, source, rule_id, resource_pk, resource_id, account_id,
 			operations, justification, requested_by, status, required_approvals, disruptive, simulation, plan_sha256,
-			resource_version, resource_sha256, policy_bundle_sha)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id, created_at`,
+			resource_version, resource_sha256, policy_bundle_sha, policy_config_sha256)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, created_at`,
 			tenantID, req.Source, req.RuleID, r.pk, r.id, r.account, opsJSON, req.Justification, actor, status, required,
-			tmpl.Disruptive, simJSON, v.PlanSHA256, r.version, r.sha, bundle.SHA256).Scan(&v.ID, &v.CreatedAt); err != nil {
+			tmpl.Disruptive, simJSON, v.PlanSHA256, r.version, r.sha, bundle.SHA256, pcfg.SHA256()).Scan(&v.ID, &v.CreatedAt); err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 				return fmt.Errorf("%w: an open remediation for %s on this resource already exists", ErrConflict, req.RuleID)
@@ -471,12 +471,14 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 type row struct {
 	View
 	tenantID, resourcePK, resourceSHA string
+	configSHA                         string // "" for remediations proposed before it was recorded
 	signed                            *signing.Signed
 }
 
 const viewCols = `id, tenant_id, source, rule_id, resource_pk, resource_id, account_id, operations, justification, requested_by,
 	status, required_approvals, disruptive, simulation, plan_sha256, resource_version, resource_sha256, policy_bundle_sha,
-	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason, change_set_signed`
+	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason, change_set_signed,
+	coalesce(policy_config_sha256, '')`
 
 func scanRow(r pgx.Row) (row, error) {
 	var x row
@@ -484,7 +486,7 @@ func scanRow(r pgx.Row) (row, error) {
 	var signedText *string
 	err := r.Scan(&x.ID, &x.tenantID, &x.Source, &x.RuleID, &x.resourcePK, &x.ResourceID, &x.AccountID, &ops, &x.Justification,
 		&x.RequestedBy, &x.Status, &x.RequiredApprovals, &x.Disruptive, &sim, &x.PlanSHA256, &x.ResourceVersion, &x.resourceSHA,
-		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason, &signedText)
+		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason, &signedText, &x.configSHA)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row{}, ErrNotFound
 	}
@@ -668,6 +670,16 @@ func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor strin
 		}
 		if bundle.SHA256 != x.PolicyBundleSHA {
 			reason = "the policies changed since the simulation"
+			break
+		}
+		if x.configSHA != "" {
+			pcfg, err := tenancy.Load(ctx, tx, x.tenantID)
+			if err != nil {
+				return resource{}, fmt.Errorf("policy configuration: %w", err)
+			}
+			if pcfg.SHA256() != x.configSHA {
+				reason = "the tenant policy configuration changed since the simulation"
+			}
 		}
 	}
 	if reason == "" {

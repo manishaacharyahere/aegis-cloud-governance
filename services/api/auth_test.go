@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -177,6 +178,36 @@ func TestRoutePermissionsTable(t *testing.T) {
 		if rec := do(h, method, path, nil, map[string]string{TenantHeader: "demo"}); rec.Code == 404 && !strings.Contains(rec.Body.String(), "not_found") ||
 			rec.Code == 405 {
 			t.Errorf("%s: no such route (%d)", pattern, rec.Code)
+		}
+	}
+}
+
+// Development mode accepts only loopback peers that address the API by a
+// local name (no LAN peers unless trusted, no DNS-rebound hosts).
+func TestDevModeLocalOnly(t *testing.T) {
+	h := NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, MaxBodyBytes: 4096})
+	trusted := NewHandler(Deps{Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), DB: fakeDB{}, MaxBodyBytes: 4096,
+		Auth: Auth{Mode: AuthDevHeaders, DevTrustPrivateNetwork: true}})
+	for _, tc := range []struct {
+		name, remote, host string
+		h                  http.Handler
+		want               int
+	}{
+		{"loopback, localhost", "127.0.0.1:1", "localhost:8080", h, http.StatusOK},
+		{"loopback, 127.0.0.1", "127.0.0.1:1", "127.0.0.1:8080", h, http.StatusOK},
+		{"ipv6 loopback", "[::1]:1", "[::1]:8080", h, http.StatusOK},
+		{"LAN peer", "192.168.1.20:1", "localhost:8080", h, http.StatusForbidden},
+		{"LAN peer, trusted private network", "172.18.0.1:1", "localhost:8080", trusted, http.StatusOK},
+		{"public peer even when private is trusted", "203.0.113.9:1", "localhost:8080", trusted, http.StatusForbidden},
+		{"DNS rebinding", "127.0.0.1:1", "evil.example:8080", h, http.StatusForbidden},
+	} {
+		req := httptest.NewRequest("GET", "/api/v1/me", nil)
+		req.RemoteAddr, req.Host = tc.remote, tc.host
+		req.Header.Set("X-Aegis-Actor", "dev@example.com")
+		rec := httptest.NewRecorder()
+		tc.h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s: got %d, want %d", tc.name, rec.Code, tc.want)
 		}
 	}
 }

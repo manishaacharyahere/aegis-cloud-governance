@@ -3,6 +3,7 @@ package natsbus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -53,11 +54,25 @@ func Connect(ctx context.Context, url, name string, creds Credentials) (*Bus, er
 
 // Publish sends data and waits for the stream's acknowledgement.
 func (b *Bus) Publish(ctx context.Context, subject, msgID string, data []byte) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := b.js.Publish(ctx, subject, data, jetstream.WithMsgID(msgID))
+	_, err := b.js.Publish(pctx, subject, data, jetstream.WithMsgID(msgID))
+	if err != nil && ctx.Err() == nil && (b.nc.Status() != nats.CONNECTED || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, nats.ErrNoResponders) || errors.Is(err, nats.ErrTimeout) || errors.Is(err, nats.ErrConnectionClosed) ||
+		errors.Is(err, jetstream.ErrNoStreamResponse)) {
+		return unavailableError{err}
+	}
 	return err
 }
+
+// unavailableError marks a failure of the broker rather than of the message
+// (disconnected, no stream responding, timeout). The outbox relay retries
+// these without counting them toward parking.
+type unavailableError struct{ err error }
+
+func (e unavailableError) Error() string   { return "broker unavailable: " + e.err.Error() }
+func (e unavailableError) Unwrap() error   { return e.err }
+func (e unavailableError) Transient() bool { return true }
 
 // JetStream exposes the context for consumers (tests, tools).
 func (b *Bus) JetStream() jetstream.JetStream { return b.js }

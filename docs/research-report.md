@@ -192,7 +192,7 @@ The scale test found and fixed three defects:
 Fault injection showed:
 - **Database lost mid-import:** the import rolls back completely, readiness reports the outage, and the retry succeeds.
 - **OPA unavailable:** every decision fails closed.
-- **NATS outage:** events are kept and parked, not lost.
+- **NATS outage:** events are kept, not parked, and published when the broker returns.
 - **Identity provider outage:** tokens are refused until it returns.
 
 Details: [performance.md](performance.md).

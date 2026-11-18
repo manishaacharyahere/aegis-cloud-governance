@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -104,5 +106,48 @@ func TestIdempotencyKey(t *testing.T) {
 	do(h, "POST", "/api/v1/investigations", body(`{"resource_id":"a"}`), map[string]string{TenantHeader: "demo", ActorHeader: "alice"})
 	if inv.calls != before+2 {
 		t.Error("requests without a key must not be de-duplicated")
+	}
+}
+
+func idemReq(key string) *http.Request {
+	r := httptest.NewRequest("POST", "/x", strings.NewReader(`{}`))
+	r.Header.Set(TenantHeader, "demo")
+	r.Header.Set(IdempotencyHeader, key)
+	return r
+}
+
+// A panicking handler must not leave its key "in progress" for a day.
+func TestIdempotencyPanicReleasesKey(t *testing.T) {
+	store := &memIdem{recs: map[string]*IdemRecord{}}
+	h := idempotent(store, "POST /x", http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }))
+	func() {
+		defer func() { _ = recover() }()
+		h.ServeHTTP(httptest.NewRecorder(), idemReq("p-1"))
+	}()
+	if len(store.recs) != 0 {
+		t.Fatalf("key still held after a panic: %+v", store.recs)
+	}
+}
+
+// A response too large to store is never replayed truncated, and the
+// request does not run twice.
+func TestIdempotencyOversizedResponse(t *testing.T) {
+	store := &memIdem{recs: map[string]*IdemRecord{}}
+	calls := 0
+	big := strings.Repeat("x", maxReplayBody+10)
+	h := idempotent(store, "POST /x", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, big)
+	}))
+	first := httptest.NewRecorder()
+	h.ServeHTTP(first, idemReq("big-1"))
+	again := httptest.NewRecorder()
+	h.ServeHTTP(again, idemReq("big-1"))
+	if first.Code != http.StatusCreated || first.Body.Len() != len(big) {
+		t.Fatalf("first response: %d, %d bytes", first.Code, first.Body.Len())
+	}
+	if calls != 1 || again.Code != http.StatusConflict || !strings.Contains(again.Body.String(), "response_not_replayable") {
+		t.Fatalf("replay: calls=%d code=%d body=%.80s", calls, again.Code, again.Body.String())
 	}
 }

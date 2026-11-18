@@ -47,7 +47,7 @@ GET /api/v1/remediations?limit=50&after=MTc2...   → the next, older page; "nex
   items when new rows arrive.
 - These routes page this way: `/remediations` and `/compliance/exceptions`.
   `/audit/events` pages by sequence number instead: use `?before_seq=<next_before_seq>`.
-- `/resources` uses `after=<resource id>` (`next_cursor` in the response).
+- `/resources` pages by resource ID with `cursor=<next_cursor>`.
 
 ## Idempotent retries
 

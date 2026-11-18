@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 )
 
@@ -222,6 +223,7 @@ func (s *Service) ask(ctx context.Context, question string, b Bundle) (ModelResu
 	raw, err := s.Model.Generate(mctx, system, user)
 	res.LatencyMS = time.Since(start).Milliseconds()
 	if err != nil {
+		logging.FromContext(ctx).Warn("model call failed", "model", s.Model.Name(), "error", err)
 		res.Status, res.Error = StatusError, "model call failed"
 		if errors.Is(err, context.DeadlineExceeded) {
 			res.Error = "model call timed out"

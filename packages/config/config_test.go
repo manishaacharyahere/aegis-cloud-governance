@@ -16,7 +16,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Environment != EnvDevelopment || cfg.HTTPAddr != ":8080" || cfg.LogLevel != slog.LevelInfo {
+	if cfg.Environment != EnvDevelopment || cfg.HTTPAddr != "127.0.0.1:8080" || cfg.LogLevel != slog.LevelInfo {
 		t.Errorf("unexpected defaults: %+v", cfg)
 	}
 	if !cfg.MigrateOnStart {

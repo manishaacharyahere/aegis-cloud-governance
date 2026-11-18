@@ -252,10 +252,17 @@ func (s *Service) Summarize(ctx context.Context, tenant, groupBy, from, to strin
 		if g.Key == "" {
 			g.Key = "(unallocated)"
 		}
-		g.Share, g.USD = round4(g.USD/out.TotalUSD), round2(g.USD)
+		if out.TotalUSD > 0 {
+			g.Share = round4(g.USD / out.TotalUSD)
+		}
+		g.USD = round2(g.USD)
 		out.Groups = append(out.Groups, g)
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return Summary{}, err
+	}
 	rows, err = s.Pool.Query(ctx, `SELECT to_char(date_trunc('month', usage_date), 'YYYY-MM'), sum(cost_usd)::float8,
 		count(DISTINCT usage_date) FROM cost_records WHERE tenant_id = $1 AND usage_date BETWEEN $2 AND $3 GROUP BY 1 ORDER BY 1`, tenantID, f, t)
 	if err != nil {
@@ -298,6 +305,10 @@ func (s *Service) TagCoverage(ctx context.Context, tenant string) (map[string]an
 		byMethod[m], total = round2(v), total+v
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	if total == 0 {
 		return nil, ErrNoData
 	}
@@ -319,6 +330,10 @@ func (s *Service) TagCoverage(ctx context.Context, tenant string) (map[string]an
 		top = append(top, map[string]any{"resource": id, "usd": round2(v)})
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	out["top_unallocated"] = top
 	return out, nil
 }
@@ -394,6 +409,10 @@ func (s *Service) GenerateRecommendations(ctx context.Context, tenant, actor, as
 		u.Days = append(u.Days, day)
 	}
 	rows.Close()
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	usages := make([]ResourceUsage, 0, len(order))
 	for _, id := range order {
 		usages = append(usages, *byRes[id])

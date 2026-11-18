@@ -126,14 +126,16 @@ type Verification struct {
 	FirstBadSeq int64  `json:"first_bad_seq,omitempty"`
 	Reason      string `json:"reason,omitempty"`
 	HeadHash    string `json:"head_hash,omitempty"`
+	HeadSeq     int64  `json:"head_seq,omitempty"` // seq of the last event (differs from Checked only if there is a gap)
 }
 
-// HashAt returns the stored hash of event seq (ErrNoEvent if absent).
+// HashAt returns the stored hash of event seq as lowercase hex, the same
+// form /audit/head publishes (ErrNoEvent if absent).
 func HashAt(ctx context.Context, q interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }, tenantID string, seq int64) (string, error) {
 	var h string
-	err := q.QueryRow(ctx, `SELECT hash FROM audit_events WHERE tenant_id = $1 AND seq = $2`, tenantID, seq).Scan(&h)
+	err := q.QueryRow(ctx, `SELECT encode(hash, 'hex') FROM audit_events WHERE tenant_id = $1 AND seq = $2`, tenantID, seq).Scan(&h)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoEvent
 	}
@@ -185,7 +187,7 @@ func Verify(ctx context.Context, q interface {
 		if !bytes.Equal(digest(prev, seq, at, e, canon), hash) {
 			fail("event content does not match its hash")
 		}
-		prev, expectSeq = hash, seq+1
+		prev, expectSeq, v.HeadSeq = hash, seq+1, seq
 	}
 	if err := rows.Err(); err != nil {
 		return Verification{}, err
