@@ -1,0 +1,39 @@
+# Serves the dashboard and proxies the API on one origin.
+#   AEGIS_API_UPSTREAM     host:port of the API (default api:8080)
+#   AEGIS_CSP_CONNECT_SRC  extra origins the browser may call, e.g. an OIDC
+#                          issuer on another host (the token exchange runs in
+#                          the browser); empty when the issuer is on this host
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	encode zstd gzip
+
+	@api path /api/* /healthz /readyz
+	handle @api {
+		reverse_proxy {$AEGIS_API_UPSTREAM}
+	}
+
+	handle {
+		root * /srv
+		# Hashed assets never change; the page itself is always revalidated.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header / Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		# Scripts only from this origin. Inline style attributes are allowed
+		# because the animation library sets them; no inline scripts are.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' {$AEGIS_CSP_CONNECT_SRC}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
