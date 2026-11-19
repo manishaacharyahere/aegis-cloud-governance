@@ -4,7 +4,7 @@ import {
   Radar, ScanSearch, ShieldCheck, ShieldHalf, Wrench, X,
 } from 'lucide-react'
 import { fetchReadiness, type Readiness } from './api'
-import { DEV_USERS, beginLogin, completeLogin, devSession, fetchAuthConfig, loadSession, logout, renew, renewIn, type AuthConfig, type Session } from './auth'
+import { DEV_USERS, beginLogin, completeLogin, devSession, fetchAuthConfig, loadSession, logout, logoutURL, renew, renewIn, type AuthConfig, type Session } from './auth'
 import { describeError, makeClient } from './client'
 import { hashFor, parseHash, type PageProps } from './nav'
 import type { Me, Membership } from './types'
@@ -166,6 +166,8 @@ function Shell() {
     }
   }, [])
 
+  // A 401 signs out locally; the Sign out button also ends the identity
+  // provider's session, so the next sign-in asks for credentials again.
   const signOut = useCallback(() => {
     logout()
     setSession(null)
@@ -173,6 +175,11 @@ function Shell() {
     setMeError(null)
     setTenants(null)
   }, [])
+  const signOutEverywhere = useCallback(() => {
+    const url = cfg?.mode === 'oidc' ? logoutURL(session, cfg.client_id, window.location.origin) : null
+    signOut()
+    if (url) window.location.assign(url)
+  }, [cfg, session, signOut])
   // The client reads the session at call time, so a silent token renewal
   // does not create a new client (which would refetch every page).
   const [box] = useState(() => new SessionBox(session))
@@ -235,7 +242,7 @@ function Shell() {
             <Callout tone="danger" title="Could not load your session">{describeError(meError)}</Callout>
             <div className="flex gap-2">
               <Button variant="primary" onClick={() => { setMeError(null); setMeTick((t) => t + 1) }}>Retry</Button>
-              <Button onClick={signOut}><LogOut />Sign out</Button>
+              <Button onClick={signOutEverywhere}><LogOut />Sign out</Button>
             </div>
           </div>
         ) : <p className="text-fg-muted">Signing in…</p>}
@@ -304,7 +311,7 @@ function Shell() {
           </div>
           <StatusPill ready={ready} />
           <ThemeToggle value={theme} onChange={setTheme} />
-          <UserMenu me={me} tenant={tenant} tenants={tenants} tenantsError={tenantsError} onTenant={switchTenant} onSignOut={signOut} />
+          <UserMenu me={me} tenant={tenant} tenants={tenants} tenantsError={tenantsError} onTenant={switchTenant} onSignOut={signOutEverywhere} />
         </header>
         <main id="main" tabIndex={-1} className="outline-none mx-auto w-full max-w-[1400px] px-4 py-5 md:px-6 md:py-6">
           <p className="mb-4 mt-0 text-[13px] text-fg-muted">{current.description}</p>

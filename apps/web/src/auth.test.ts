@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { beginLogin, codeChallenge, completeLogin, decodeJWT, identityHeaders, loadSession, renew, renewIn, type AuthConfig } from './auth'
+import { beginLogin, codeChallenge, completeLogin, decodeJWT, identityHeaders, loadSession, logoutURL, renew, renewIn, type AuthConfig } from './auth'
 import { ApiError, describeError, makeClient } from './client'
 import { can, hashFor, parseHash } from './nav'
 
@@ -93,6 +93,9 @@ describe('sign-in', () => {
     expect(next.refreshToken).toBe('r2')
     expect(next.expiresAt).toBe(exp * 1000)
     expect(loadSession(store)?.token).toBe(next.token)
+    // The refresh token stays in memory: storage never holds it.
+    expect(loadSession(store)?.refreshToken).toBeUndefined()
+    expect([...store.m.values()].join(' ')).not.toContain('r2')
 
     const otherPerson = (async () => new Response(JSON.stringify({ id_token: jwt({ email: 'mallory@x.yz', exp }) }))) as unknown as typeof fetch
     await expect(renew(s, 'aegis-web', store, otherPerson)).rejects.toThrow(/different identity/)
@@ -162,5 +165,15 @@ describe('navigation and roles', () => {
     expect(can(me(['admin']), 'admin')).toBe(true)
     expect(can({ subject: '', method: 'dev-headers' }, 'admin')).toBe(true)
     expect(can(null, 'read')).toBe(false)
+  })
+
+  it('builds an RP-initiated logout URL only when the provider offers one', () => {
+    const s = { mode: 'oidc' as const, token: 'idt', subject: 'a', endSessionEndpoint: 'http://idp.test/logout' }
+    const u = new URL(logoutURL(s, 'aegis-web', 'https://aegis.example')!)
+    expect(u.origin + u.pathname).toBe('http://idp.test/logout')
+    expect(u.searchParams.get('id_token_hint')).toBe('idt')
+    expect(u.searchParams.get('post_logout_redirect_uri')).toBe('https://aegis.example/')
+    expect(logoutURL({ mode: 'oidc', token: 'x', subject: 'a' }, 'aegis-web', 'https://aegis.example')).toBeNull()
+    expect(logoutURL({ mode: 'dev-headers', subject: 'a' }, 'aegis-web', 'https://aegis.example')).toBeNull()
   })
 })

@@ -2,7 +2,11 @@
 //
 // OIDC mode: authorization code flow with PKCE (S256), a random state (CSRF)
 // and nonce (replay) per attempt. The ID token is kept in sessionStorage, so
-// it is scoped to the tab and gone when the tab closes. The API verifies the
+// it is scoped to the tab and gone when the tab closes. The refresh token is
+// never stored: it lives in memory only, so script on the page cannot read it
+// from storage, and after a reload the session simply ends at token expiry.
+// Signing out also ends the identity provider's session when it supports
+// RP-initiated logout. The API verifies the
 // token's signature, issuer, audience and expiry on every request; the
 // dashboard only checks state and nonce.
 //
@@ -19,8 +23,14 @@ export interface Session {
   actor?: string // dev mode identity
   subject: string
   expiresAt?: number // epoch ms
-  refreshToken?: string // used to renew the ID token silently
+  refreshToken?: string // used to renew the ID token silently; memory only
   tokenEndpoint?: string
+  endSessionEndpoint?: string
+}
+
+/** Saves the session without its refresh token (that stays in memory). */
+function persist(store: Storage, s: Session): void {
+  store.setItem(TOKEN_KEY, JSON.stringify({ ...s, refreshToken: undefined }))
 }
 
 const TOKEN_KEY = 'aegis.session'
@@ -80,7 +90,7 @@ export async function beginLogin(cfg: Extract<AuthConfig, { mode: 'oidc' }>, ori
   const verifier = randomString(48)
   const state = randomString(16)
   const nonce = randomString(16)
-  store.setItem(PENDING_KEY, JSON.stringify({ verifier, state, nonce, token_endpoint: d.token_endpoint }))
+  store.setItem(PENDING_KEY, JSON.stringify({ verifier, state, nonce, token_endpoint: d.token_endpoint, end_session_endpoint: d.end_session_endpoint }))
   const u = new URL(d.authorization_endpoint)
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', cfg.client_id)
@@ -107,7 +117,7 @@ export async function completeLogin(params: URLSearchParams, cfg: Extract<AuthCo
   store.removeItem(PENDING_KEY) // one attempt only
   if (params.get('error')) throw new Error(`sign-in failed: ${params.get('error_description') ?? params.get('error')}`)
   if (!raw) throw new Error('no sign-in in progress')
-  const pending = JSON.parse(raw) as { verifier: string; state: string; nonce: string; token_endpoint: string }
+  const pending = JSON.parse(raw) as { verifier: string; state: string; nonce: string; token_endpoint: string; end_session_endpoint?: string }
   if (!params.get('state') || params.get('state') !== pending.state) throw new Error('sign-in state mismatch')
   const code = params.get('code')
   if (!code) throw new Error('no authorization code')
@@ -128,9 +138,9 @@ export async function completeLogin(params: URLSearchParams, cfg: Extract<AuthCo
     mode: 'oidc', token: body.id_token,
     subject: String(claims.email ?? claims.sub ?? ''),
     expiresAt: typeof claims.exp === 'number' ? claims.exp * 1000 : undefined,
-    refreshToken: body.refresh_token, tokenEndpoint: pending.token_endpoint,
+    refreshToken: body.refresh_token, tokenEndpoint: pending.token_endpoint, endSessionEndpoint: pending.end_session_endpoint,
   }
-  store.setItem(TOKEN_KEY, JSON.stringify(session))
+  persist(store, session)
   return session
 }
 
@@ -153,7 +163,7 @@ export async function renew(s: Session, clientID: string, store: Storage = sessi
     ...s, token: body.id_token, refreshToken: body.refresh_token ?? s.refreshToken,
     expiresAt: typeof claims.exp === 'number' ? claims.exp * 1000 : undefined,
   }
-  store.setItem(TOKEN_KEY, JSON.stringify(next))
+  persist(store, next)
   return next
 }
 
@@ -188,6 +198,17 @@ export function loadSession(store: Storage = sessionStorage, now = Date.now()): 
 export function logout(store: Storage = sessionStorage): void {
   store.removeItem(TOKEN_KEY)
   store.removeItem(PENDING_KEY)
+}
+
+/** Where to send the browser to end the identity provider's session too, or
+ * null when the provider has no end_session_endpoint. */
+export function logoutURL(s: Session | null, clientID: string, origin: string): string | null {
+  if (!s || s.mode !== 'oidc' || !s.endSessionEndpoint) return null
+  const u = new URL(s.endSessionEndpoint)
+  if (s.token) u.searchParams.set('id_token_hint', s.token)
+  u.searchParams.set('client_id', clientID)
+  u.searchParams.set('post_logout_redirect_uri', origin + '/')
+  return u.toString()
 }
 
 /** Headers that identify the caller to the API. */
