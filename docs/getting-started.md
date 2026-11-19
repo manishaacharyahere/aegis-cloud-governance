@@ -84,6 +84,19 @@ npm ci
 npm run dev        # http://127.0.0.1:5173, proxies /api and /readyz to :8080
 ```
 
+## 2c. Load demo data
+
+```bash
+pip install -e ml                      # the cost data generator
+scripts/seed-demo.sh                   # development header mode
+# OIDC mode: AEGIS_TOKEN=$(scripts/dev-token.sh admin@aegis.local) scripts/seed-demo.sh
+```
+
+This loads the seed-42 synthetic inventory (1 000 resources) and 120 days of
+cost data, then runs a compliance evaluation, a risk assessment and the cost
+recommendations. It is safe to run twice. CI runs the same script before the
+browser journeys.
+
 ## 3. Run the API from source (optional)
 
 PowerShell:

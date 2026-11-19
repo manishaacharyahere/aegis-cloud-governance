@@ -60,6 +60,13 @@ jobs:
             curl -sf -X POST -H "Authorization: Bearer $TOKEN" -H "X-Aegis-Tenant: demo" -H "Content-Type: application/json" \
               -d "{\"subject\":\"${b%%:*}\",\"role\":\"${b##*:}\"}" localhost:8080/api/v1/access/bindings
           done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: demo data (seed-42 inventory, cost, evaluations)
+        run: |
+          pip install -q -e ml
+          AEGIS_TOKEN=$(bash scripts/dev-token.sh admin@aegis.local) bash scripts/seed-demo.sh
       - name: IaC worker (providers from an offline mirror)
         run: |
           bash scripts/seed-terraform-mirror.sh
