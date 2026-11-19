@@ -49,6 +49,12 @@ propose ──► simulate (OPA on a patched copy) ──► blocked            
 5. **Release.** This produces a change set (operations, field diff, plan hash) and
    instructions to apply it through Terraform/CI with its own review. The
    audit event records `executor: export-only`.
+   With GitHub configured, an approver can then **open a pull request** that adds
+   the signed change set (`aegis/change-sets/<id>.json`) to the team's repository on
+   the branch `aegis/remediation-<id>`. The description lists the rule, the approvers,
+   the plan hash and the `aegis-verify` command. Opening it is idempotent and audited
+   (`remediation.pull_request`). Aegis still holds no cloud credentials: the team's
+   pipeline applies the change after its own review.
 6. **Verify.** After the next inventory import, Aegis checks three things:
    - the approved values are present;
    - the target rule passes;
@@ -111,6 +117,19 @@ is affected.
 | POST | `/api/v1/remediations`: `{"source":"finding","rule_id":"…","resource_id":"…","justification":"…"}` or `{"source":"manual","resource_id":"…","operations":[{"op":"set","path":"configuration.x","value":…}],"justification":"…"}` |
 | GET | `/api/v1/remediations?status=`, `/api/v1/remediations/{id}` (with approvals; with the change set once released) |
 | POST | `/api/v1/remediations/{id}/approve` · `reject` (`{"comment":"…"}`) · `release` · `verify` |
+| POST | `/api/v1/remediations/{id}/pull-request` (approver; 503 when not configured, 502 when GitHub refuses) |
+| GET | `/api/v1/delivery`: `{"github_repo":"owner/name"}`, empty when pull requests are off |
+
+**Setting up pull requests (free).**
+
+1. Create a repository for change sets, for example `aegis-remediation-demo`.
+2. Create a fine-grained personal access token (GitHub → Settings → Developer
+   settings → Fine-grained tokens) for that repository only, with **Contents**
+   and **Pull requests** set to read and write.
+3. Set `AEGIS_GITHUB_REPO=<owner>/aegis-remediation-demo` and
+   `AEGIS_GITHUB_TOKEN=<token>` in `.env`, or `github.repo` and `github.token`
+   in the Helm chart. The token is only ever sent to GitHub and never appears
+   in logs or errors.
 
 Status codes:
 

@@ -30,9 +30,11 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrAmbiguous      = errors.New("resource_id exists in more than one account; set account_id")
 	ErrConflict       = errors.New("conflict")
-	ErrForbidden      = errors.New("not allowed")
-	ErrStale          = errors.New("the resource changed after this remediation was simulated; it is now stale and must be proposed again")
-	ErrNotObserved    = errors.New("no inventory import has changed the resource since release; import the current inventory, then verify")
+	// ErrDelivery: the pull request could not be opened (the cause is wrapped).
+	ErrDelivery    = errors.New("delivering the change set failed")
+	ErrForbidden   = errors.New("not allowed")
+	ErrStale       = errors.New("the resource changed after this remediation was simulated; it is now stale and must be proposed again")
+	ErrNotObserved = errors.New("no inventory import has changed the resource since release; import the current inventory, then verify")
 )
 
 // Statuses.
@@ -128,6 +130,8 @@ type View struct {
 	Verification      json.RawMessage `json:"verification,omitempty"`
 	Approvals         []Approval      `json:"approvals"`
 	ChangeSet         *ChangeSet      `json:"change_set,omitempty"`
+	// PullRequestURL is where the released change set was delivered (GitHub).
+	PullRequestURL string `json:"pull_request_url,omitempty"`
 }
 
 // ChangeSet is what a released remediation hands to the change pipeline.
@@ -478,7 +482,7 @@ type row struct {
 const viewCols = `id, tenant_id, source, rule_id, resource_pk, resource_id, account_id, operations, justification, requested_by,
 	status, required_approvals, disruptive, simulation, plan_sha256, resource_version, resource_sha256, policy_bundle_sha,
 	created_at, released_at, coalesce(released_by, ''), verified_at, verification, stale_reason, change_set_signed,
-	coalesce(policy_config_sha256, '')`
+	coalesce(policy_config_sha256, ''), coalesce(pull_request_url, '')`
 
 func scanRow(r pgx.Row) (row, error) {
 	var x row
@@ -486,7 +490,7 @@ func scanRow(r pgx.Row) (row, error) {
 	var signedText *string
 	err := r.Scan(&x.ID, &x.tenantID, &x.Source, &x.RuleID, &x.resourcePK, &x.ResourceID, &x.AccountID, &ops, &x.Justification,
 		&x.RequestedBy, &x.Status, &x.RequiredApprovals, &x.Disruptive, &sim, &x.PlanSHA256, &x.ResourceVersion, &x.resourceSHA,
-		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason, &signedText, &x.configSHA)
+		&x.PolicyBundleSHA, &x.CreatedAt, &x.ReleasedAt, &x.ReleasedBy, &x.VerifiedAt, &ver, &x.StaleReason, &signedText, &x.configSHA, &x.PullRequestURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row{}, ErrNotFound
 	}

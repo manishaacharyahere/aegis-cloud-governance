@@ -1856,6 +1856,52 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /api/v1/remediations/{id}/pull-request:
+    post:
+      tags:
+      - remediation
+      summary: Open a GitHub pull request with the released, signed change set
+      description: Idempotent. A remediation already delivered returns its pull request. 503 delivery_not_configured
+        without AEGIS_GITHUB_REPO and AEGIS_GITHUB_TOKEN; 502 delivery_failed when GitHub refuses.
+      operationId: postRemediationsPullRequest
+      x-aegis-permission: approve
+      parameters:
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: The remediation, with pull_request_url
+          content:
+            application/json:
+              schema: *id001
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/delivery:
+    get:
+      tags:
+      - remediation
+      summary: Where released change sets can be delivered
+      operationId: getDelivery
+      x-aegis-permission: read
+      parameters:
+      - *id002
+      responses:
+        '200':
+          description: github_repo is empty when pull requests are not configured
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [github_repo]
+                properties:
+                  github_repo:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     oidc:

@@ -13,6 +13,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/delivery"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
@@ -314,6 +315,27 @@ func TestRemediationControls(t *testing.T) {
 	if got, err = svc.Verify(ctx, "demo", "alice", v.ID); err != nil || got.Status != remediation.StatusVerified {
 		t.Fatalf("verification after the fix: %s %s %v", got.Status, got.Verification, err)
 	}
+
+	// Delivery: the signed change set becomes one pull request, recorded and
+	// audited once; a retry, or another tenant, never opens a second one.
+	fd := &fakeDeliverer{}
+	if _, err := svc.Deliver(ctx, "other", "carol", v.ID, fd); err == nil || fd.calls != 0 {
+		t.Errorf("cross-tenant delivery: %v (calls %d)", err, fd.calls)
+	}
+	got, err = svc.Deliver(ctx, "demo", "carol", v.ID, fd)
+	if err != nil || got.PullRequestURL != "https://github.example/pull/1" || fd.calls != 1 {
+		t.Fatalf("deliver: %q %v (calls %d)", got.PullRequestURL, err, fd.calls)
+	}
+	if fd.last.Branch != "aegis/remediation-"+v.ID || !strings.Contains(string(fd.last.Content), `"signature"`) ||
+		!strings.Contains(fd.last.Body, "aegis-verify") {
+		t.Errorf("delivered change: %+v", fd.last)
+	}
+	if again, err := svc.Deliver(ctx, "demo", "carol", v.ID, fd); err != nil || again.PullRequestURL != got.PullRequestURL || fd.calls != 1 {
+		t.Errorf("second delivery: %q %v (calls %d)", again.PullRequestURL, err, fd.calls)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM audit_events WHERE action = 'remediation.pull_request'`); n != 1 {
+		t.Errorf("pull request audit events = %d", n)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE remediation_approvals SET decision = 'reject'`); err == nil {
 		t.Error("approvals must be append-only")
 	}
@@ -440,4 +462,15 @@ func TestRemediationPaging(t *testing.T) {
 	if _, _, err := svc.List(ctx, "demo", "", "not-a-cursor", 3); !errors.Is(err, remediation.ErrInvalid) {
 		t.Errorf("bad cursor: %v", err)
 	}
+}
+
+type fakeDeliverer struct {
+	calls int
+	last  delivery.Change
+}
+
+func (f *fakeDeliverer) Open(_ context.Context, c delivery.Change) (delivery.PullRequest, error) {
+	f.calls++
+	f.last = c
+	return delivery.PullRequest{URL: "https://github.example/pull/1", Number: 1}, nil
 }

@@ -120,6 +120,9 @@ var routePermissions = map[string]access.Permission{
 	"POST /api/v1/remediations/{id}/reject":  access.Approve,
 	"POST /api/v1/remediations/{id}/release": access.Approve,
 	"POST /api/v1/remediations/{id}/verify":  access.Operate,
+	// Opening a pull request hands the released change to the team's pipeline.
+	"POST /api/v1/remediations/{id}/pull-request": access.Approve,
+	"GET /api/v1/delivery":                        access.Read,
 }
 
 // authenticate puts the caller in the request context. With OIDC, a missing

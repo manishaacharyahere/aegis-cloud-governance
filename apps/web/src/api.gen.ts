@@ -1015,6 +1015,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remediations/{id}/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a GitHub pull request with the released, signed change set
+         * @description Idempotent. A remediation already delivered returns its pull request. 503 delivery_not_configured without AEGIS_GITHUB_REPO and AEGIS_GITHUB_TOKEN; 502 delivery_failed when GitHub refuses.
+         */
+        post: operations["postRemediationsPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where released change sets can be delivered */
+        get: operations["getDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3170,6 +3207,60 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    postRemediationsPullRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Aegis-Tenant": components["parameters"]["Tenant"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The remediation, with pull_request_url */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDelivery: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Aegis-Tenant": components["parameters"]["Tenant"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description github_repo is empty when pull requests are not configured */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        github_repo: string;
+                    };
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

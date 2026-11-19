@@ -69,6 +69,8 @@ type Config struct {
 	AuthFailuresPerMinute int
 	// TrustedProxies are the proxies whose X-Forwarded-For is believed.
 	TrustedProxies []netip.Prefix
+	// GitHub delivery of released change sets as pull requests (optional).
+	GitHubRepo, GitHubToken, GitHubAPI string
 	// NATSURL enables the outbox relay when set (e.g. nats://nats:4222).
 	NATSURL string
 	// NATS credentials (kept out of the URL so they never appear in logs).
@@ -211,6 +213,17 @@ func Load(lookup LookupFunc) (Config, error) {
 			errs = append(errs, fmt.Errorf("%s: must be an integer between 0 and 100000", rl.key))
 		}
 		*rl.dst = n
+	}
+	cfg.GitHubRepo = get("AEGIS_GITHUB_REPO", "")
+	cfg.GitHubToken = get("AEGIS_GITHUB_TOKEN", "")
+	cfg.GitHubAPI = get("AEGIS_GITHUB_API", "https://api.github.com")
+	if (cfg.GitHubRepo == "") != (cfg.GitHubToken == "") {
+		errs = append(errs, errors.New("AEGIS_GITHUB_REPO and AEGIS_GITHUB_TOKEN must be set together"))
+	} else if cfg.GitHubRepo != "" && !regexp.MustCompile(`^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$`).MatchString(cfg.GitHubRepo) {
+		errs = append(errs, errors.New("AEGIS_GITHUB_REPO: must be owner/name"))
+	}
+	if u, err := url.Parse(cfg.GitHubAPI); err != nil || (u.Scheme != "https" && cfg.Environment == EnvProduction) || u.Host == "" {
+		errs = append(errs, errors.New("AEGIS_GITHUB_API: must be an https URL"))
 	}
 	for _, c := range strings.Split(get("AEGIS_TRUSTED_PROXIES", ""), ",") {
 		if c = strings.TrimSpace(c); c == "" {

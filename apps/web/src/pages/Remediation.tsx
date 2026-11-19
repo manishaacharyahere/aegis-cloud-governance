@@ -122,6 +122,7 @@ function Propose({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) 
 
 function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id: string }) {
   const r = useLoad(() => api<Rem>('GET', `/api/v1/remediations/${seg(id)}`), [api, id])
+  const delivery = useLoad(() => api<{ github_repo: string }>('GET', '/api/v1/delivery'), [api])
   const act = useAction()
   const toast = useToast()
   const [comment, setComment] = useState('')
@@ -129,7 +130,8 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
     const body = s === 'approve' || s === 'reject' ? { comment } : undefined
     const out = await act.run(() => api<Rem>('POST', `/api/v1/remediations/${seg(id)}/${s}`, body))
     if (out) {
-      toast(({ approve: 'Approved.', reject: 'Rejected.', release: 'Change set released.', verify: 'Verification recorded.' } as Record<string, string>)[s] ?? 'Done.')
+      toast(({ approve: 'Approved.', reject: 'Rejected.', release: 'Change set released.', verify: 'Verification recorded.',
+        'pull-request': 'Pull request opened.' } as Record<string, string>)[s] ?? 'Done.')
       setComment('')
       r.reload()
     }
@@ -235,6 +237,16 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
               Verify it before applying: <code className="font-mono">go run ./cmd/aegis-verify -key &lt;public key&gt; remediation.json</code>. The public key is at <code className="font-mono">/api/v1/signing-key</code>.
             </Callout>
           ) : <Callout tone="warning" className="mb-3">This change set is not signed (no signing key configured).</Callout>}
+          {x.pull_request_url ? (
+            <p className="m-0 mb-3 text-[13px]">
+              Delivered as <a href={x.pull_request_url} target="_blank" rel="noreferrer noopener">a pull request</a> to your repository.
+            </p>
+          ) : delivery.data?.github_repo && x.change_set.signed && can(me, 'approve') ? (
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <Button variant="primary" loading={act.busy} onClick={() => step('pull-request')}><GitPullRequestArrow />Open pull request</Button>
+              <span className="text-[13px] text-fg-muted">in <Mono value={delivery.data.github_repo} copy={false} />, adding the signed change set for your pipeline to apply.</span>
+            </div>
+          ) : null}
           <div className="relative">
             <div className="absolute right-2 top-2"><CopyButton value={JSON.stringify(x.change_set.operations, null, 2)} label="Copy operations" /></div>
             <pre className="m-0 max-h-80 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-[12px] leading-5">{JSON.stringify(x.change_set.operations, null, 2)}</pre>

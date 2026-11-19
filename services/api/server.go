@@ -46,6 +46,8 @@ type Deps struct {
 	Settings SettingsStore
 	// Signer signs released change sets and audit heads.
 	Signer *signing.Signer
+	// PullRequests delivers released change sets as GitHub pull requests (nil: off).
+	PullRequests *PullRequests
 	// OutboxRequeue re-queues parked outbox events (admin endpoint).
 	OutboxRequeue OutboxRequeuer
 	Remediation   RemediationService
@@ -183,6 +185,8 @@ func NewHandler(d Deps) http.Handler {
 	handle("POST /api/v1/remediations/{id}/verify", d.MaxBodyBytes, rm.step(func(s RemediationService) func(context.Context, string, string, string) (remediation.View, error) {
 		return s.Verify
 	}))
+	handle("POST /api/v1/remediations/{id}/pull-request", d.MaxBodyBytes, rm.step(d.PullRequests.deliver))
+	handle("GET /api/v1/delivery", d.MaxBodyBytes, deliveryInfo(d.PullRequests))
 	// No catch-all route: it would shadow the mux's automatic 405 responses.
 
 	// otelhttp is outermost so the request span exists before logging, and

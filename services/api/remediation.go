@@ -10,6 +10,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/delivery"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 )
 
@@ -24,6 +25,33 @@ type RemediationService interface {
 }
 
 type remediationHandlers struct{ svc RemediationService }
+
+// PullRequests opens pull requests for released change sets (GitHub).
+type PullRequests struct {
+	Repo    string // owner/name, shown in the dashboard
+	Deliver func(ctx context.Context, tenant, actor, id string) (remediation.View, error)
+}
+
+// deliver is the pull-request step; without configuration it answers 503.
+func (p *PullRequests) deliver(RemediationService) func(context.Context, string, string, string) (remediation.View, error) {
+	if p == nil || p.Deliver == nil {
+		return func(context.Context, string, string, string) (remediation.View, error) {
+			return remediation.View{}, delivery.ErrNotConfigured
+		}
+	}
+	return p.Deliver
+}
+
+// deliveryInfo tells the dashboard whether pull requests can be opened.
+func deliveryInfo(p *PullRequests) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		repo := ""
+		if p != nil && p.Deliver != nil {
+			repo = p.Repo
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"github_repo": repo})
+	}
+}
 
 func (h remediationHandlers) tenant(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if h.svc == nil {
@@ -162,6 +190,12 @@ func (h remediationHandlers) fail(w http.ResponseWriter, r *http.Request, err er
 		writeError(w, http.StatusConflict, "ambiguous_resource", err.Error())
 	case errors.Is(err, remediation.ErrConflict):
 		writeError(w, http.StatusConflict, "invalid_transition", err.Error())
+	case errors.Is(err, delivery.ErrNotConfigured):
+		writeError(w, http.StatusServiceUnavailable, "delivery_not_configured", "pull requests are not configured (AEGIS_GITHUB_REPO and AEGIS_GITHUB_TOKEN)")
+	case errors.Is(err, remediation.ErrDelivery):
+		// The cause names the GitHub answer, never the token.
+		logging.FromContext(r.Context()).Warn("pull request failed", "error", err)
+		writeError(w, http.StatusBadGateway, "delivery_failed", err.Error())
 	case errors.Is(err, remediation.ErrInvalid), errors.Is(err, remediation.ErrNoTemplate):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_request", err.Error())
 	case errors.Is(err, context.Canceled):

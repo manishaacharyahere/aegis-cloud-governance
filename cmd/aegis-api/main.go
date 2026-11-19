@@ -26,6 +26,7 @@ import (
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/api"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/automation"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/delivery"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/finops"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/iac"
@@ -184,6 +185,7 @@ func run() error {
 		log.Warn("no Terraform fixtures listed", "dir", cfg.FixturesDir, "error", err)
 	}
 
+	remSvc := &remediation.Service{Pool: pool, OPA: opaClient, Signer: signer}
 	srv := api.NewServer(cfg.HTTPAddr, api.NewHandler(api.Deps{
 		Logger:       log,
 		DB:           pool,
@@ -199,11 +201,12 @@ func run() error {
 		OutboxRequeue: func(ctx context.Context, tenant string) (int64, error) {
 			return outbox.RequeueParked(ctx, pool, tenant, 0)
 		},
-		RateLimit:   &api.RateLimit{PerMinute: cfg.RateLimitPerMinute, ExpensivePerMinute: cfg.RateLimitExpensivePerMinute},
-		Remediation: &remediation.Service{Pool: pool, OPA: opaClient, Signer: signer},
-		Signer:      signer,
-		Settings:    &tenancy.Store{Pool: pool},
-		Idempotency: &api.PGIdempotency{Pool: pool},
+		RateLimit:    &api.RateLimit{PerMinute: cfg.RateLimitPerMinute, ExpensivePerMinute: cfg.RateLimitExpensivePerMinute},
+		Remediation:  remSvc,
+		Signer:       signer,
+		PullRequests: pullRequests(cfg, remSvc),
+		Settings:     &tenancy.Store{Pool: pool},
+		Idempotency:  &api.PGIdempotency{Pool: pool},
 		// Model timeout plus time to collect evidence and store the result.
 		InvestigationWriteBudget: cfg.AI.Timeout + 15*time.Second,
 		Version:                  version,
@@ -351,4 +354,15 @@ func appliedVersion(ctx context.Context, url string) (int, error) {
 	var v int
 	err = pool.QueryRow(ctx, `SELECT coalesce(max(version), 0) FROM schema_migrations`).Scan(&v)
 	return v, err
+}
+
+// pullRequests delivers released change sets to GitHub when configured.
+func pullRequests(cfg config.Config, rem *remediation.Service) *api.PullRequests {
+	if cfg.GitHubRepo == "" {
+		return nil
+	}
+	gh := &delivery.GitHub{API: cfg.GitHubAPI, Repo: cfg.GitHubRepo, Token: cfg.GitHubToken}
+	return &api.PullRequests{Repo: cfg.GitHubRepo, Deliver: func(ctx context.Context, tenant, actor, id string) (remediation.View, error) {
+		return rem.Deliver(ctx, tenant, actor, id, gh)
+	}}
 }

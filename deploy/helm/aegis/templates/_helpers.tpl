@@ -58,6 +58,11 @@ seccompProfile: { type: RuntimeDefault }
 # Requests arrive through the web proxy and the ingress (private addresses);
 # the client address is then read from X-Forwarded-For.
 - { name: AEGIS_TRUSTED_PROXIES, value: {{ join "," .Values.api.trustedProxies | quote }} }
+{{- if .Values.github.repo }}
+- { name: AEGIS_GITHUB_REPO, value: {{ .Values.github.repo | quote }} }
+- name: AEGIS_GITHUB_TOKEN
+  valueFrom: { secretKeyRef: { name: {{ include "aegis.name" . }}-github, key: token } }
+{{- end }}
 {{- if eq .Values.api.authMode "dev-headers" }}
 # The web proxy reaches the API from a pod address.
 - { name: AEGIS_DEV_TRUST_PRIVATE_NETWORK, value: "true" }

@@ -89,6 +89,13 @@ dex:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { memory: 128Mi }
 
+# Deliver released change sets as GitHub pull requests (optional). Use a
+# fine-grained token limited to that one repository, with Contents and Pull
+# requests read/write.
+github:
+  repo: "" # owner/name
+  token: ""
+
 mlWorker:
   enabled: false
   schedule: "0 */6 * * *"

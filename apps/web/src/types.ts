@@ -221,6 +221,7 @@ export interface Remediation {
   created_at: string
   approvals: { actor: string; decision: string; comment: string; created_at: string }[]
   change_set?: { instructions: string; native_type: string; operations: unknown[]; signed?: { key_id: string; signature: string; payload: unknown } }
+  pull_request_url?: string
   verification?: { verified: boolean; config_matches: boolean; target_resolved: boolean; mismatched_paths: string[]; unexpected_failures: string[] }
 }
 

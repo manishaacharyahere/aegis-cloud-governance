@@ -22,16 +22,17 @@ type RateLimit struct {
 // evaluations, assessments, investigations (possibly a model call) and
 // remediation simulations.
 var expensiveRoutes = map[string]bool{
-	"POST /api/v1/inventory/import":       true,
-	"POST /api/v1/iac/scans":              true,
-	"POST /api/v1/compliance/evaluations": true,
-	"POST /api/v1/drift/compare":          true,
-	"POST /api/v1/drift/baselines":        true,
-	"POST /api/v1/risk/assessments":       true,
-	"POST /api/v1/cost/import":            true,
-	"POST /api/v1/recommendations":        true,
-	"POST /api/v1/investigations":         true,
-	"POST /api/v1/remediations":           true,
+	"POST /api/v1/inventory/import":               true,
+	"POST /api/v1/iac/scans":                      true,
+	"POST /api/v1/compliance/evaluations":         true,
+	"POST /api/v1/drift/compare":                  true,
+	"POST /api/v1/drift/baselines":                true,
+	"POST /api/v1/risk/assessments":               true,
+	"POST /api/v1/cost/import":                    true,
+	"POST /api/v1/recommendations":                true,
+	"POST /api/v1/investigations":                 true,
+	"POST /api/v1/remediations":                   true,
+	"POST /api/v1/remediations/{id}/pull-request": true,
 	// Large uploads and full audit-chain recomputations.
 	"POST /api/v1/inventory/import/terraform-state": true,
 	"GET /api/v1/audit/head":                        true,
