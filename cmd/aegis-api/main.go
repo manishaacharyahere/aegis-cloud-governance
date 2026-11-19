@@ -64,6 +64,12 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "migrate" {
 		return migrateOnly(ctx, cfg, log)
 	}
+	// "aegis-api wait-for-schema" waits until every migration this binary
+	// embeds has been applied, using only the application credentials. It is
+	// the API's init step in Kubernetes, so new pods never run on an old schema.
+	if len(os.Args) > 1 && os.Args[1] == "wait-for-schema" {
+		return waitForSchema(ctx, cfg, log, 10*time.Minute)
+	}
 
 	tel, err := telemetry.Setup(ctx, "aegis-api", version)
 	if err != nil {
@@ -310,4 +316,38 @@ func migrateOnly(ctx context.Context, cfg config.Config, log *slog.Logger) error
 	}
 	log.Info("migrations applied")
 	return nil
+}
+
+func waitForSchema(ctx context.Context, cfg config.Config, log *slog.Logger, limit time.Duration) error {
+	migs, err := database.LoadMigrations(migrations.FS)
+	if err != nil {
+		return err
+	}
+	want := migs[len(migs)-1].Version
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	for {
+		have, err := appliedVersion(ctx, cfg.DatabaseURL)
+		if err == nil && have >= want {
+			log.Info("schema is current", "version", have)
+			return nil
+		}
+		log.Info("waiting for migrations", "have", have, "want", want, "error", err)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("schema not at version %d after %s (have %d): %w", want, limit, have, ctx.Err())
+		case <-time.After(3 * time.Second):
+		}
+	}
+}
+
+func appliedVersion(ctx context.Context, url string) (int, error) {
+	pool, err := database.OpenWith(ctx, url, database.Options{MaxConns: 1, AppName: "aegis-wait"})
+	if err != nil {
+		return 0, err
+	}
+	defer pool.Close()
+	var v int
+	err = pool.QueryRow(ctx, `SELECT coalesce(max(version), 0) FROM schema_migrations`).Scan(&v)
+	return v, err
 }

@@ -153,11 +153,18 @@ cd apps/web && npm ci && npm run dev       # http://127.0.0.1:5173
 To sign in with real accounts, run the scanner, or load the demo data, follow
 [docs/getting-started.md](docs/getting-started.md).
 
+To run it in the cloud, use the Helm chart in `deploy/helm/aegis`. It works
+on any Kubernetes cluster (EKS, GKE, AKS, k3s), and CI installs it on a fresh
+cluster on every push. [docs/deploy.md](docs/deploy.md) also has a step-by-step
+free route: an Oracle Cloud Always Free VM, k3s, Let's Encrypt and sign-in
+with GitHub.
+
 ## Where things are
 
 | Path | What is there |
 |---|---|
-| `cmd/` | `aegis-api`, `aegis-worker` (IaC scans), `aegis-datagen` (synthetic data), `aegis-verify` (checks signed change sets) |
+| `cmd/` | `aegis-api`, `aegis-worker` (IaC scans), `aegis-collect` (reads a real AWS account), `aegis-datagen` (synthetic data), `aegis-verify` (checks signed change sets) |
+| `deploy/helm/aegis` | The Helm chart for running it on Kubernetes |
 | `services/` | One package per module: inventory, iac, compliance, drift, risk, finops, investigator, remediation, plus access, audit, outbox, automation, retention, tenancy and the HTTP API |
 | `packages/` | Shared Go code: config, database, logging, telemetry, OPA client, NATS, redaction, signing |
 | `migrations/` | SQL migrations, embedded in the binary and applied by a one-shot job |

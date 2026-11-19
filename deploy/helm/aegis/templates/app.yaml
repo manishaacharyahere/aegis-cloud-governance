@@ -1,0 +1,170 @@
+{{- $root := . }}
+{{- $api := printf "%s-api" (include "aegis.name" .) }}
+{{- $web := printf "%s-web" (include "aegis.name" .) }}
+{{- if and (eq .Values.environment "production") (ne .Values.api.authMode "oidc") }}
+{{- fail "api.authMode must be oidc in production" }}
+{{- end }}
+{{- if and (eq .Values.api.authMode "oidc") (not (include "aegis.issuer" .)) }}
+{{- fail "set api.oidc.issuer, or enable dex together with host" }}
+{{- end }}
+# Migrations run once per release revision as the schema owner. The API never
+# receives the owner credentials; its pods wait until the schema is current.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aegis.name" . }}-migrate-{{ .Release.Revision }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 10 # PostgreSQL may still be starting on a first install
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "aegis.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: {{ include "aegis.image" (dict "root" . "name" "aegis-api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            # The migrate step serves nothing, so it does not need the
+            # production settings (identity provider, signing key).
+            - { name: AEGIS_ENV, value: development }
+            - name: AEGIS_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: owner-database-url } }
+            - name: AEGIS_MIGRATION_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: owner-database-url } }
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 65532 # distroless "nonroot"; numeric so the kubelet can verify it
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $api }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+    - { name: metrics, port: 9464, targetPort: 9464 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $api }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "api") | nindent 8 }}
+      annotations:
+        # Roll the pods when their settings change.
+        checksum/env: {{ include "aegis.apiEnv" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30 # longer than the API's own 15 s drain
+      initContainers:
+        - name: wait-for-schema
+          image: {{ include "aegis.image" (dict "root" . "name" "aegis-api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["wait-for-schema"]
+          env: {{- include "aegis.apiEnv" . | nindent 12 }}
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 65532 # distroless "nonroot"; numeric so the kubelet can verify it
+      containers:
+        - name: api
+          image: {{ include "aegis.image" (dict "root" . "name" "aegis-api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env: {{- include "aegis.apiEnv" . | nindent 12 }}
+          ports: [{ containerPort: 8080, name: http }, { containerPort: 9464, name: metrics }]
+          readinessProbe: { httpGet: { path: /readyz, port: 8080 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: 8080 }, initialDelaySeconds: 10, periodSeconds: 20 }
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 65532 # distroless "nonroot"; numeric so the kubelet can verify it
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $web }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "web") | nindent 4 }}
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $web }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "web") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: web
+          image: {{ include "aegis.image" (dict "root" . "name" "aegis-web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - { name: AEGIS_API_UPSTREAM, value: "{{ $api }}:8080" }
+            - { name: AEGIS_CSP_CONNECT_SRC, value: {{ .Values.web.cspConnectSrc | quote }} }
+          ports: [{ containerPort: 8080, name: http }]
+          readinessProbe: { httpGet: { path: /, port: 8080 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 20 }
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 65532
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+{{- if .Values.mlWorker.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "aegis.name" . }}-ml
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.mlWorker.schedule | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels: {{- include "aegis.labels" . | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          containers:
+            - name: ml
+              image: {{ include "aegis.image" (dict "root" . "name" "aegis-ml") }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args: ["--tenant", {{ .Values.mlWorker.tenant | quote }}]
+              env:
+                - name: AEGIS_DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: app-database-url } }
+              securityContext:
+                {{- include "aegis.containerSecurity" . | nindent 16 }}
+                runAsUser: 10001
+              resources: {{- toYaml .Values.mlWorker.resources | nindent 16 }}
+              volumeMounts: [{ name: tmp, mountPath: /tmp }]
+          volumes: [{ name: tmp, emptyDir: {} }]
+{{- end }}

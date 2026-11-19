@@ -123,3 +123,57 @@ jobs:
       - run: docker build -f infrastructure/docker/api.Dockerfile -t aegis-api:ci .
       - name: compose config
         run: POSTGRES_PASSWORD=ci AEGIS_OPA_TOKEN=ci AEGIS_NATS_PASSWORD=ci AEGIS_APP_DB_PASSWORD=ci docker compose --profile core config --quiet
+
+  # Installs the Helm chart on a throwaway Kubernetes cluster (kind) with the
+  # images built from this commit, then checks the deployment really works.
+  kubernetes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: chart files match the Compose ones
+        run: |
+          diff infrastructure/postgres/init/10-app-role.sh deploy/helm/aegis/files/10-app-role.sh
+          diff infrastructure/postgres/init/20-dex-db.sh deploy/helm/aegis/files/20-dex-db.sh
+          diff infrastructure/nats/nats.conf deploy/helm/aegis/files/nats.conf
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.1
+      - name: lint and render (production settings)
+        run: |
+          helm lint deploy/helm/aegis --set host=aegis.example.org --set dex.enabled=true
+          helm template t deploy/helm/aegis --set host=aegis.example.org --set dex.enabled=true \
+            --set mlWorker.enabled=true > /tmp/prod.yaml
+          # production must refuse an insecure configuration
+          ! helm template t deploy/helm/aegis --set host=x.org --set api.authMode=dev-headers
+          ! helm template t deploy/helm/aegis --set host=x.org
+      - name: build images
+        run: |
+          for c in api web opa ml; do
+            docker build -q -f infrastructure/docker/$c.Dockerfile -t ghcr.io/manishaacharyahere/aegis-cloud-governance/aegis-$c:ci .
+          done
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.33.0
+          cluster_name: aegis
+      - name: install the chart
+        run: |
+          for c in api web opa ml; do kind load docker-image ghcr.io/manishaacharyahere/aegis-cloud-governance/aegis-$c:ci --name aegis; done
+          helm install aegis deploy/helm/aegis --namespace aegis --create-namespace \
+            --set image.tag=ci --set image.pullPolicy=Never --set environment=development \
+            --set api.authMode=dev-headers --set ingress.enabled=false --set mlWorker.enabled=true \
+            --wait --timeout 6m
+      - name: smoke test through the web front end
+        run: |
+          kubectl -n aegis port-forward svc/aegis-web 8080:8080 & sleep 3
+          curl -sf localhost:8080/ | grep -q '<div id="root">'
+          curl -sf localhost:8080/readyz | tee /dev/stderr | grep -q '"status":"ready"'
+          curl -sfI localhost:8080/ | grep -qi content-security-policy
+          h=(-H "X-Aegis-Tenant: demo" -H "X-Aegis-Actor: ci@aegis.local" -H "Content-Type: application/json")
+          curl -sf "${h[@]}" -X POST --data @datasets/inventory/sample/snapshot-v1.json localhost:8080/api/v1/inventory/import | grep -q import_id
+          curl -sf "${h[@]}" -X POST -d '{"source":"inventory"}' localhost:8080/api/v1/compliance/evaluations | tee /dev/stderr | grep -q run_id
+      - name: diagnostics
+        if: failure()
+        run: |
+          kubectl -n aegis get pods,jobs -o wide
+          kubectl -n aegis describe pods | tail -80
+          for p in $(kubectl -n aegis get pods -o name); do echo "== $p"; kubectl -n aegis logs $p --all-containers --tail=40; done

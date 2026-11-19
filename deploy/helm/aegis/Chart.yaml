@@ -1,0 +1,10 @@
+apiVersion: v2
+name: aegis
+description: Aegis - local-first cloud governance, security, compliance and FinOps
+type: application
+version: 0.1.0
+appVersion: "1.2.0"
+home: https://github.com/manishaacharyahere/aegis-cloud-governance
+sources:
+  - https://github.com/manishaacharyahere/aegis-cloud-governance
+keywords: [governance, compliance, security, opa, finops]

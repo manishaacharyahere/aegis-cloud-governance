@@ -1,0 +1,184 @@
+{{- /* Ingress, the optional bundled identity provider, and network policies. */}}
+{{- $web := printf "%s-web" (include "aegis.name" .) }}
+{{- $dex := printf "%s-dex" (include "aegis.name" .) }}
+{{- if .Values.ingress.enabled }}
+{{- if not .Values.host }}{{ fail "set host (the public hostname) or disable the ingress" }}{{ end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "aegis.name" . }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls: [{ hosts: [{{ .Values.host | quote }}], secretName: {{ .Values.ingress.tls.secretName }} }]
+  {{- end }}
+  rules:
+    - host: {{ .Values.host | quote }}
+      http:
+        paths:
+          {{- if .Values.dex.enabled }}
+          - path: /dex
+            pathType: Prefix
+            backend: { service: { name: {{ $dex }}, port: { number: 5556 } } }
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: {{ $web }}, port: { number: 8080 } } }
+{{- end }}
+{{- if .Values.dex.enabled }}
+{{- if not .Values.host }}{{ fail "dex needs host (its issuer is https://<host>/dex)" }}{{ end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $dex }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  config.yaml: |
+    issuer: https://{{ .Values.host }}/dex
+    storage:
+      type: postgres
+      config:
+        host: {{ include "aegis.name" . }}-postgres
+        port: 5432
+        database: dex
+        user: aegis
+        password: {{ "{{" }} getenv "DEX_DB_PASSWORD" {{ "}}" }}
+        ssl: { mode: {{ ternary "require" "disable" .Values.postgresql.tls }} }
+    web:
+      http: 0.0.0.0:5556
+      allowedOrigins: ["https://{{ .Values.host }}"]
+    oauth2:
+      skipApprovalScreen: true
+      responseTypes: ["code"]
+      {{- if .Values.dex.staticPasswords }}
+      passwordConnector: local
+      {{- end }}
+    expiry: { idTokens: "1h" }
+    staticClients:
+      - id: {{ .Values.api.oidc.clientId }}
+        name: Aegis
+        public: true
+        redirectURIs: ["https://{{ .Values.host }}/callback"]
+    {{- if .Values.dex.github.clientId }}
+    connectors:
+      - type: github
+        id: github
+        name: GitHub
+        config:
+          clientID: {{ .Values.dex.github.clientId | quote }}
+          clientSecret: {{ .Values.dex.github.clientSecret | quote }}
+          redirectURI: https://{{ .Values.host }}/dex/callback
+          {{- with .Values.dex.github.orgs }}
+          orgs: {{- range . }}
+            - name: {{ . | quote }}
+          {{- end }}
+          {{- end }}
+    {{- end }}
+    enablePasswordDB: {{ if .Values.dex.staticPasswords }}true{{ else }}false{{ end }}
+    {{- with .Values.dex.staticPasswords }}
+    staticPasswords: {{- toYaml . | nindent 6 }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $dex }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "dex") | nindent 4 }}
+  ports: [{ name: http, port: 5556, targetPort: 5556 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $dex }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "dex") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "dex") | nindent 8 }}
+      annotations:
+        checksum/config: {{ toYaml .Values.dex | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: dex
+          image: {{ .Values.dex.image }}
+          args: ["dex", "serve", "/etc/dex/config.yaml"]
+          env:
+            - name: DEX_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: postgres-password } }
+          ports: [{ containerPort: 5556, name: http }]
+          readinessProbe: { httpGet: { path: /dex/healthz, port: 5556 }, periodSeconds: 5 }
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 1001
+          resources: {{- toYaml .Values.dex.resources | nindent 12 }}
+          volumeMounts:
+            - { name: config, mountPath: /etc/dex, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          secret: { secretName: {{ $dex }} }
+        - { name: tmp, emptyDir: {} }
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# Default deny inside the release; then only the paths Aegis uses.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aegis.name" . }}-default-deny
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }} } }
+  policyTypes: ["Ingress"]
+{{- range $target, $from := dict "postgres" (list "api" "dex" "") "nats" (list "api") "opa" (list "api") "api" (list "web") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aegis.name" $ }}-{{ $target }}-ingress
+  labels: {{- include "aegis.labels" $ | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/instance: {{ $.Release.Name }}, app.kubernetes.io/component: {{ $target }} } }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- range $from }}
+        {{- if eq . "" }}
+        # migrate job, ML job and the API's init step carry no component label
+        - podSelector: { matchExpressions: [{ key: app.kubernetes.io/component, operator: DoesNotExist }], matchLabels: { app.kubernetes.io/instance: {{ $.Release.Name }} } }
+        {{- else }}
+        - podSelector: { matchLabels: { app.kubernetes.io/instance: {{ $.Release.Name }}, app.kubernetes.io/component: {{ . }} } }
+        {{- end }}
+        {{- end }}
+{{- end }}
+---
+# The web and Dex pods take traffic from the ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aegis.name" . }}-public-ingress
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/component, operator: In, values: ["web", "dex"] }
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }} }
+  policyTypes: ["Ingress"]
+  ingress: [{}]
+{{- end }}

@@ -1,0 +1,102 @@
+{{- /* NATS JetStream (events) and OPA (policy decisions). */}}
+{{- $n := printf "%s-nats" (include "aegis.name" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $n }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+data:
+  nats.conf: {{ .Files.Get "files/nats.conf" | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $n }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "nats") | nindent 4 }}
+  ports: [{ name: client, port: 4222, targetPort: 4222 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $n }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ $n }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "nats") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "nats") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, runAsNonRoot: true }
+      containers:
+        - name: nats
+          image: {{ .Values.nats.image }}
+          args: ["-c", "/etc/nats/nats.conf"]
+          env:
+            - name: NATS_API_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: nats-password } }
+          ports: [{ containerPort: 4222, name: client }, { containerPort: 8222, name: monitor }]
+          readinessProbe: { httpGet: { path: /healthz, port: 8222 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: 8222 }, initialDelaySeconds: 10, periodSeconds: 20 }
+          securityContext: {{- include "aegis.containerSecurity" . | nindent 12 }}
+          resources: {{- toYaml .Values.nats.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /etc/nats, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: {{ $n }} }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: {{ .Values.nats.storage }} } }
+---
+{{- $o := printf "%s-opa" (include "aegis.name" .) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $o }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "opa") | nindent 4 }}
+  ports: [{ name: http, port: 8181, targetPort: 8181 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $o }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "opa") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "opa") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: opa
+          # The repository's policies are baked into this image (same commit as the API).
+          image: {{ include "aegis.image" (dict "root" . "name" "aegis-opa") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: OPA_AUTH_TOKEN
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: opa-token } }
+          ports: [{ containerPort: 8181, name: http }]
+          readinessProbe: { httpGet: { path: /health, port: 8181 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health, port: 8181 }, initialDelaySeconds: 5, periodSeconds: 20 }
+          securityContext:
+            {{- include "aegis.containerSecurity" . | nindent 12 }}
+            runAsUser: 65532
+          resources: {{- toYaml .Values.opa.resources | nindent 12 }}

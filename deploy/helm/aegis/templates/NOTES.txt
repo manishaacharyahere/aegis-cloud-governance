@@ -1,0 +1,16 @@
+Aegis {{ .Chart.AppVersion }} is installing in namespace {{ .Release.Namespace }}.
+
+Watch it come up:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+{{- if .Values.ingress.enabled }}
+Open https://{{ .Values.host }} once the certificate is issued.
+{{- else }}
+Open it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "aegis.name" . }}-web 8080:8080
+  then http://localhost:8080
+{{- end }}
+
+Generated secrets (database passwords, OPA token, signing key) are in the
+Secret {{ include "aegis.secret" . }}, which is kept if the release is deleted.
+The public key that verifies released change sets: GET /api/v1/signing-key

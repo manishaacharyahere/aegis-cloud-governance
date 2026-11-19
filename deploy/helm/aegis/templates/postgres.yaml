@@ -1,0 +1,114 @@
+{{- if .Values.postgresql.enabled }}
+{{- $name := printf "%s-postgres" (include "aegis.name" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-init
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+data:
+  # The same scripts as infrastructure/postgres/init (CI checks they match):
+  # the least-privilege aegis_app role, and Dex's database.
+  10-app-role.sh: {{ .Files.Get "files/10-app-role.sh" | quote }}
+  20-dex-db.sh: {{ .Files.Get "files/20-dex-db.sh" | quote }}
+{{- if .Values.postgresql.tls }}
+---
+{{- $tlsName := printf "%s-tls" $name }}
+{{- $old := (lookup "v1" "Secret" .Release.Namespace $tlsName).data | default dict }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $tlsName }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  {{- if get $old "tls.crt" }}
+  tls.crt: {{ get $old "tls.crt" }}
+  tls.key: {{ get $old "tls.key" }}
+  {{- else }}
+  {{- $cert := genSelfSignedCert $name nil (list $name (printf "%s.%s.svc" $name .Release.Namespace)) 3650 }}
+  tls.crt: {{ $cert.Cert | b64enc }}
+  tls.key: {{ $cert.Key | b64enc }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "aegis.selector" (dict "root" . "component" "postgres") | nindent 4 }}
+  ports: [{ name: postgres, port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels: {{- include "aegis.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "aegis.selector" (dict "root" . "component" "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.labels" . | nindent 8 }}
+        {{- include "aegis.selector" (dict "root" . "component" "postgres") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      # uid/gid 70 is the postgres user of the Alpine image; the group can
+      # read the TLS key (PostgreSQL accepts a root-owned key readable by its group).
+      securityContext: { runAsUser: 70, runAsGroup: 70, fsGroup: 70, runAsNonRoot: true }
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image }}
+          {{- if .Values.postgresql.tls }}
+          args: ["-c", "ssl=on", "-c", "ssl_cert_file=/tls/tls.crt", "-c", "ssl_key_file=/tls/tls.key"]
+          {{- end }}
+          env:
+            - { name: POSTGRES_USER, value: aegis }
+            - { name: POSTGRES_DB, value: aegis }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: postgres-password } }
+            - name: AEGIS_APP_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "aegis.secret" . }}, key: app-db-password } }
+          ports: [{ containerPort: 5432, name: postgres }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "aegis", "-d", "aegis"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "aegis", "-d", "aegis"] }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext: {{- include "aegis.containerSecurity" . | nindent 12 }}
+          resources: {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+            {{- if .Values.postgresql.tls }}
+            - { name: tls, mountPath: /tls, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: init
+          # Executable, so the entrypoint runs the scripts instead of sourcing
+          # them into its own shell.
+          configMap: { name: {{ $name }}-init, defaultMode: 0555 }
+        - { name: run, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        {{- if .Values.postgresql.tls }}
+        - name: tls
+          secret: { secretName: {{ $name }}-tls, defaultMode: 0440 }
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgresql.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.postgresql.storage }} } }
+{{- end }}
