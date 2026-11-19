@@ -36,7 +36,7 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 // Service is the drift module.
 type Service struct {
 	Pool         *pgxpool.Pool
-	OPA          *opa.Client
+	OPA          opa.Querier
 	Config       Config
 	RuleSeverity map[string]string // from the compliance catalog
 }
@@ -313,32 +313,22 @@ func (s *Service) Compare(ctx context.Context, tenant, accountID, actor string) 
 // failures evaluates states with the inventory policies and returns the
 // failing rule IDs per resource.
 func (s *Service) failures(ctx context.Context, states map[string]State, policyConfig map[string]any) (map[string][]string, error) {
-	docs := make([]map[string]any, 0, len(states))
+	if len(states) == 0 {
+		return map[string][]string{}, nil
+	}
+	docs := make([]opa.Resource, 0, len(states))
 	for _, st := range states {
-		docs = append(docs, map[string]any{"id": st.ResourceID, "type": st.Type, "region": st.Region,
-			"tags": st.Tags, "configuration": st.Configuration})
-	}
-	type finding struct {
-		RuleID  string `json:"rule_id"`
-		Address string `json:"address"`
-	}
-	out := map[string][]string{}
-	if len(docs) == 0 {
-		return out, nil
-	}
-	for _, chunk := range opa.Chunks(docs, opa.ChunkSize) {
-		var res struct {
-			Deny []finding `json:"deny"`
-			Warn []finding `json:"warn"`
+		tags := make(map[string]any, len(st.Tags))
+		for k, v := range st.Tags {
+			tags[k] = v
 		}
-		if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": chunk, "config": policyConfig}, &res); err != nil {
-			return nil, fmt.Errorf("evaluate policies: %w", err)
-		}
-		for _, f := range append(res.Deny, res.Warn...) {
-			out[f.Address] = append(out[f.Address], f.RuleID)
-		}
+		docs = append(docs, opa.Resource{ID: st.ResourceID, Type: st.Type, Region: st.Region, Tags: tags, Configuration: st.Configuration})
 	}
-	return out, nil
+	findings, err := opa.EvaluateInventory(ctx, s.OPA, docs, policyConfig)
+	if err != nil {
+		return nil, err
+	}
+	return opa.FailingRules(findings), nil
 }
 
 // GetReport returns a stored report; items may be filtered by category or minimum severity.

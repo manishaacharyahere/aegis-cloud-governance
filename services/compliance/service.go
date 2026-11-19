@@ -39,7 +39,7 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 type Service struct {
 	Pool    *pgxpool.Pool
 	Catalog *Catalog
-	OPA     *opa.Client
+	OPA     opa.Querier
 	Now     func() time.Time
 }
 
@@ -86,20 +86,13 @@ func (s *Service) EvaluateInventory(ctx context.Context, tenant, actor string) (
 	if err != nil {
 		return RunSummary{}, err
 	}
-	type doc struct {
-		ID            string         `json:"id"`
-		Type          string         `json:"type"`
-		Region        string         `json:"region"`
-		Tags          map[string]any `json:"tags"`
-		Configuration map[string]any `json:"configuration"`
-	}
-	var docs []doc
+	var docs []opa.Resource
 	var subjects []Subject
 	accounts := map[string]bool{}
 	for rows.Next() {
 		var pk, account, sha string
 		var version int
-		var d doc
+		var d opa.Resource
 		var tags, cfg []byte
 		if err := rows.Scan(&pk, &account, &d.ID, &d.Type, &d.Region, &tags, &cfg, &version, &sha); err != nil {
 			rows.Close()
@@ -128,18 +121,13 @@ func (s *Service) EvaluateInventory(ctx context.Context, tenant, actor string) (
 	if err != nil {
 		return RunSummary{}, err
 	}
-	var findings []PolicyFinding
-	for _, chunk := range opa.Chunks(docs, opa.ChunkSize) {
-		var res struct {
-			Deny []opaFinding `json:"deny"`
-			Warn []opaFinding `json:"warn"`
-		}
-		if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": chunk, "config": pcfg.Input()}, &res); err != nil {
-			return RunSummary{}, fmt.Errorf("evaluate inventory policies: %w", err)
-		}
-		for _, f := range append(res.Deny, res.Warn...) {
-			findings = append(findings, PolicyFinding{RuleID: f.RuleID, Subject: f.Address, Message: f.Message})
-		}
+	results, err := opa.EvaluateInventory(ctx, s.OPA, docs, pcfg.Input())
+	if err != nil {
+		return RunSummary{}, err
+	}
+	findings := make([]PolicyFinding, 0, len(results))
+	for _, f := range results {
+		findings = append(findings, PolicyFinding{RuleID: f.RuleID, Subject: f.Address, Message: f.Message})
 	}
 	ref := make([]string, 0, len(accounts))
 	for a := range accounts {
@@ -147,12 +135,6 @@ func (s *Service) EvaluateInventory(ctx context.Context, tenant, actor string) (
 	}
 	sort.Strings(ref)
 	return s.saveRun(ctx, tenantID, "inventory", "inventory", strings.Join(ref, ","), bundle.SHA256, bundle.Modules, actor, subjects, findings)
-}
-
-type opaFinding struct {
-	RuleID  string `json:"rule_id"`
-	Address string `json:"address"`
-	Message string `json:"message"`
 }
 
 // EvaluateScan turns a succeeded IaC scan into compliance evidence. It

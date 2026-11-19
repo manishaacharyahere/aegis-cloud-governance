@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/redact"
 )
 
@@ -28,13 +29,7 @@ type Op struct {
 }
 
 // State is the policy-relevant view of a resource (the OPA input document).
-type State struct {
-	ID            string         `json:"id"`
-	Type          string         `json:"type"`
-	Region        string         `json:"region"`
-	Tags          map[string]any `json:"tags"`
-	Configuration map[string]any `json:"configuration"`
-}
+type State = opa.Resource
 
 // Change is one field difference produced by applying ops.
 type Change struct {

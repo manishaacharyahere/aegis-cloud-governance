@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -49,11 +48,8 @@ const (
 	StatusVerificationFailed = "verification_failed"
 )
 
-// Policy is the subset of the OPA client used for simulation.
-type Policy interface {
-	Query(ctx context.Context, path string, input any, out any) error
-	Bundle(ctx context.Context) (opa.Bundle, error)
-}
+// Policy is what the simulation needs from OPA.
+type Policy = opa.Querier
 
 // Service is Module H.
 type Service struct {
@@ -251,27 +247,14 @@ func loadByPKLock(ctx context.Context, q querier, tenantID, pk, lock string) (re
 // failing evaluates the inventory policies on one state and returns the
 // sorted IDs of rules it fails (deny and warn).
 func (s *Service) failing(ctx context.Context, st State, policyConfig map[string]any) ([]string, error) {
-	var res struct {
-		Deny []struct {
-			RuleID string `json:"rule_id"`
-		} `json:"deny"`
-		Warn []struct {
-			RuleID string `json:"rule_id"`
-		} `json:"warn"`
+	findings, err := opa.EvaluateInventory(ctx, s.OPA, []opa.Resource{st}, policyConfig)
+	if err != nil {
+		return nil, err
 	}
-	if err := s.OPA.Query(ctx, "aegis.inventory", map[string]any{"resources": []State{st}, "config": policyConfig}, &res); err != nil {
-		return nil, fmt.Errorf("evaluate policies: %w", err)
+	if out := opa.FailingRules(findings)[st.ID]; out != nil {
+		return out, nil
 	}
-	set := map[string]bool{}
-	for _, f := range append(res.Deny, res.Warn...) {
-		set[f.RuleID] = true
-	}
-	out := make([]string, 0, len(set))
-	for id := range set {
-		out = append(out, id)
-	}
-	sort.Strings(out)
-	return out, nil
+	return []string{}, nil
 }
 
 func minus(a, b []string) []string {
@@ -656,7 +639,10 @@ func (s *Service) withLocked(ctx context.Context, tenant, id string, fn func(tx 
 // checkFresh marks the remediation stale if the resource or the policies
 // changed since it was simulated. The resource row stays share-locked until
 // the transaction ends, so it cannot change before the decision commits.
-func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor string) (resource, error) {
+//
+// The policy bundle is fetched by the caller before the row lock is taken
+// (policyBundle), so no OPA call happens while the remediation is locked.
+func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor string, b bundleCheck) (resource, error) {
 	cur, err := loadByPKLock(ctx, tx, x.tenantID, x.resourcePK, "FOR SHARE OF r")
 	if err != nil {
 		return resource{}, err
@@ -668,11 +654,10 @@ func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor strin
 	case cur.version != x.ResourceVersion || cur.sha != x.resourceSHA:
 		reason = fmt.Sprintf("the resource changed (version %d, simulated against %d)", cur.version, x.ResourceVersion)
 	default:
-		bundle, err := s.OPA.Bundle(ctx)
-		if err != nil {
-			return resource{}, fmt.Errorf("policy bundle: %w", err)
+		if b.err != nil {
+			return resource{}, fmt.Errorf("policy bundle: %w", b.err)
 		}
-		if bundle.SHA256 != x.PolicyBundleSHA {
+		if b.sha != x.PolicyBundleSHA {
 			reason = "the policies changed since the simulation"
 			break
 		}
@@ -700,6 +685,18 @@ func (s *Service) checkFresh(ctx context.Context, tx pgx.Tx, x *row, actor strin
 	return resource{}, &committing{fmt.Errorf("%w (%s)", ErrStale, reason)}
 }
 
+// bundleCheck is the policy bundle hash fetched before a row lock is taken;
+// an OPA error is kept and reported only if the hash is needed.
+type bundleCheck struct {
+	sha string
+	err error
+}
+
+func (s *Service) policyBundle(ctx context.Context) bundleCheck {
+	b, err := s.OPA.Bundle(ctx)
+	return bundleCheck{sha: b.SHA256, err: err}
+}
+
 // Decide records an approval or rejection. The requester cannot decide their
 // own remediation, nobody decides twice, and a stale plan cannot be approved.
 func (s *Service) Decide(ctx context.Context, tenant, actor, id, decision, comment string) (View, error) {
@@ -709,6 +706,7 @@ func (s *Service) Decide(ctx context.Context, tenant, actor, id, decision, comme
 	if len([]rune(comment)) > 1000 {
 		return View{}, fmt.Errorf("%w: comment must be at most 1000 characters", ErrInvalid)
 	}
+	b := s.policyBundle(ctx)
 	return s.withLocked(ctx, tenant, id, func(tx pgx.Tx, x *row) error {
 		if x.Status != StatusPending {
 			return fmt.Errorf("%w: remediation is %s, not pending_approval", ErrConflict, x.Status)
@@ -720,7 +718,7 @@ func (s *Service) Decide(ctx context.Context, tenant, actor, id, decision, comme
 			}
 			return &committing{fmt.Errorf("%w: the requester cannot approve or reject their own remediation", ErrForbidden)}
 		}
-		if _, err := s.checkFresh(ctx, tx, x, actor); err != nil {
+		if _, err := s.checkFresh(ctx, tx, x, actor, b); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO remediation_approvals (remediation_id, actor, decision, plan_sha256, comment)
@@ -755,11 +753,12 @@ func (s *Service) Decide(ctx context.Context, tenant, actor, id, decision, comme
 // set. It changes nothing in the cloud.
 func (s *Service) Release(ctx context.Context, tenant, actor, id string) (View, error) {
 	var native string
+	b := s.policyBundle(ctx)
 	v, err := s.withLocked(ctx, tenant, id, func(tx pgx.Tx, x *row) error {
 		if x.Status != StatusApproved {
 			return fmt.Errorf("%w: remediation is %s; only approved remediations can be released", ErrConflict, x.Status)
 		}
-		cur, err := s.checkFresh(ctx, tx, x, actor)
+		cur, err := s.checkFresh(ctx, tx, x, actor, b)
 		if err != nil {
 			return err
 		}
