@@ -64,30 +64,9 @@ func (b Bundle) SHA256() string {
 // maxConfigBytes caps how much resource configuration goes into evidence.
 const maxConfigBytes = 4096
 
-// scrub redacts sensitive keys at any depth (defence in depth: inventory
+// scrub redacts sensitive values at any depth (defence in depth: inventory
 // import already redacts) and returns a copy.
-func scrub(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for k, val := range t {
-			if redact.IsSensitiveKey(k) {
-				out[k] = redact.Placeholder
-				continue
-			}
-			out[k] = scrub(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(t))
-		for i, val := range t {
-			out[i] = scrub(val)
-		}
-		return out
-	default:
-		return v
-	}
-}
+func scrub(v any) any { return redact.Walk(v, "", nil) }
 
 // boundedConfig returns the scrubbed configuration, dropping keys
 // (alphabetically last first) until it fits maxConfigBytes.

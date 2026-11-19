@@ -126,7 +126,7 @@ func Normalize(s Snapshot) NormalizedSnapshot {
 		}
 
 		var redacted []string
-		n.Configuration = redactMap(r.Configuration, "", &redacted)
+		n.Configuration, _ = redact.Walk(r.Configuration, "", &redacted).(map[string]any)
 		for _, p := range redacted {
 			out.Warnings = append(out.Warnings, Warning{r.ResourceID, "sensitive_attribute_redacted", p})
 		}
@@ -157,49 +157,6 @@ func Normalize(s Snapshot) NormalizedSnapshot {
 	}
 	out.SHA256 = hex.EncodeToString(h.Sum(nil))
 	return out
-}
-
-// redactMap returns a deep copy of cfg with sensitive values replaced, recording
-// the redacted paths. Nil maps become empty maps so hashes are stable.
-func redactMap(cfg map[string]any, prefix string, paths *[]string) map[string]any {
-	out := make(map[string]any, len(cfg))
-	keys := make([]string, 0, len(cfg))
-	for k := range cfg {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		p := k
-		if prefix != "" {
-			p = prefix + "." + k
-		}
-		if redact.IsSensitiveKey(k) {
-			if cfg[k] != nil {
-				*paths = append(*paths, p)
-				out[k] = Redacted
-			} else {
-				out[k] = nil
-			}
-			continue
-		}
-		out[k] = redactValue(cfg[k], p, paths)
-	}
-	return out
-}
-
-func redactValue(v any, path string, paths *[]string) any {
-	switch t := v.(type) {
-	case map[string]any:
-		return redactMap(t, path, paths)
-	case []any:
-		cp := make([]any, len(t))
-		for i, e := range t {
-			cp[i] = redactValue(e, path, paths)
-		}
-		return cp
-	default:
-		return v
-	}
 }
 
 func dedupeRelationships(in []Relationship) []Relationship {

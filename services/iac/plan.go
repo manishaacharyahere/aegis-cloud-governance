@@ -402,12 +402,10 @@ func redactAny(v, mask any, path string, paths *[]string) any {
 		out := make(map[string]any, len(t))
 		for k, x := range t {
 			p := path + "." + k
-			if redact.IsSensitiveKey(k) && x != nil && x != "" {
-				if _, isBool := x.(bool); !isBool {
-					*paths = append(*paths, p)
-					out[k] = redact.Placeholder
-					continue
-				}
+			if redact.ShouldRedact(k, x) { // the same rule as inventory and investigator
+				*paths = append(*paths, p)
+				out[k] = redact.Placeholder
+				continue
 			}
 			out[k] = redactAny(x, mm[k], p, paths)
 		}
