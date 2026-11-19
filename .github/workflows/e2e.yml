@@ -78,7 +78,8 @@ jobs:
         working-directory: apps/web
         run: |
           npm ci --no-audit --no-fund
-          npx playwright install --with-deps chromium
+          # apt mirrors occasionally hang: bound each attempt and retry.
+          for i in 1 2 3; do timeout 300 npx playwright install --with-deps chromium && break; echo "retrying browser install"; done
           nohup npm run dev > ../../web.log 2>&1 &
           for i in $(seq 1 60); do curl -sf localhost:5173 >/dev/null && break; sleep 1; done
       - name: journeys
