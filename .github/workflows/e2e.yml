@@ -55,14 +55,14 @@ jobs:
       - name: demo roles
         run: |
           for i in $(seq 1 60); do curl -sf localhost:5556/dex/healthz >/dev/null && break; sleep 2; done
-          TOKEN=$(scripts/dev-token.sh admin@aegis.local)
+          TOKEN=$(bash scripts/dev-token.sh admin@aegis.local)
           for b in alice@aegis.local:analyst bob@aegis.local:approver carol@aegis.local:approver viewer@aegis.local:viewer; do
             curl -sf -X POST -H "Authorization: Bearer $TOKEN" -H "X-Aegis-Tenant: demo" -H "Content-Type: application/json" \
               -d "{\"subject\":\"${b%%:*}\",\"role\":\"${b##*:}\"}" localhost:8080/api/v1/access/bindings
           done
       - name: IaC worker (providers from an offline mirror)
         run: |
-          scripts/seed-terraform-mirror.sh
+          bash scripts/seed-terraform-mirror.sh
           set -a; . ./.env; set +a
           AEGIS_DATABASE_URL="postgres://aegis:${POSTGRES_PASSWORD}@127.0.0.1:5432/aegis?sslmode=disable" \
           AEGIS_OPA_URL=http://127.0.0.1:8181 AEGIS_TF_MIRROR_VOLUME=aegis-tf-mirror \
