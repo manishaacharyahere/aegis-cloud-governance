@@ -22,6 +22,8 @@ docker compose --profile core --profile observability up -d
 | `http_server_request_duration_seconds` (histogram) | otelhttp | labels: method, status code, `http_route` (the route *pattern*, e.g. `/api/v1/investigations/{id}`) |
 | request and response body sizes | otelhttp | same labels |
 | `aegis_outbox_published_total`, `aegis_outbox_failed_total`, `aegis_outbox_backlog`, `aegis_outbox_parked` | outbox relay | backlog and parked are sampled after every batch; alert on `aegis_outbox_parked > 0` |
+| `aegis_job_runs_total{job,outcome}`, `aegis_job_duration_seconds{job}`, `aegis_job_last_success_seconds{job}` | retention, scheduled evaluation, import reactor | alert on time since the last success, not only on failures: a job that stopped running fails nothing |
+| `aegis_iac_queue_depth{status}`, `aegis_iac_queue_oldest_queued_seconds` | scan queue, read on each scrape | a growing oldest wait means no worker is taking scans |
 | Go runtime and process metrics | Prometheus collectors | heap, goroutines, GC, file descriptors |
 | Traces | otelhttp, one span per request named after the route pattern | exported over OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT`; W3C trace context is propagated |
 | Logs | slog JSON | every request log line has `request_id` and, when tracing is active, `trace_id`, so logs and traces can be joined |
@@ -68,6 +70,18 @@ These checks were made with the profile running and traffic sent to three routes
   `AEGIS_WORKER_METRICS_ADDR=:9465` to expose `/metrics`. The worker runs on the
   host, and Prometheus scrapes it at `host.docker.internal:9465` (job
   `aegis-worker`; the target is down while the worker is not running).
+
+## Alerts
+
+`infrastructure/observability/alerts.yml` is loaded by the observability
+profile:
+
+- **Job not succeeding** for 12 hours, or **failing** more than 3 times an hour.
+- **A scan waiting** more than 10 minutes.
+- **Parked outbox events.**
+- **More than 5 % of API requests failing** with a 5xx.
+
+CI checks the rules with `promtool`.
 
 ## Not yet instrumented
 

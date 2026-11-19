@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/migrations"
+	"go.opentelemetry.io/otel"
+
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/config"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/database"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
@@ -100,6 +102,9 @@ func run() error {
 		return err
 	}
 	defer bg.Close()
+	if err := iac.RegisterQueueMetrics(otel.GetMeterProvider().Meter("aegis/iac"), pool); err != nil {
+		return fmt.Errorf("queue metrics: %w", err)
+	}
 
 	// Migrations run as the schema owner when a separate URL is given; the
 	// API itself then runs as the least-privilege aegis_app role.

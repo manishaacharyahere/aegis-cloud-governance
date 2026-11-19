@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"os"
 	"path/filepath"
 	"sync"
@@ -267,5 +269,46 @@ func TestPolicyGroundTruth(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The queue gauges read the real table: a waiting scan shows as queued, with
+// its waiting time, so an alert can fire when no worker takes scans.
+func TestScanQueueMetrics(t *testing.T) {
+	pool, _ := migratedPool(t)
+	ctx := context.Background()
+	s := iac.NewStore(pool)
+	if _, _, err := s.Enqueue(ctx, "demo", "tester", "insecure-storage", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE iac_scans SET created_at = now() - interval '5 minutes'`); err != nil {
+		t.Fatal(err)
+	}
+	reader := sdkmetric.NewManualReader()
+	if err := iac.RegisterQueueMetrics(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader)).Meter("t"), pool); err != nil {
+		t.Fatal(err)
+	}
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatal(err)
+	}
+	var queued int64 = -1
+	var oldest float64
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			switch m.Name {
+			case "aegis.iac.queue.depth":
+				for _, p := range m.Data.(metricdata.Gauge[int64]).DataPoints {
+					if v, _ := p.Attributes.Value("status"); v.AsString() == "queued" {
+						queued = p.Value
+					}
+				}
+			case "aegis.iac.queue.oldest_queued":
+				oldest = m.Data.(metricdata.Gauge[float64]).DataPoints[0].Value
+			}
+		}
+	}
+	if queued != 1 || oldest < 290 {
+		t.Errorf("queued = %d, oldest = %.0f s; want 1 and about 300", queued, oldest)
 	}
 }

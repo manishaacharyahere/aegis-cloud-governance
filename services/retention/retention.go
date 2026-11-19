@@ -11,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 )
 
 // Policy says what to keep. Zero values disable that rule.
@@ -98,8 +100,13 @@ func ptr[T any](v T) *T { return &v }
 func Run(ctx context.Context, pool *pgxpool.Pool, p Policy, every time.Duration, log *slog.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
+	job := telemetry.NewJob("retention")
 	for {
+		start := time.Now()
 		res, err := RunOnce(ctx, pool, p)
+		if ctx.Err() == nil {
+			job.Observe(start, err)
+		}
 		switch {
 		case err != nil && ctx.Err() == nil:
 			log.Warn("retention run failed", "error", err)

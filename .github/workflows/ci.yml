@@ -121,6 +121,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f infrastructure/docker/api.Dockerfile -t aegis-api:ci .
+      - name: alert rules
+        run: docker run --rm --entrypoint promtool -v "$PWD/infrastructure/observability:/c:ro" prom/prometheus:v3.15.1 check rules /c/alerts.yml
       - name: compose config
         run: POSTGRES_PASSWORD=ci AEGIS_OPA_TOKEN=ci AEGIS_NATS_PASSWORD=ci AEGIS_APP_DB_PASSWORD=ci docker compose --profile core config --quiet
 

@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/risk"
@@ -284,13 +285,20 @@ func (a *Automation) tenants(ctx context.Context) ([]string, error) {
 func (a *Automation) RunScheduler(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
+	job := telemetry.NewJob("scheduled_evaluation")
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
-		if err := a.pass(ctx); err != nil && ctx.Err() == nil {
+		start := time.Now()
+		err := a.pass(ctx)
+		if ctx.Err() != nil {
+			continue
+		}
+		job.Observe(start, err)
+		if err != nil {
 			a.log().Warn("scheduled evaluation failed", "error", err)
 		}
 	}

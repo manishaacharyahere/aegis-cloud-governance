@@ -218,6 +218,7 @@ services:
     ports: ["127.0.0.1:9090:9090"]
     volumes:
       - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - promdata:/prometheus
     deploy:
       resources:

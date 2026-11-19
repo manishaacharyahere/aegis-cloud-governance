@@ -11,8 +11,12 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/telemetry"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/outbox"
 )
+
+// reactorJob records each post-import evaluation (see telemetry.Job).
+var reactorJob = telemetry.NewJob("import_reactor")
 
 // ImportSubject matches every tenant's completed inventory imports.
 const ImportSubject = "aegis.*.inventory_import.inventory_import_completed"
@@ -80,7 +84,12 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 			settle(errors.Is(err, pgx.ErrNoRows))
 			return
 		}
-		if err := a.Evaluate(ctx, slug); err != nil {
+		start := time.Now()
+		err := a.Evaluate(ctx, slug)
+		if ctx.Err() == nil {
+			reactorJob.Observe(start, err)
+		}
+		if err != nil {
 			if ctx.Err() == nil {
 				a.log().Warn("reactor: evaluation after import failed; will retry", "tenant", slug, "error", err)
 			}
