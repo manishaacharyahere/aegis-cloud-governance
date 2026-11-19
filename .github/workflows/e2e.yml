@@ -1,0 +1,89 @@
+name: e2e
+
+# The seven browser journeys against the whole stack: API in OIDC mode with
+# real Dex sign-in, PostgreSQL, OPA, NATS, the IaC worker running real
+# Terraform scans, and the dashboard. Nothing is mocked.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: throwaway configuration
+        run: |
+          r() { openssl rand -hex 24; }
+          cat > .env <<EOF
+          POSTGRES_DB=aegis
+          POSTGRES_USER=aegis
+          POSTGRES_PASSWORD=$(r)
+          AEGIS_OPA_TOKEN=$(r)
+          AEGIS_APP_DB_PASSWORD=$(r)
+          AEGIS_NATS_PASSWORD=$(r)
+          AEGIS_SIGNING_KEY=$(go run ./cmd/aegis-verify -new-key 2>/dev/null | sed -n 's/^AEGIS_SIGNING_KEY=//p')
+          POSTGRES_HOST_PORT=5432
+          AEGIS_AI_PROVIDER=none
+          AEGIS_AUTH_MODE=oidc
+          AEGIS_BOOTSTRAP_ADMINS=admin@aegis.local
+          GRAFANA_ADMIN_PASSWORD=$(r)
+          EOF
+          sed -i 's/^ *//' .env
+      - name: start the stack
+        run: |
+          # No --wait: the one-shot migrate service exits by design.
+          docker compose --profile core --profile auth up -d --build
+          for i in $(seq 1 90); do curl -sf localhost:8080/readyz && break; sleep 2; done; curl -sf localhost:8080/readyz
+      - name: demo roles
+        run: |
+          for i in $(seq 1 60); do curl -sf localhost:5556/dex/healthz >/dev/null && break; sleep 2; done
+          TOKEN=$(scripts/dev-token.sh admin@aegis.local)
+          for b in alice@aegis.local:analyst bob@aegis.local:approver carol@aegis.local:approver viewer@aegis.local:viewer; do
+            curl -sf -X POST -H "Authorization: Bearer $TOKEN" -H "X-Aegis-Tenant: demo" -H "Content-Type: application/json" \
+              -d "{\"subject\":\"${b%%:*}\",\"role\":\"${b##*:}\"}" localhost:8080/api/v1/access/bindings
+          done
+      - name: IaC worker (providers from an offline mirror)
+        run: |
+          scripts/seed-terraform-mirror.sh
+          set -a; . ./.env; set +a
+          AEGIS_DATABASE_URL="postgres://aegis:${POSTGRES_PASSWORD}@127.0.0.1:5432/aegis?sslmode=disable" \
+          AEGIS_OPA_URL=http://127.0.0.1:8181 AEGIS_TF_MIRROR_VOLUME=aegis-tf-mirror \
+            nohup go run ./cmd/aegis-worker > worker.log 2>&1 &
+      - name: dashboard
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          nohup npm run dev > ../../web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf localhost:5173 >/dev/null && break; sleep 1; done
+      - name: journeys
+        working-directory: apps/web
+        run: npx playwright test e2e/journeys.spec.ts
+      - name: logs
+        if: failure()
+        run: |
+          tail -50 worker.log web.log || true
+          docker compose --profile core --profile auth logs --tail=60 api dex || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: apps/web/test-results
