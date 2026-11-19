@@ -52,9 +52,10 @@ authentication and an authorization policy that only allows evaluation.
 approves passes the real compliance check, because it is the same policy.
 
 **Cost.** The shape of `input.resources[]` is a contract between Go and
-Rego, and it is written in three places. A missing field means "no
-finding", which reads as compliant. That is the main open design debt;
-the fix is one shared evaluator (review item DESIGN-3).
+Rego, and a missing field means "no finding", which reads as compliant. It
+used to be written in three places; it is now one type (`opa.Resource`)
+and one evaluator (`opa.EvaluateInventory`) behind a small `opa.Querier`
+interface, which also lets the evaluation be unit-tested with a fake OPA.
 
 ## 4. Deterministic first, AI second
 
@@ -99,8 +100,9 @@ becomes stale.
 **Why.** Checks done only in the UI can be bypassed. Checks done before the
 lock can race.
 
-**Cost.** OPA is called while the row is locked (review item D2). That is
-acceptable at this scale, but is the next thing to move out of the lock.
+**Cost.** The checks need the current policy bundle hash from OPA. It is
+fetched *before* the row lock is taken, so no network call happens while
+the remediation is locked; the comparison itself happens under the lock.
 
 ## 7. Aegis never touches the cloud
 
@@ -174,11 +176,11 @@ setting the tenant per transaction.
 
 ## What I would do next
 
-1. **One policy evaluator.** A shared OPA evaluator, so the policy input is
-   defined once.
-2. **No OPA calls under row locks.**
-3. **Row-level security.**
-4. **A cost rollup table**, so the summary is independent of how much
+1. **Row-level security.**
+2. **A cost rollup table**, so the summary is independent of how much
    history there is.
-5. **Running scans in Kubernetes**, by moving the scan worker to a sandboxed
+3. **Running scans in Kubernetes**, by moving the scan worker to a sandboxed
    runtime.
+
+(A shared policy evaluator and moving OPA calls out of row locks, the
+first two items here before, are done.)
