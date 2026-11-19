@@ -57,6 +57,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 20s # JetStream recovers its store before it reports healthy
     deploy:
       resources:
         limits: { memory: 256m }
