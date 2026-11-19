@@ -86,6 +86,44 @@ assessment since the third fix below.
    per-finding search it replaced. An index on `(tenant_id, rule_id, subject)`
    was kept for the history query.
 
+## Sustained load (k6)
+
+[`benchmarks/load/aegis.js`](../benchmarks/load/aegis.js) simulates 20
+people using the dashboard at the same time. The users ramp up over 30 s and
+then browse for 2 minutes across 11 read routes. Each user stays under the
+per-user rate limit, at about 3.5 requests per second. The run fails if p95
+exceeds 250 ms, p99 exceeds 600 ms, any single route's p95 exceeds 500 ms,
+or more than 1 % of requests fail.
+
+The setup was one laptop running the Compose stack: the API with 20
+connections, and PostgreSQL holding 292 140 cost rows plus the e2e
+inventory. 2026-11-19.
+
+| Route | Before: median / p95 | After: median / p95 / p99 |
+|---|---|---|
+| cost summary | **862 / 934 ms** | **245 / 290 / 334 ms** |
+| attack paths | 11.6 / 14.5 ms | 11.6 / 16.7 / 21.3 ms |
+| compliance coverage | 5.5 / 7.5 ms | 5.6 / 8.4 / 11.1 ms |
+| risk, resources, remediations, recommendations, drift, audit, me | 0.6–2.7 / 1.0–4.4 ms | 0.6–2.7 / 1.1–4.6 / 3.3–8.0 ms |
+| **All requests** | p95 857 ms: **failed the threshold** | p95 243 ms, p99 273 ms, 0 failures in 10 187 requests: **passed** |
+
+The first run found that the cost summary scanned the tenant's whole cost
+history three times (for the total, the groups and the months). It now
+reduces the history to per-group, per-day totals in one pass and derives the
+rest from those, which made it 3.5× faster. An integration test checks the
+new summary against plain SQL. It still reads every row in the requested
+range. A daily rollup table maintained at import would make it independent
+of history length; that is the next step if cost history grows further.
+
+To run it:
+
+```bash
+docker run --rm --network aegis_default -v "$PWD/benchmarks/load:/scripts:ro"   -e AEGIS_URL=http://<api>:8080 grafana/k6:1.8.2 run /scripts/aegis.js
+```
+
+Point it at an API in development mode on the Compose network, or pass
+`AEGIS_TOKEN` for OIDC.
+
 ## Resilience
 
 | Failure | Test | Behaviour |
@@ -102,6 +140,6 @@ assessment since the third fix below.
 
 - Multi-node deployment, network partitions between API replicas, and
   PostgreSQL failover.
-- Sustained soak tests (hours), and write-heavy concurrent load (the HTTP load
-  test above is read-only).
+- Soak tests (hours), and write-heavy concurrent load (both load tests above
+  are read-only).
 - Sizes beyond 10 000 resources.

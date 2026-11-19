@@ -105,6 +105,41 @@ func TestFinOpsLifecycle(t *testing.T) {
 	if keys["analytics"] != 56 || keys["(unallocated)"] != 285 || sum.Unallocated <= 0 {
 		t.Errorf("summary groups %v unallocated %.4f", keys, sum.Unallocated)
 	}
+	// The summary is computed in one pass; it must agree with plain SQL.
+	var total float64
+	var from, to string
+	if err := pool.QueryRow(ctx, `SELECT sum(cost_usd)::float8, min(usage_date)::text, max(usage_date)::text FROM cost_records`).Scan(&total, &from, &to); err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(sum.TotalUSD-total) > 0.01 || sum.From != from || sum.To != to {
+		t.Errorf("total %.2f %s..%s, SQL says %.2f %s..%s", sum.TotalUSD, sum.From, sum.To, total, from, to)
+	}
+	months, err := pool.Query(ctx, `SELECT to_char(usage_date, 'YYYY-MM'), sum(cost_usd)::float8, count(DISTINCT usage_date)
+		FROM cost_records GROUP BY 1 ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := 0
+	for months.Next() {
+		var m string
+		var usd float64
+		var days int
+		if err := months.Scan(&m, &usd, &days); err != nil {
+			t.Fatal(err)
+		}
+		if i >= len(sum.Monthly) || sum.Monthly[i]["month"] != m || math.Abs(sum.Monthly[i]["usd"].(float64)-usd) > 0.01 || sum.Monthly[i]["days"] != days {
+			t.Errorf("month %d: got %v, SQL says %s %.2f %d days", i, sum.Monthly, m, usd, days)
+		}
+		i++
+	}
+	if months.Err() != nil || i != len(sum.Monthly) {
+		t.Errorf("months: %d from SQL, %d in the summary (%v)", i, len(sum.Monthly), months.Err())
+	}
+	for j := 1; j < len(sum.Groups); j++ {
+		if sum.Groups[j].USD > sum.Groups[j-1].USD {
+			t.Errorf("groups not sorted by spend: %v", sum.Groups)
+		}
+	}
 	if _, err := svc.Summarize(ctx, "demo", "team; DROP TABLE cost_records", "", ""); !errors.Is(err, finops.ErrInvalid) {
 		t.Fatalf("group_by injection not rejected: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -225,61 +226,86 @@ func (s *Service) Summarize(ctx context.Context, tenant, groupBy, from, to strin
 		return Summary{}, err
 	}
 	out := Summary{GroupBy: groupBy, Groups: []Group{}, Monthly: []map[string]any{}}
-	var minD, maxD *time.Time
-	if err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(cost_usd), 0)::float8, min(usage_date), max(usage_date),
+	// One pass over the tenant's cost rows, reduced to (group, day) totals in
+	// the database (thousands of rows, not millions); the total, the groups
+	// and the months are derived from that here. It used to be three full
+	// scans: the load test measured 860 ms at the median for 292k rows.
+	rows, err := s.Pool.Query(ctx, `SELECT `+col+`, usage_date, sum(cost_usd)::float8,
 		coalesce(sum(cost_usd) FILTER (WHERE team = ''), 0)::float8
-		FROM cost_records WHERE tenant_id = $1 AND usage_date BETWEEN $2 AND $3`, tenantID, f, t).Scan(&out.TotalUSD, &minD, &maxD, &out.Unallocated); err != nil {
+		FROM cost_records WHERE tenant_id = $1 AND usage_date BETWEEN $2 AND $3 GROUP BY 1, 2`, tenantID, f, t)
+	if err != nil {
 		return Summary{}, err
 	}
-	if minD == nil {
+	defer rows.Close()
+	byGroup := map[string]float64{}
+	type month struct {
+		usd  float64
+		days map[time.Time]bool
+	}
+	byMonth := map[string]*month{}
+	var minD, maxD time.Time
+	for rows.Next() {
+		var key string
+		var day time.Time
+		var usd, unalloc float64
+		if err := rows.Scan(&key, &day, &usd, &unalloc); err != nil {
+			return Summary{}, err
+		}
+		out.TotalUSD += usd
+		out.Unallocated += unalloc
+		byGroup[key] += usd
+		mk := day.Format("2006-01")
+		m := byMonth[mk]
+		if m == nil {
+			m = &month{days: map[time.Time]bool{}}
+			byMonth[mk] = m
+		}
+		m.usd += usd
+		m.days[day] = true
+		if minD.IsZero() || day.Before(minD) {
+			minD = day
+		}
+		if day.After(maxD) {
+			maxD = day
+		}
+	}
+	// A broken stream ends the loop early; never use a partial result.
+	if err := rows.Err(); err != nil {
+		return Summary{}, err
+	}
+	if minD.IsZero() {
 		return Summary{}, ErrNoData
 	}
 	out.From, out.To = minD.Format("2006-01-02"), maxD.Format("2006-01-02")
 	if out.TotalUSD > 0 {
 		out.Unallocated = round4(out.Unallocated / out.TotalUSD)
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT `+col+`, sum(cost_usd)::float8 FROM cost_records
-		WHERE tenant_id = $1 AND usage_date BETWEEN $2 AND $3 GROUP BY 1 ORDER BY 2 DESC`, tenantID, f, t)
-	if err != nil {
-		return Summary{}, err
-	}
-	for rows.Next() {
-		var g Group
-		if err := rows.Scan(&g.Key, &g.USD); err != nil {
-			rows.Close()
-			return Summary{}, err
-		}
-		if g.Key == "" {
+	for key, usd := range byGroup {
+		g := Group{Key: key, USD: round2(usd)}
+		if key == "" {
 			g.Key = "(unallocated)"
 		}
 		if out.TotalUSD > 0 {
-			g.Share = round4(g.USD / out.TotalUSD)
+			g.Share = round4(usd / out.TotalUSD)
 		}
-		g.USD = round2(g.USD)
 		out.Groups = append(out.Groups, g)
 	}
-	rows.Close()
-	// A broken stream ends the loop early; never use a partial result.
-	if err := rows.Err(); err != nil {
-		return Summary{}, err
-	}
-	rows, err = s.Pool.Query(ctx, `SELECT to_char(date_trunc('month', usage_date), 'YYYY-MM'), sum(cost_usd)::float8,
-		count(DISTINCT usage_date) FROM cost_records WHERE tenant_id = $1 AND usage_date BETWEEN $2 AND $3 GROUP BY 1 ORDER BY 1`, tenantID, f, t)
-	if err != nil {
-		return Summary{}, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var m string
-		var usd float64
-		var days int
-		if err := rows.Scan(&m, &usd, &days); err != nil {
-			return Summary{}, err
+	sort.Slice(out.Groups, func(i, j int) bool {
+		if out.Groups[i].USD != out.Groups[j].USD {
+			return out.Groups[i].USD > out.Groups[j].USD
 		}
-		out.Monthly = append(out.Monthly, map[string]any{"month": m, "usd": round2(usd), "days": days})
+		return out.Groups[i].Key < out.Groups[j].Key
+	})
+	months := make([]string, 0, len(byMonth))
+	for k := range byMonth {
+		months = append(months, k)
+	}
+	sort.Strings(months)
+	for _, k := range months {
+		out.Monthly = append(out.Monthly, map[string]any{"month": k, "usd": round2(byMonth[k].usd), "days": len(byMonth[k].days)})
 	}
 	out.TotalUSD = round2(out.TotalUSD)
-	return out, rows.Err()
+	return out, nil
 }
 
 // TagCoverage reports how much spend is attributable to an owner.
