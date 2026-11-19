@@ -15,7 +15,7 @@ publishes those rows to the JetStream stream `AEGIS_EVENTS`.
 | Failures | `last_error` is recorded per row. A broker outage (disconnected, no responders, timeout) does **not** count as an attempt: the batch stops and the relay backs off, so a long outage never parks events. A message the broker refuses counts; rows refused 10 times are parked. The `aegis_outbox_parked` gauge and a warning log (when the number changes) show them; an admin requeues them with `POST /api/v1/admin/outbox/requeue` |
 | Ordering | not guaranteed. Events of one transaction share `created_at`, and a failed event is retried after later ones. Consumers must not assume order (today's only consumer, the import reactor, does not) |
 | Table retention | published rows are deleted from `outbox_events` after 7 days by the retention job |
-| Authentication | NATS anonymous access is off; the relay uses the `aegis_api` user (`AEGIS_NATS_USER` / `AEGIS_NATS_PASSWORD`). It publishes to `aegis.>` and also holds `$JS.API.>` to create the stream and the reactor's consumer, which includes stream administration |
+| Authentication | NATS anonymous access is off; the relay uses the `aegis_api` user (`AEGIS_NATS_USER` / `AEGIS_NATS_PASSWORD`). It may publish to `aegis.>` and call only the JetStream operations Aegis uses on the `AEGIS_EVENTS` stream (create/update/info of the stream; create/info/fetch/ack of its consumers). Purging or deleting streams, and any other stream, is refused (`TestOutboxRelay` checks the purge) |
 | Backoff | exponential up to 30 s while the broker is down; full batches are relayed back to back |
 | Stream retention (NATS) | 7 days, file storage |
 

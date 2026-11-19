@@ -140,11 +140,17 @@ func TestOutboxRelay(t *testing.T) {
 			t.Error("publishing outside aegis.> was allowed")
 		}
 	}
+	// The API's NATS user may not purge or delete streams, so count what
+	// this test adds instead of starting from an empty stream.
 	stream, err := bus.JetStream().Stream(ctx, natsbus.Stream)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := stream.Purge(ctx); err != nil {
+	if err := stream.Purge(ctx); err == nil {
+		t.Error("the API's NATS user was allowed to purge the event stream")
+	}
+	start, err := stream.Info(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET published_at = NULL, attempts = 0`); err != nil {
@@ -171,8 +177,8 @@ func TestOutboxRelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.State.Msgs != 500 {
-		t.Fatalf("stream holds %d messages, want 500 (duplicates must be dropped)", info.State.Msgs)
+	if got := info.State.Msgs - start.State.Msgs; got != 500 {
+		t.Fatalf("stream gained %d messages, want 500 (duplicates must be dropped)", got)
 	}
 	cons, err := stream.OrderedConsumer(ctx, jetstream.OrderedConsumerConfig{FilterSubjects: []string{"aegis.*.test.test_event"}})
 	if err != nil {
