@@ -11,6 +11,11 @@ COPY apps/web/ ./
 RUN npm run build
 
 FROM caddy:2.11.7-alpine
+# The official binary carries the cap_net_bind_service file capability, and
+# the kernel refuses to exec it in a container that drops all capabilities
+# (as the Helm chart does). Port 8080 needs none: a plain copy has no file
+# capabilities.
+RUN cp /usr/bin/caddy /usr/bin/caddy.tmp && mv /usr/bin/caddy.tmp /usr/bin/caddy
 COPY infrastructure/web/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /web/dist /srv
 # Caddy keeps nothing needed across restarts here (no ACME: TLS ends at the
