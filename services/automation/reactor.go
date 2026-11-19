@@ -3,9 +3,11 @@ package automation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/natsbus"
@@ -74,7 +76,8 @@ func (a *Automation) RunReactor(ctx context.Context, js jetstream.JetStream, deb
 		var slug string
 		if err := a.Pool.QueryRow(ctx, `SELECT slug FROM tenants WHERE id = $1`, tenantID).Scan(&slug); err != nil {
 			a.log().Warn("reactor: unknown tenant", "tenant_id", tenantID, "error", err)
-			settle(ctx.Err() == nil) // a deleted tenant will never succeed: do not redeliver
+			// Only a deleted tenant will never succeed; a database error is retried.
+			settle(errors.Is(err, pgx.ErrNoRows))
 			return
 		}
 		if err := a.Evaluate(ctx, slug); err != nil {

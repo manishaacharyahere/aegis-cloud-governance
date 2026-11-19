@@ -16,7 +16,7 @@ func TestListScansPaging(t *testing.T) {
 	ctx := context.Background()
 	want := map[string]bool{}
 	for i := range 5 {
-		sc, _, err := s.Enqueue(ctx, "demo", "insecure-storage", fmt.Sprintf("list-%d", i))
+		sc, _, err := s.Enqueue(ctx, "demo", "tester", "insecure-storage", fmt.Sprintf("list-%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +62,7 @@ func TestResourceTypes(t *testing.T) {
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	ds := synthetic.Generate(synthetic.Options{Seed: 3, Resources: 200, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	types, err := inv.ResourceTypes(ctx, "demo")
@@ -76,15 +76,15 @@ func TestResourceTypes(t *testing.T) {
 	if live := count(t, pool, `SELECT count(*) FROM resources WHERE deleted_at IS NULL`); total != live || len(types) < 5 {
 		t.Fatalf("types=%d total=%d live=%d", len(types), total, live)
 	}
-	if other, _ := inv.ResourceTypes(ctx, "other"); len(other) != 0 {
-		t.Errorf("types leak across tenants: %v", other)
+	if other, err := inv.ResourceTypes(ctx, "other"); err != nil || len(other) != 0 {
+		t.Errorf("types leak across tenants: %v %v", other, err)
 	}
 	accts, err := inv.ListAccounts(ctx, "demo")
 	if err != nil || len(accts) != 1 || accts[0].Resources != total || accts[0].ExternalID != ds.Snapshot.Account.ExternalID {
 		t.Fatalf("accounts: %+v %v", accts, err)
 	}
-	if other, _ := inv.ListAccounts(ctx, "other"); len(other) != 0 {
-		t.Errorf("accounts leak across tenants: %v", other)
+	if other, err := inv.ListAccounts(ctx, "other"); err != nil || len(other) != 0 {
+		t.Errorf("accounts leak across tenants: %v %v", other, err)
 	}
 }
 

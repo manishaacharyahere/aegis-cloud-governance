@@ -420,14 +420,17 @@ func (s *Service) GenerateRecommendations(ctx context.Context, tenant, actor, as
 	recs := Recommend(usages)
 
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
+		// One round trip for all upserts instead of one per recommendation.
+		batch := &pgx.Batch{}
 		for _, r := range recs {
-			if _, err := tx.Exec(ctx, `INSERT INTO recommendations (tenant_id, kind, resource_id, team, as_of, details, projected_monthly_savings)
+			batch.Queue(`INSERT INTO recommendations (tenant_id, kind, resource_id, team, as_of, details, projected_monthly_savings)
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 				ON CONFLICT (tenant_id, kind, resource_id) WHERE status = 'open' DO UPDATE SET
 					as_of = EXCLUDED.as_of, details = EXCLUDED.details, projected_monthly_savings = EXCLUDED.projected_monthly_savings`,
-				tenantID, r.Kind, r.ResourceID, r.Team, end, mustJSON(r.Details), r.ProjectedMonthly); err != nil {
-				return err
-			}
+				tenantID, r.Kind, r.ResourceID, r.Team, end, mustJSON(r.Details), r.ProjectedMonthly)
+		}
+		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+			return fmt.Errorf("save recommendations: %w", err)
 		}
 		return audit.Append(ctx, tx, tenantID, audit.Event{Actor: actor, Action: "recommendations.generate", TargetType: "tenant",
 			TargetID: tenantID, Outcome: "success", Details: map[string]any{"as_of": end.Format("2006-01-02"), "count": len(recs)}})

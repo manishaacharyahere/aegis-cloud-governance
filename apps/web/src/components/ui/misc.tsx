@@ -117,8 +117,18 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       <section role="alert" className="rounded-lg border border-danger/30 bg-surface p-6">
         <h2 className="m-0 text-base font-semibold">This page failed to render</h2>
         <p className="mt-1 text-[13px] text-danger">{this.state.error.message}</p>
-        <Button className="mt-3" onClick={() => this.setState({ error: null })}>Try again</Button>
+        {chunkFailed(this.state.error) ? (
+          // A lazy page that failed to download stays failed until the app reloads.
+          <>
+            <p className="mt-1 text-[13px] text-fg-muted">Aegis may have been updated. Reload to get the latest version.</p>
+            <Button className="mt-3" onClick={() => window.location.reload()}>Reload</Button>
+          </>
+        ) : <Button className="mt-3" onClick={() => this.setState({ error: null })}>Try again</Button>}
       </section>
     )
   }
+}
+
+function chunkFailed(e: Error): boolean {
+  return e.name === 'ChunkLoadError' || /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(e.message)
 }

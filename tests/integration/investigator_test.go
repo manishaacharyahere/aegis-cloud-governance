@@ -40,7 +40,7 @@ func seedEstate(t *testing.T, opaURL string) (*pgxpool.Pool, map[string]investig
 	oc := testOPA(opaURL)
 
 	v1 := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", v1.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v1.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	dsvc := &drift.Service{Pool: pool, OPA: oc, Config: drift.DefaultConfig(), RuleSeverity: cat.RuleSeverities()}
@@ -48,7 +48,7 @@ func seedEstate(t *testing.T, opaURL string) (*pgxpool.Pool, map[string]investig
 		t.Fatal(err)
 	}
 	v2, _ := synthetic.Mutate(v1, synthetic.MutateOptions{Seed: 5, Modify: 30, Delete: 10, Add: 12, CapturedAt: base.Add(24 * time.Hour)})
-	if _, err := inv.Import(ctx, "demo", v2.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v2.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := dsvc.Compare(ctx, "demo", "", "bob"); err != nil {
@@ -229,7 +229,7 @@ func TestInvestigatorInjectedTags(t *testing.T) {
 			Account: inventory.Account{Provider: "aws", ExternalID: acct, Name: "a" + acct},
 			Resources: []inventory.Resource{{ResourceID: "aws_s3_bucket.shared", ResourceType: "aws_s3_bucket", Region: "us-east-1",
 				Tags: map[string]string{"owner": "x", "environment": "dev", "cost_center": "c", "note": injected, "api_token": "s3cr3t"}}}}
-		if _, err := inv.Import(ctx, "demo", snap); err != nil {
+		if _, err := inv.Import(ctx, "demo", "tester", snap); err != nil {
 			t.Fatal(err)
 		}
 	}

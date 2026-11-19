@@ -23,7 +23,7 @@ type fakeInventory struct {
 	getErr    error
 }
 
-func (f *fakeInventory) Import(_ context.Context, _ string, s inventory.Snapshot) (inventory.ImportReport, error) {
+func (f *fakeInventory) Import(_ context.Context, _, _ string, s inventory.Snapshot) (inventory.ImportReport, error) {
 	f.lastSnap = s
 	return f.report, f.importErr
 }
@@ -65,7 +65,7 @@ func TestImportTerraformState(t *testing.T) {
 		"provider":"provider[\"registry.terraform.io/hashicorp/aws\"]",
 		"instances":[{"attributes":{"arn":"arn:aws:kms:eu-west-1:123456789012:key/k","enable_key_rotation":true}}]}]}`
 	rec := do(invHandler(f), http.MethodPost, "/api/v1/inventory/import/terraform-state?environment=production",
-		strings.NewReader(state), map[string]string{TenantHeader: "demo"})
+		strings.NewReader(state), map[string]string{TenantHeader: "demo", ActorHeader: "alice"})
 	if rec.Code != http.StatusCreated || rec.Header().Get("Location") != "/api/v1/inventory/imports/i1" {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
@@ -73,7 +73,7 @@ func TestImportTerraformState(t *testing.T) {
 		t.Errorf("snapshot passed on: %+v", f.lastSnap)
 	}
 	rec = do(invHandler(f), http.MethodPost, "/api/v1/inventory/import/terraform-state", strings.NewReader(`{"version":3}`),
-		map[string]string{TenantHeader: "demo"})
+		map[string]string{TenantHeader: "demo", ActorHeader: "alice"})
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_state") {
 		t.Errorf("old state version: %d %s", rec.Code, rec.Body)
 	}
@@ -95,11 +95,14 @@ const validBody = `{"schema_version":"aegis.inventory/v1","source":"synthetic","
 
 var tenantHdr = map[string]string{TenantHeader: "demo"}
 
+// writeHdr adds the actor that write routes require.
+var writeHdr = map[string]string{TenantHeader: "demo", ActorHeader: "alice"}
+
 func TestImportCreatedAndReplay(t *testing.T) {
 	f := &fakeInventory{report: inventory.ImportReport{ImportSummary: inventory.ImportSummary{ImportID: "abc"}}}
 	h := invHandler(f)
 
-	rec := do(h, http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), tenantHdr)
+	rec := do(h, http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), writeHdr)
 	if rec.Code != http.StatusCreated || rec.Header().Get("Location") != "/api/v1/inventory/imports/abc" {
 		t.Fatalf("first import = %d %s", rec.Code, rec.Body)
 	}
@@ -108,7 +111,7 @@ func TestImportCreatedAndReplay(t *testing.T) {
 	}
 
 	f.report.Duplicate = true
-	if rec := do(h, http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), tenantHdr); rec.Code != http.StatusOK {
+	if rec := do(h, http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), writeHdr); rec.Code != http.StatusOK {
 		t.Fatalf("replay = %d, want 200", rec.Code)
 	}
 }
@@ -124,14 +127,14 @@ func TestImportRequestErrors(t *testing.T) {
 	}{
 		{"no tenant", validBody, nil, nil, 400, "invalid_tenant"},
 		{"bad tenant", validBody, map[string]string{TenantHeader: "../etc"}, nil, 400, "invalid_tenant"},
-		{"bad json", `{"schema_version":`, tenantHdr, nil, 400, "invalid_json"},
-		{"unknown field", `{"surprise":1}`, tenantHdr, nil, 400, "invalid_json"},
-		{"two documents", validBody + validBody, tenantHdr, nil, 400, "invalid_json"},
-		{"too large", `{"x":"` + strings.Repeat("a", 5000) + `"}`, tenantHdr, nil, 413, "body_too_large"},
-		{"validation", validBody, tenantHdr, &inventory.ValidationError{Issues: []inventory.Issue{{Path: "source", Message: "bad"}}}, 422, "validation_failed"},
-		{"stale", validBody, tenantHdr, fmt.Errorf("wrap: %w", inventory.ErrStaleSnapshot), 409, "stale_snapshot"},
-		{"tenant missing", validBody, tenantHdr, inventory.ErrTenantNotFound, 404, "tenant_not_found"},
-		{"internal", validBody, tenantHdr, errors.New("pq: password=hunter2 failed"), 500, "internal_error"},
+		{"bad json", `{"schema_version":`, writeHdr, nil, 400, "invalid_json"},
+		{"unknown field", `{"surprise":1}`, writeHdr, nil, 400, "invalid_json"},
+		{"two documents", validBody + validBody, writeHdr, nil, 400, "invalid_json"},
+		{"too large", `{"x":"` + strings.Repeat("a", 5000) + `"}`, writeHdr, nil, 413, "body_too_large"},
+		{"validation", validBody, writeHdr, &inventory.ValidationError{Issues: []inventory.Issue{{Path: "source", Message: "bad"}}}, 422, "validation_failed"},
+		{"stale", validBody, writeHdr, fmt.Errorf("wrap: %w", inventory.ErrStaleSnapshot), 409, "stale_snapshot"},
+		{"tenant missing", validBody, writeHdr, inventory.ErrTenantNotFound, 404, "tenant_not_found"},
+		{"internal", validBody, writeHdr, errors.New("pq: password=hunter2 failed"), 500, "internal_error"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -149,7 +152,7 @@ func TestImportRequestErrors(t *testing.T) {
 
 func TestValidationIssuesReturned(t *testing.T) {
 	f := &fakeInventory{importErr: &inventory.ValidationError{Issues: []inventory.Issue{{Path: "account.external_id", Message: "must be 12 digits"}}}}
-	rec := do(invHandler(f), http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), tenantHdr)
+	rec := do(invHandler(f), http.MethodPost, "/api/v1/inventory/import", strings.NewReader(validBody), writeHdr)
 	var body validationErrorBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Error.Issues) != 1 || body.Error.Issues[0].Path != "account.external_id" {
 		t.Fatalf("issues not returned: %s", rec.Body)

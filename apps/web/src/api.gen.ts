@@ -1096,13 +1096,14 @@ export interface components {
             account_id?: string;
             question?: string;
         };
+        /** @description With source "finding" the operations come from the rule's template and are omitted; with "manual" they are required. */
         ProposeRequest: {
             /** @enum {string} */
             source: "finding" | "manual";
             rule_id?: string;
             resource_id: string;
             account_id?: string;
-            operations: {
+            operations?: {
                 /** @enum {string} */
                 op: "set" | "remove";
                 path: string;
@@ -2461,7 +2462,8 @@ export interface operations {
             query?: {
                 /** @description Minimum band */
                 min_band?: string;
-                limit?: components["parameters"]["Limit"];
+                /** @description Highest-scoring assessments to return */
+                limit?: number;
             };
             header: {
                 "X-Aegis-Tenant": components["parameters"]["Tenant"];
@@ -2491,7 +2493,11 @@ export interface operations {
     };
     getRiskAttackPaths: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Only paths that reach a resource at least this sensitive. */
+                min_sensitivity?: number;
+            };
             header: {
                 "X-Aegis-Tenant": components["parameters"]["Tenant"];
             };

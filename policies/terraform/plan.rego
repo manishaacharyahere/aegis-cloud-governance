@@ -176,8 +176,10 @@ deny contains f if {
 	t.type == "aws_cloudtrail"
 	problems := [msg |
 		some check in [
-			{"ok": t.after.enable_logging != false, "msg": "logging is disabled"},
-			{"ok": t.after.enable_log_file_validation == true, "msg": "log file validation is disabled"},
+			# object.get: a missing attribute must not make the whole list
+			# undefined (that would silently skip the rule).
+			{"ok": object.get(t.after, "enable_logging", true) != false, "msg": "logging is disabled"},
+			{"ok": object.get(t.after, "enable_log_file_validation", false) == true, "msg": "log file validation is disabled"},
 		]
 		not check.ok
 		msg := check.msg
@@ -191,9 +193,20 @@ deny contains f if {
 warn contains f if {
 	some r in live
 	r.taggable
-	missing := [t | some t in config.required_tags; not r.tags[t]]
+	missing := [t | some t in config.required_tags; not tag_set(r.tags, t)]
 	count(missing) > 0
 	f := finding("AEGIS-TAG-001", "medium", r, sprintf("missing required tags: %s", [concat(", ", missing)]))
+}
+
+# A blank tag value does not count as set.
+tag_set(tags, t) if trim_space(tags[t]) != ""
+
+# A region that is neither a literal nor a root variable cannot be checked:
+# say so instead of passing silently.
+warn contains f if {
+	some r in live
+	object.get(r, "region", "") == ""
+	f := finding("AEGIS-REG-001", "medium", r, "region could not be determined from the plan (not a literal or a root variable); check it manually")
 }
 
 deny contains f if {

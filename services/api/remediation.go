@@ -53,6 +53,9 @@ func (h remediationHandlers) propose(w http.ResponseWriter, r *http.Request) {
 	}
 	var req remediation.ProposeRequest
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", "body must be a remediation proposal")
 		return
 	}
@@ -142,7 +145,7 @@ func (h remediationHandlers) step(fn func(RemediationService) func(context.Conte
 func (h remediationHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var unavailable *opa.UnavailableError
 	switch {
-	case errors.As(err, &unavailable):
+	case errors.As(err, &unavailable), errors.Is(err, opa.ErrUndefined):
 		logging.FromContext(r.Context()).Error("policy engine unavailable", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "policy_engine_unavailable", "policy engine unavailable; nothing was changed")
 	case errors.Is(err, remediation.ErrTenantNotFound):

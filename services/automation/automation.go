@@ -126,8 +126,10 @@ func (a *Automation) Evaluate(ctx context.Context, tenant string) error {
 		}
 	}()
 
+	// Use the lock connection: asking the pool for a second one while holding
+	// this one deadlocks once every background connection is held here.
 	var before int
-	err = a.Pool.QueryRow(ctx, `SELECT coalesce((r.summary->'by_band'->>'critical')::int, 0) + coalesce((r.summary->'by_band'->>'high')::int, 0)
+	err = conn.QueryRow(ctx, `SELECT coalesce((r.summary->'by_band'->>'critical')::int, 0) + coalesce((r.summary->'by_band'->>'high')::int, 0)
 		FROM risk_runs r JOIN tenants t ON t.id = r.tenant_id WHERE t.slug = $1 ORDER BY r.created_at DESC LIMIT 1`, tenant).Scan(&before)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		// Without the previous count an alert could only be a guess.

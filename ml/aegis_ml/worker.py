@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import signal
 import sys
@@ -66,6 +67,8 @@ def detect(frame: pd.DataFrame, lookback_days: int, threshold: float) -> list[di
 # Shortest history each model can be fitted on; shorter series fall back.
 MIN_HISTORY = {"seasonal_naive": 7, "holt_winters": 14, "sarimax": 14}
 FALLBACK_MODEL = "moving_average_28"
+# A forecast above this multiple of the largest observed day is treated as diverged.
+MAX_PREDICTION_FACTOR = 100.0
 
 
 def predict(
@@ -90,6 +93,9 @@ def predict(
                 pred = np.asarray(fn(series, horizon), dtype=float)
                 if not np.isfinite(pred).all():
                     reason, pred = f"{model} returned non-finite values", None
+                elif pred.size and pred.max() > MAX_PREDICTION_FACTOR * max(float(np.max(series)), 1.0):
+                    # An explosive fit would overflow numeric(14,4) and abort the run.
+                    reason, pred = f"{model} diverged", None
             except Exception as e:  # noqa: BLE001 - any model failure falls back
                 reason = f"{model} failed: {type(e).__name__}"
         if pred is None:
@@ -200,6 +206,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("AEGIS_DATABASE_URL is required")
     if not 1 <= args.horizon <= 365 or not 1 <= args.lookback <= 3650:
         sys.exit("horizon must be 1-365 and lookback 1-3650 days")
+    if not (math.isfinite(args.threshold) and args.threshold > 0):
+        sys.exit("threshold must be a positive number")
     if not args.every:
         print(json.dumps(run(dsn, args.tenant, args.model, args.horizon, args.lookback, args.threshold)))
         return

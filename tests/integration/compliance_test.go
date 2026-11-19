@@ -39,7 +39,7 @@ func complianceSvc(t *testing.T) (*pgxpool.Pool, *compliance.Service, synthetic.
 	}
 	pool, inv := migratedPool(t)
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
-	if _, err := inv.Import(context.Background(), "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(context.Background(), "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	cat, err := compliance.LoadCatalog()
@@ -149,7 +149,10 @@ func TestCoverageAndStaleness(t *testing.T) {
 		t.Errorf("summary %v", cov.Summary)
 	}
 
-	planned, _ := svc.Coverage(ctx, "demo", "nist-csf-2.0", compliance.ScopePlanned, time.Hour)
+	planned, err := svc.Coverage(ctx, "demo", "nist-csf-2.0", compliance.ScopePlanned, time.Hour)
+	if err != nil || len(planned.Controls) == 0 {
+		t.Fatalf("planned coverage: %d controls, %v", len(planned.Controls), err)
+	}
 	for _, c := range planned.Controls {
 		if c.Status != "no_evidence" && c.Status != "not_covered" {
 			t.Errorf("no IaC evaluations yet, but %s is %s", c.ControlID, c.Status)
@@ -256,7 +259,12 @@ func TestAuditChainDetectsTampering(t *testing.T) {
 	var tenantID string
 	pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = 'demo'`).Scan(&tenantID)
 
-	// Concurrent appends must produce one gap-free, valid chain.
+	// Concurrent appends must produce one gap-free, valid chain (after the
+	// events already recorded, such as the inventory import).
+	before, err := svc.VerifyAudit(ctx, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var wg sync.WaitGroup
 	for i := range 20 {
 		wg.Add(1)
@@ -273,7 +281,7 @@ func TestAuditChainDetectsTampering(t *testing.T) {
 	}
 	wg.Wait()
 	v, err := svc.VerifyAudit(ctx, "demo")
-	if err != nil || !v.Valid || v.Checked != 20 {
+	if err != nil || !v.Valid || v.Checked != before.Checked+20 {
 		t.Fatalf("concurrent chain: %+v %v", v, err)
 	}
 
@@ -293,11 +301,64 @@ func TestAuditChainDetectsTampering(t *testing.T) {
 	}
 }
 
+// Every hashed column is covered, and so are a deleted event and a broken
+// link: a digest that silently drops a field would pass the single-column
+// tamper check above.
+func TestAuditChainDetectsEveryKindOfTampering(t *testing.T) {
+	cases := map[string]struct {
+		sql     string
+		firstAt int64
+	}{
+		"details":     {`UPDATE audit_events SET details = '{"role":"admin"}' WHERE tenant_id = $1 AND seq = 5`, 5},
+		"outcome":     {`UPDATE audit_events SET outcome = 'failure' WHERE tenant_id = $1 AND seq = 5`, 5},
+		"target_id":   {`UPDATE audit_events SET target_id = 'other' WHERE tenant_id = $1 AND seq = 5`, 5},
+		"occurred_at": {`UPDATE audit_events SET occurred_at = occurred_at - interval '1 day' WHERE tenant_id = $1 AND seq = 5`, 5},
+		"action":      {`UPDATE audit_events SET action = 'test.other' WHERE tenant_id = $1 AND seq = 5`, 5},
+		"prev_hash":   {`UPDATE audit_events SET prev_hash = hash WHERE tenant_id = $1 AND seq = 5`, 5},
+		"deleted":     {`DELETE FROM audit_events WHERE tenant_id = $1 AND seq = 5`, 6}, // the gap shows at the next event
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			pool, svc, _ := complianceSvc(t)
+			ctx := context.Background()
+			var tenantID string
+			if err := pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = 'demo'`).Scan(&tenantID); err != nil {
+				t.Fatal(err)
+			}
+			for i := range 8 {
+				if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+					return audit.Append(ctx, tx, tenantID, audit.Event{Actor: "w", Action: "test.event", TargetType: "t",
+						TargetID: fmt.Sprint(i), Outcome: "success", Details: map[string]any{"role": "viewer", "n": i}})
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if v, err := svc.VerifyAudit(ctx, "demo"); err != nil || !v.Valid {
+				t.Fatalf("chain before tampering: %+v %v", v, err)
+			}
+			if _, err := pool.Exec(ctx, `ALTER TABLE audit_events DISABLE TRIGGER audit_events_append_only`); err != nil {
+				t.Fatal(err)
+			}
+			_, err := pool.Exec(ctx, c.sql, tenantID)
+			if _, e := pool.Exec(ctx, `ALTER TABLE audit_events ENABLE TRIGGER audit_events_append_only`); e != nil {
+				t.Fatal(e)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			v, err := svc.VerifyAudit(ctx, "demo")
+			if err != nil || v.Valid || v.FirstBadSeq != c.firstAt {
+				t.Fatalf("tampered %s not detected at seq %d: %+v %v", name, c.firstAt, v, err)
+			}
+		})
+	}
+}
+
 func TestEvaluateScanEvidence(t *testing.T) {
 	pool, svc, _ := complianceSvc(t)
 	ctx := context.Background()
 	store := iac.NewStore(pool)
-	scan, _, _ := store.Enqueue(ctx, "demo", "insecure-storage", "")
+	scan, _, _ := store.Enqueue(ctx, "demo", "tester", "insecure-storage", "")
 
 	if _, err := svc.EvaluateScan(ctx, "demo", scan.ID, "tester"); !errors.Is(err, compliance.ErrScanNotReady) {
 		t.Fatalf("queued scan evaluated: %v", err)

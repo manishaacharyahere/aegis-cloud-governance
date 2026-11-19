@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { niceTicks } from './ticks'
-import { humanize, severityRank, toneOf } from './tones'
+import { humanize, severityRail, severityRank, toneOf } from './tones'
+import { qs, seg } from '../client'
 import { can, hashFor, parseHash, patchParams } from '../nav'
 import { ago } from '../hooks'
 import type { Me } from '../types'
@@ -63,5 +64,23 @@ describe('ago', () => {
     expect(ago('2026-11-17T09:00:00Z', now)).toBe('3 hours ago')
     expect(ago('2026-11-15T12:00:00Z', now)).toBe('2 days ago')
     expect(ago(undefined, now)).toBe('—')
+  })
+})
+
+describe('url helpers', () => {
+  it('encodes values from the URL and drops empty ones', () => {
+    expect(qs({ status: 'open', after: '' })).toBe('?status=open')
+    expect(qs({ status: 'x&limit=5000' })).toBe('?status=x%26limit%3D5000')
+    expect(qs({})).toBe('')
+    expect(seg('a/../b')).toBe('a%2F..%2Fb')
+  })
+})
+
+describe('severity rail', () => {
+  it('marks only critical and high', () => {
+    expect(severityRail('critical')).toBe('danger')
+    expect(severityRail('high')).toBe('high')
+    expect(severityRail('medium')).toBeUndefined()
+    expect(severityRail(undefined)).toBeUndefined()
   })
 })

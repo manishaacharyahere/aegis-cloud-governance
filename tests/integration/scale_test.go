@@ -134,14 +134,14 @@ func TestScale(t *testing.T) {
 
 		ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: n, CapturedAt: base})
 		res["resources"] = len(ds.Snapshot.Resources)
-		must("import", func() error { _, err := inv.Import(ctx, "demo", ds.Snapshot); return err })
-		must("reimport_unchanged", func() error { _, err := inv.Import(ctx, "demo", ds.Snapshot); return err })
+		must("import", func() error { _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); return err })
+		must("reimport_unchanged", func() error { _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); return err })
 
 		dsvc := &drift.Service{Pool: pool, OPA: oc, Config: drift.DefaultConfig(), RuleSeverity: cat.RuleSeverities()}
 		must("drift_baseline", func() error { _, err := dsvc.ApproveBaseline(ctx, "demo", "", "alice", "scale test"); return err })
 		v2, _ := synthetic.Mutate(ds, synthetic.MutateOptions{Seed: 7, Modify: max(1, n/50), Delete: max(1, n/200), Add: max(1, n/200),
 			CapturedAt: base.Add(time.Hour)})
-		must("import_2pct_changed", func() error { _, err := inv.Import(ctx, "demo", v2.Snapshot); return err })
+		must("import_2pct_changed", func() error { _, err := inv.Import(ctx, "demo", "tester", v2.Snapshot); return err })
 		must("drift_compare", func() error { _, err := dsvc.Compare(ctx, "demo", "", "alice"); return err })
 
 		csvc := &compliance.Service{Pool: pool, Catalog: cat, OPA: oc}

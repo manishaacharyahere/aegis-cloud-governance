@@ -29,7 +29,7 @@ func TestRiskAssessmentLifecycle(t *testing.T) {
 	rsvc := &risk.Service{Pool: pool, Rules: rules, Now: func() time.Time { return now }}
 
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rsvc.Assess(ctx, "demo", "alice", risk.DefaultWeights()); !errors.Is(err, risk.ErrNoEvaluation) {

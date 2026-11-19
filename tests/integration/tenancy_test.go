@@ -25,7 +25,7 @@ func TestTenantPolicyConfig(t *testing.T) {
 			Tags:          map[string]string{"owner": "a", "environment": "dev", "cost_center": "c"},
 			Configuration: map[string]any{"public_access_block": true, "versioning": true, "encryption": "aws:kms"}}}}
 	for _, tenant := range []string{"demo", "other"} {
-		if _, err := inv.Import(ctx, tenant, snap); err != nil {
+		if _, err := inv.Import(ctx, tenant, "tester", snap); err != nil {
 			t.Fatal(err)
 		}
 	}

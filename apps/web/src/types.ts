@@ -1,4 +1,13 @@
-// Response shapes used by the dashboard (subset of the API).
+// Response shapes used by the dashboard (subset of the API). Shapes the
+// OpenAPI contract defines come from api.gen.ts (npm run api:types), so a
+// contract change fails the type check here; the rest are written by hand
+// until the contract describes them.
+import type { components } from './api.gen'
+
+type Schemas = components['schemas']
+
+/** A request body as the contract defines it. */
+export type RequestBody<K extends keyof Schemas> = Schemas[K]
 
 export interface Resource {
   id: string
@@ -303,21 +312,8 @@ export interface DriftReport {
   items: DriftItem[]
 }
 
-export interface Membership {
-  slug: string
-  name: string
-  roles: string[]
-}
+export type Membership = Schemas['Membership']
 
-export interface TypeCount {
-  resource_type: string
-  count: number
-}
+export type TypeCount = Schemas['TypeCount']
 
-export interface Account {
-  id: string
-  provider: string
-  external_id: string
-  name: string
-  resource_count: number
-}
+export type Account = Schemas['Account']

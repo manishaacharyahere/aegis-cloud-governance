@@ -23,13 +23,13 @@ func TestRoleBindings(t *testing.T) {
 	if err := s.Grant(ctx, "demo", "root@example.com", "alice@example.com", access.RoleAnalyst); err != nil {
 		t.Fatal(err)
 	}
-	if roles, _ := s.RolesFor(ctx, "demo", "alice@example.com"); len(roles) != 1 || roles[0] != "analyst" {
+	if roles, err := s.RolesFor(ctx, "demo", "alice@example.com"); err != nil || len(roles) != 1 || roles[0] != "analyst" {
 		t.Fatalf("roles = %v", roles)
 	}
-	if roles, _ := s.RolesFor(ctx, "other", "alice@example.com"); len(roles) != 0 {
+	if roles, err := s.RolesFor(ctx, "other", "alice@example.com"); err != nil || len(roles) != 0 {
 		t.Fatalf("roles leak across tenants: %v", roles)
 	}
-	if roles, _ := s.RolesFor(ctx, "no-such-tenant", "root@example.com"); len(roles) != 0 {
+	if roles, err := s.RolesFor(ctx, "no-such-tenant", "root@example.com"); err != nil || len(roles) != 0 {
 		t.Fatalf("unknown tenant: %v", roles)
 	}
 	for name, err := range map[string]error{
@@ -58,13 +58,13 @@ func TestRoleBindings(t *testing.T) {
 	if err := s.Revoke(ctx, "demo", "second@example.com", "alice@example.com", access.RoleAnalyst); err != nil {
 		t.Fatal(err)
 	}
-	if roles, _ := s.RolesFor(ctx, "demo", "alice@example.com"); len(roles) != 0 {
+	if roles, err := s.RolesFor(ctx, "demo", "alice@example.com"); err != nil || len(roles) != 0 {
 		t.Errorf("revoked role still cached: %v", roles)
 	}
 	if err := s.Grant(ctx, "demo", "second@example.com", "alice@example.com", access.RoleAnalyst); err != nil {
 		t.Fatal(err)
 	}
-	if roles, _ := s.RolesFor(ctx, "demo", "alice@example.com"); len(roles) != 1 {
+	if roles, err := s.RolesFor(ctx, "demo", "alice@example.com"); err != nil || len(roles) != 1 {
 		t.Errorf("new grant not visible: %v", roles)
 	}
 	bs, err := s.List(ctx, "demo")
@@ -73,6 +73,24 @@ func TestRoleBindings(t *testing.T) {
 	}
 	if n := count(t, pool, `SELECT count(*) FROM audit_events WHERE action IN ('access.granted', 'access.revoked')`); n != 6 {
 		t.Errorf("audit events = %d, want 6 (bootstrap, alice, second, revoke root, revoke and re-grant alice)", n)
+	}
+
+	// Identity-provider subjects are case-sensitive: "sub:" ids are stored as
+	// given (an email is lowercased), so the granted user really gets the role.
+	if err := s.Grant(ctx, "demo", "second@example.com", "sub:CiQwOGE4Ab", access.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if roles, err := s.RolesFor(ctx, "demo", "sub:CiQwOGE4Ab"); err != nil || len(roles) != 1 {
+		t.Errorf("sub: subject lost its case: %v %v", roles, err)
+	}
+	if err := s.Grant(ctx, "demo", "second@example.com", "Carol@Example.com", access.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if roles, err := s.RolesFor(ctx, "demo", "carol@example.com"); err != nil || len(roles) != 1 {
+		t.Errorf("email subject not lowercased: %v %v", roles, err)
+	}
+	if err := s.Revoke(ctx, "demo", "second@example.com", "sub:CiQwOGE4Ab", access.RoleViewer); err != nil {
+		t.Errorf("revoking a sub: subject: %v", err)
 	}
 }
 

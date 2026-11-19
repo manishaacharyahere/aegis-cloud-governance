@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { CheckCircle2, FileSignature, GitPullRequestArrow, ShieldCheck, Wrench } from 'lucide-react'
 import { can, patchParams, type PageProps } from '../nav'
-import type { Paged, Remediation as Rem, Template } from '../types'
+import type { Paged, Remediation as Rem, RequestBody, Template } from '../types'
 import {
   BackLink, Button, Callout, Card, ConfirmAction, CopyButton, DataTable, DiffList, EmptyState, ErrorState, Field, Input, KeyValue,
   Mono, Pager, RadioGroup, SectionTitle, Select, Skeleton, StatusBadge, Textarea, Timeline, useToast,
 } from '@/components/ui'
 import { ago, useAction, useDraft, useLoad, usePaged, when } from '../hooks'
+import { qs, seg } from '../client'
 
 const STATUSES = ['pending_approval', 'approved', 'released', 'verified', 'verification_failed', 'blocked', 'rejected', 'stale']
 
@@ -23,7 +24,7 @@ export default function Remediation({ api, me, go, params }: PageProps) {
 
 function List({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) {
   const status = params.get('status') ?? ''
-  const list = usePaged((after) => api<Paged<Rem>>('GET', `/api/v1/remediations?limit=50${status ? '&status=' + status : ''}${after ? '&after=' + encodeURIComponent(after) : ''}`), [api, status])
+  const list = usePaged((after) => api<Paged<Rem>>('GET', `/api/v1/remediations${qs({ limit: 50, status, after })}`), [api, status])
   return (
     <Card title="Remediations" icon={<GitPullRequestArrow />} actions={
       <Select aria-label="Status" value={status} onChange={(e) => go('remediation', patchParams(params, { status: e.target.value }))}>
@@ -70,9 +71,10 @@ function Propose({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) 
         return
       }
     }
-    const r = await act.run(() => api<Rem>('POST', '/api/v1/remediations', source === 'finding'
+    const body: RequestBody<'ProposeRequest'> = source === 'finding'
       ? { source, rule_id: effectiveRule, resource_id: resource, justification: just }
-      : { source, resource_id: resource, operations, justification: just }))
+      : { source, resource_id: resource, operations: operations as RequestBody<'ProposeRequest'>['operations'], justification: just }
+    const r = await act.run(() => api<Rem>('POST', '/api/v1/remediations', body))
     if (r) {
       clearOps()
       clearJust()
@@ -119,13 +121,13 @@ function Propose({ api, go, params }: Pick<PageProps, 'api' | 'go' | 'params'>) 
 }
 
 function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id: string }) {
-  const r = useLoad(() => api<Rem>('GET', `/api/v1/remediations/${id}`), [api, id])
+  const r = useLoad(() => api<Rem>('GET', `/api/v1/remediations/${seg(id)}`), [api, id])
   const act = useAction()
   const toast = useToast()
   const [comment, setComment] = useState('')
   const step = async (s: string) => {
     const body = s === 'approve' || s === 'reject' ? { comment } : undefined
-    const out = await act.run(() => api<Rem>('POST', `/api/v1/remediations/${id}/${s}`, body))
+    const out = await act.run(() => api<Rem>('POST', `/api/v1/remediations/${seg(id)}/${s}`, body))
     if (out) {
       toast(({ approve: 'Approved.', reject: 'Rejected.', release: 'Change set released.', verify: 'Verification recorded.' } as Record<string, string>)[s] ?? 'Done.')
       setComment('')
@@ -145,7 +147,8 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
   const approvals = x.approvals.filter((a) => a.decision === 'approve').length
   const mine = x.requested_by === me.subject
   const decided = x.approvals.some((a) => a.actor === me.subject)
-  const impact = [...sim.impact.incoming, ...sim.impact.outgoing]
+  // A neighbour linked both ways is one connected resource, not two.
+  const impact = [...new Set([...sim.impact.incoming, ...sim.impact.outgoing])]
 
   return (
     <div className="space-y-5">
@@ -190,9 +193,10 @@ function Detail({ api, me, go, id }: Pick<PageProps, 'api' | 'me' | 'go'> & { id
           meta: when(a.created_at), body: a.comment ? `“${a.comment}”` : undefined,
         }))} />
         <div className="mt-4 space-y-3">
-          {x.status === 'pending_approval' && can(me, 'approve') && (
-            mine ? <Callout tone="info">You requested this change, so someone else must approve it.</Callout>
-              : decided ? <p className="m-0 text-[13px] text-fg-muted">You have already decided.</p>
+          {/* The requester learns why they cannot approve, whatever their role. */}
+          {x.status === 'pending_approval' && mine && <Callout tone="info">You requested this change, so someone else must approve it.</Callout>}
+          {x.status === 'pending_approval' && !mine && can(me, 'approve') && (
+            decided ? <p className="m-0 text-[13px] text-fg-muted">You have already decided.</p>
                 : (
                   <div className="flex flex-wrap items-end gap-2">
                     <Field label="Comment (optional)" className="min-w-[240px] flex-1">

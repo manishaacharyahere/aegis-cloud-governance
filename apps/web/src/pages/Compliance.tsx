@@ -7,12 +7,13 @@ import {
   SectionTitle, Skeleton, StatusBadge, Textarea, useToast,
 } from '@/components/ui'
 import { ago, useAction, useDraft, useLoad, usePaged, when } from '../hooks'
+import { qs, seg } from '../client'
 
 export default function Compliance({ api, me, go, params }: PageProps) {
   const fw = useLoad(() => api<{ frameworks: Framework[]; catalog_version: string }>('GET', '/api/v1/compliance/frameworks'), [api])
   const framework = params.get('framework') || 'aegis-baseline-1'
   const control = params.get('control')
-  const cov = useLoad(() => api<Coverage>('GET', `/api/v1/compliance/coverage?framework=${framework}`), [api, framework])
+  const cov = useLoad(() => api<Coverage>('GET', `/api/v1/compliance/coverage${qs({ framework })}`), [api, framework])
   const act = useAction()
   const toast = useToast()
   const [exTick, setExTick] = useState(0)
@@ -30,8 +31,7 @@ export default function Compliance({ api, me, go, params }: PageProps) {
             </Select>
             {can(me, 'operate') && (
               <Button variant="primary" loading={act.busy} onClick={async () => {
-                const r = await act.run(() => api('POST', '/api/v1/compliance/evaluations', { source: 'inventory' }))
-                if (r !== undefined) toast('Inventory evaluated against the policies.')
+                if (await act.attempt(() => api('POST', '/api/v1/compliance/evaluations', { source: 'inventory' }))) toast('Inventory evaluated against the policies.')
                 cov.reload()
               }}><Play />Evaluate inventory now</Button>
             )}
@@ -60,7 +60,7 @@ export default function Compliance({ api, me, go, params }: PageProps) {
 }
 
 function ControlPanel({ api, me, go, framework, control, onException }: Pick<PageProps, 'api' | 'me' | 'go'> & { framework: string; control: string; onException: () => void }) {
-  const d = useLoad(() => api<ControlDetail>('GET', `/api/v1/compliance/controls/${framework}/${control}`), [api, framework, control])
+  const d = useLoad(() => api<ControlDetail>('GET', `/api/v1/compliance/controls/${seg(framework)}/${seg(control)}`), [api, framework, control])
   const [req, setReq] = useState<{ rule: string; subject: string } | null>(null)
   const [shown, setShown] = useState(50)
   const fails = (d.data?.evaluations ?? []).filter((e) => e.result !== 'pass')
@@ -118,8 +118,7 @@ function RequestException({ api, rule, subject, onDone, onCancel }: { api: PageP
       e.preventDefault()
       if (!daysOk) return
       const expires = new Date(Date.now() + n * 86400_000).toISOString()
-      const r = await act.run(() => api('POST', '/api/v1/compliance/exceptions', { rule_id: rule, subject, justification: just, expires_at: expires }))
-      if (r !== undefined) {
+      if (await act.attempt(() => api('POST', '/api/v1/compliance/exceptions', { rule_id: rule, subject, justification: just, expires_at: expires }))) {
         clearJust()
         toast('Exception requested. Someone else must approve it.')
         onDone()
@@ -142,12 +141,11 @@ function RequestException({ api, rule, subject, onDone, onCancel }: { api: PageP
 }
 
 function Exceptions({ api, me, tick }: Pick<PageProps, 'api' | 'me'> & { tick: number }) {
-  const ex = usePaged((after) => api<Paged<ExceptionView>>('GET', `/api/v1/compliance/exceptions?limit=50${after ? '&after=' + encodeURIComponent(after) : ''}`), [api, tick])
+  const ex = usePaged((after) => api<Paged<ExceptionView>>('GET', `/api/v1/compliance/exceptions${qs({ limit: 50, after })}`), [api, tick])
   const act = useAction()
   const toast = useToast()
   const decide = async (id: string, d: string) => {
-    const r = await act.run(() => api('POST', `/api/v1/compliance/exceptions/${id}/${d}`))
-    if (r !== undefined) toast(`Exception ${d === 'approve' ? 'approved' : d === 'reject' ? 'rejected' : 'revoked'}.`)
+    if (await act.attempt(() => api('POST', `/api/v1/compliance/exceptions/${seg(id)}/${d}`))) toast(`Exception ${d === 'approve' ? 'approved' : d === 'reject' ? 'rejected' : 'revoked'}.`)
     ex.reload()
   }
   return (

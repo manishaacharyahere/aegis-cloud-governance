@@ -73,7 +73,6 @@ func (c PolicyConfig) Validate() error {
 	return nil
 }
 
-// Input returns the config as the OPA input.config object (only set fields).
 // SHA256 identifies this configuration. encoding/json writes struct fields
 // in declaration order, so equal configurations hash equally.
 func (c PolicyConfig) SHA256() string {
@@ -82,6 +81,7 @@ func (c PolicyConfig) SHA256() string {
 	return hex.EncodeToString(sum[:])
 }
 
+// Input returns the config as the OPA input.config object (only set fields).
 func (c PolicyConfig) Input() map[string]any {
 	raw, _ := json.Marshal(c)
 	out := map[string]any{}

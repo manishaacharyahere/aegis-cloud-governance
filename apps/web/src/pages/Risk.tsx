@@ -8,13 +8,15 @@ import { cn } from '@/lib/utils'
 import { toneSolid, toneOf } from '@/lib/tones'
 import { ago, useAction, useLoad, when } from '../hooks'
 
-type Band = 'critical' | 'high' | 'medium' | 'low'
+const BANDS = ['critical', 'high', 'medium', 'low'] as const
+type Band = (typeof BANDS)[number]
 
 export default function Risk({ api, me, go, params }: PageProps) {
-  const band = (params.get('band') as Band) || 'high'
+  const raw = params.get('band')
+  const band: Band = BANDS.includes(raw as Band) ? (raw as Band) : 'high'
   const run = useLoad(async () => {
     try {
-      return await api<RiskRun>('GET', `/api/v1/risk/assessments/latest?min_band=${band}&limit=200`)
+      return await api<RiskRun>('GET', `/api/v1/risk/assessments/latest?${new URLSearchParams({ min_band: band, limit: '200' })}`)
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null
       throw e

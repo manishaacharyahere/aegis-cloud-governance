@@ -130,11 +130,16 @@ func idempotent(store IdempotencyStore, pattern string, next http.Handler) http.
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", "request body too large")
+			if !bodyTooLarge(w, err) {
+				writeError(w, http.StatusBadRequest, "invalid_body", "could not read request body")
+			}
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
-		sum := sha256.Sum256(append([]byte(r.URL.Path+"\n"), body...))
+		hash := sha256.New() // hashed in place: a large import is not copied again
+		hash.Write([]byte(r.URL.Path + "\n"))
+		hash.Write(body)
+		sum := hash.Sum(nil)
 		actor := ""
 		if p, ok := access.FromContext(r.Context()); ok {
 			actor = p.Subject

@@ -135,7 +135,7 @@ func TestResilienceDatabaseLoss(t *testing.T) {
 	// Sever the database connection part-way through writing a large import.
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 3000, CapturedAt: base})
 	proxy.cutAt.Store(256 << 10)
-	_, err = inv.Import(ctx, "demo", ds.Snapshot)
+	_, err = inv.Import(ctx, "demo", "tester", ds.Snapshot)
 	if err == nil {
 		t.Fatal("import succeeded although the connection was cut mid-transaction")
 	}
@@ -163,7 +163,7 @@ func TestResilienceDatabaseLoss(t *testing.T) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	rep, err := inv.Import(ctx, "demo", ds.Snapshot)
+	rep, err := inv.Import(ctx, "demo", "tester", ds.Snapshot)
 	if err != nil {
 		t.Fatalf("retry after recovery: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestResiliencePolicyEngineDown(t *testing.T) {
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 200, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")

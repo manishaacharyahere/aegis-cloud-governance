@@ -31,7 +31,13 @@ Store.Import (one transaction)
   4. Diff against current state → created / updated (with changed paths) / deleted / unchanged
   5. write resources, append resource_versions, replace relationships,
      outbox events only for real changes + one inventory.import.completed
+  6. record who imported (inventory_imports.imported_by) and append an
+     inventory.import event to the tenant's audit chain
 ```
+
+Imports drive compliance, drift and remediation verification, so they are
+audited like every other change: a hand-made snapshot that "verifies" a fix is
+attributable.
 
 Code: [services/inventory](../../services/inventory), API handlers in
 [services/api/inventory.go](../../services/api/inventory.go), schema in

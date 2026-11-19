@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BadgeDollarSign, Lightbulb, LineChart, Sparkles, TrendingUp } from 'lucide-react'
-import { ApiError } from '../client'
+import { notFoundAsNull, qs, seg } from '../client'
 import { can, patchParams, type PageProps } from '../nav'
 import type { CostSummary, MLResult, Recommendation } from '../types'
 import {
@@ -9,23 +9,15 @@ import {
 } from '@/components/ui'
 import { ago, pct, useAction, useLoad, usd, usdCompact, when } from '../hooks'
 
-const orNull = async <T,>(p: Promise<T>): Promise<T | null> => {
-  try {
-    return await p
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null
-    throw e
-  }
-}
 
 const GROUPS = ['team', 'service', 'environment', 'account', 'allocation_method']
 
 export default function Cost({ api, me, go, params }: PageProps) {
   const [now] = useState(() => Date.now()) // read once per visit, not on every render
   const groupBy = params.get('group_by') || 'team'
-  const sum = useLoad(() => orNull(api<CostSummary>('GET', `/api/v1/cost/summary?group_by=${groupBy}`)), [api, groupBy])
-  const anomalies = useLoad(() => orNull(api<MLResult>('GET', '/api/v1/cost/anomalies')), [api])
-  const forecast = useLoad(() => orNull(api<MLResult>('GET', '/api/v1/cost/forecast?entity=total')), [api])
+  const sum = useLoad(() => notFoundAsNull(api<CostSummary>('GET', `/api/v1/cost/summary${qs({ group_by: groupBy })}`)), [api, groupBy])
+  const anomalies = useLoad(() => notFoundAsNull(api<MLResult>('GET', '/api/v1/cost/anomalies')), [api])
+  const forecast = useLoad(() => notFoundAsNull(api<MLResult>('GET', '/api/v1/cost/forecast?entity=total')), [api])
   const fcPoints = (forecast.data?.points ?? []).map((p) => ({ x: String(p.date), y: Number(p.predicted_usd ?? 0) }))
   const fcTotal = fcPoints.reduce((s, p) => s + p.y, 0)
   const recent = [...(anomalies.data?.points ?? [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 12)
@@ -86,13 +78,12 @@ export default function Cost({ api, me, go, params }: PageProps) {
 
 function Recommendations({ api, me }: Pick<PageProps, 'api' | 'me'>) {
   const [status, setStatus] = useState('open')
-  const recs = useLoad(() => api<{ items: Recommendation[] }>('GET', `/api/v1/recommendations?status=${status}`), [api, status])
+  const recs = useLoad(() => api<{ items: Recommendation[] }>('GET', `/api/v1/recommendations${qs({ status })}`), [api, status])
   const act = useAction()
   const toast = useToast()
   const decide = async (id: string, action: string) => {
     const body = action === 'implement' ? { implemented_at: new Date().toISOString().slice(0, 10) } : undefined
-    const r = await act.run(() => api('POST', `/api/v1/recommendations/${id}/${action}`, body))
-    if (r !== undefined) toast(`Recommendation ${action === 'implement' ? 'marked implemented' : action === 'accept' ? 'accepted' : 'dismissed'}.`)
+    if (await act.attempt(() => api('POST', `/api/v1/recommendations/${seg(id)}/${action}`, body))) toast(`Recommendation ${action === 'implement' ? 'marked implemented' : action === 'accept' ? 'accepted' : 'dismissed'}.`)
     recs.reload()
   }
   const [shown, setShown] = useState(20)
@@ -107,8 +98,7 @@ function Recommendations({ api, me }: Pick<PageProps, 'api' | 'me'>) {
             {['open', 'accepted', 'implemented', 'dismissed'].map((s) => <option key={s}>{s}</option>)}
           </Select>
           {can(me, 'operate') && <Button variant="primary" loading={act.busy} onClick={async () => {
-            const r = await act.run(() => api('POST', '/api/v1/recommendations', {}))
-            if (r !== undefined) toast('Recommendations generated.')
+            if (await act.attempt(() => api('POST', '/api/v1/recommendations', {}))) toast('Recommendations generated.')
             recs.reload()
           }}>Generate</Button>}
         </>

@@ -15,7 +15,7 @@ import (
 
 // InventoryService is the subset of the inventory module used by the API.
 type InventoryService interface {
-	Import(ctx context.Context, tenant string, snap inventory.Snapshot) (inventory.ImportReport, error)
+	Import(ctx context.Context, tenant, actor string, snap inventory.Snapshot) (inventory.ImportReport, error)
 	GetImport(ctx context.Context, tenant, id string) (inventory.ImportReport, error)
 	ListResources(ctx context.Context, tenant string, f inventory.ListFilter) (inventory.ResourcePage, error)
 	GetResource(ctx context.Context, tenant, id string) (inventory.ResourceDetail, error)
@@ -59,6 +59,10 @@ func (h inventoryHandlers) importSnapshot(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+	who, ok := actor(w, r)
+	if !ok {
+		return
+	}
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	dec.UseNumber()
@@ -77,7 +81,7 @@ func (h inventoryHandlers) importSnapshot(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rep, err := h.svc.Import(r.Context(), tenant, snap)
+	rep, err := h.svc.Import(r.Context(), tenant, who, snap)
 	if err != nil {
 		var verr *inventory.ValidationError
 		if errors.As(err, &verr) {
@@ -196,6 +200,10 @@ func (h inventoryHandlers) importTerraformState(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
+	who, ok := actor(w, r)
+	if !ok {
+		return
+	}
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		var tooLarge *http.MaxBytesError
@@ -213,7 +221,7 @@ func (h inventoryHandlers) importTerraformState(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "invalid_state", err.Error())
 		return
 	}
-	rep, err := h.svc.Import(r.Context(), tenant, snap)
+	rep, err := h.svc.Import(r.Context(), tenant, who, snap)
 	if err != nil {
 		var verr *inventory.ValidationError
 		if errors.As(err, &verr) {
@@ -243,6 +251,10 @@ func (h inventoryHandlers) fail(w http.ResponseWriter, r *http.Request, err erro
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
 	case errors.Is(err, inventory.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "resource not found")
+	case errors.Is(err, inventory.ErrInvalidCursor):
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
+	case errors.Is(err, inventory.ErrInvalidQuery):
+		writeError(w, http.StatusBadRequest, "invalid_query", err.Error())
 	case errors.Is(err, inventory.ErrStaleSnapshot):
 		writeError(w, http.StatusConflict, "stale_snapshot", err.Error())
 	case errors.Is(err, context.Canceled):

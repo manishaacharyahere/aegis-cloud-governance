@@ -74,7 +74,7 @@ func TestDriftErrorMapping(t *testing.T) {
 	for err, want := range map[error]int{
 		drift.ErrNoBaseline:          409,
 		drift.ErrNoInventory:         409,
-		drift.ErrAmbiguous:           422,
+		drift.ErrAmbiguous:           409,
 		drift.ErrNotFound:            404,
 		errors.New("secret=hunter2"): 500,
 	} {

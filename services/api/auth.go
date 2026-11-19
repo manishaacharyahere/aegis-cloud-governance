@@ -302,15 +302,18 @@ func (h accessHandlers) change(grant bool) http.HandlerFunc {
 			Role    string `json:"role"`
 		}
 		if err := decodeStrict(r, &req); err != nil {
+			if bodyTooLarge(w, err) {
+				return
+			}
 			writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"subject":"...","role":"..."}`)
 			return
 		}
 		tenant := r.Header.Get(TenantHeader)
 		var err error
 		if grant {
-			err = h.auth.Roles.Grant(r.Context(), tenant, who, strings.ToLower(req.Subject), req.Role)
+			err = h.auth.Roles.Grant(r.Context(), tenant, who, access.CanonicalSubject(req.Subject), req.Role)
 		} else {
-			err = h.auth.Roles.Revoke(r.Context(), tenant, who, strings.ToLower(req.Subject), req.Role)
+			err = h.auth.Roles.Revoke(r.Context(), tenant, who, access.CanonicalSubject(req.Subject), req.Role)
 		}
 		if err != nil {
 			h.fail(w, r, err)
@@ -328,6 +331,7 @@ func (h accessHandlers) fail(w http.ResponseWriter, r *http.Request, err error) 
 		writeError(w, http.StatusConflict, "forbidden_change", err.Error())
 	case errors.Is(err, access.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "binding or tenant not found")
+	case errors.Is(err, context.Canceled): // the client went away
 	default:
 		logging.FromContext(r.Context()).Error("access request failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")

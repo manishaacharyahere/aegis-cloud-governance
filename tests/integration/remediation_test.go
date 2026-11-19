@@ -83,7 +83,7 @@ func TestRemediationClosedLoop(t *testing.T) {
 	svc := &remediation.Service{Pool: pool, OPA: oc}
 
 	v1 := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", v1.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v1.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := csvc.EvaluateInventory(ctx, "demo", "tester"); err != nil {
@@ -140,7 +140,7 @@ func TestRemediationClosedLoop(t *testing.T) {
 	}
 
 	v2 := applyToSnapshot(t, v1.Snapshot, base.Add(24*time.Hour), changes)
-	if _, err := inv.Import(ctx, "demo", v2); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v2); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range released {
@@ -194,7 +194,7 @@ func TestRemediationControls(t *testing.T) {
 			}}
 	}
 	tags := map[string]string{"owner": "a", "environment": "development", "cost_center": "c"}
-	if _, err := inv.Import(ctx, "demo", bucket(false, tags)); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(false, tags)); err != nil {
 		t.Fatal(err)
 	}
 	propose := func(req remediation.ProposeRequest) (remediation.View, error) {
@@ -248,10 +248,24 @@ func TestRemediationControls(t *testing.T) {
 	if _, err := svc.Get(ctx, "other", v.ID); !errors.Is(err, remediation.ErrNotFound) {
 		t.Errorf("cross-tenant read: %v", err)
 	}
+	// Writes are tenant-scoped too: another tenant's approver cannot decide,
+	// release or verify this tenant's remediation.
+	if _, err := svc.Decide(ctx, "other", "bob", v.ID, "approve", ""); err == nil {
+		t.Error("cross-tenant approve succeeded")
+	}
+	if _, err := svc.Release(ctx, "other", "bob", v.ID); err == nil {
+		t.Error("cross-tenant release succeeded")
+	}
+	if _, err := svc.Verify(ctx, "other", "bob", v.ID); err == nil {
+		t.Error("cross-tenant verify succeeded")
+	}
+	if got, err := svc.Get(ctx, "demo", v.ID); err != nil || got.Status != remediation.StatusPending || len(got.Approvals) != 0 {
+		t.Fatalf("cross-tenant writes changed the remediation: %+v %v", got, err)
+	}
 
 	// The resource changes before approval: the plan is stale and stays stale.
 	tags2 := map[string]string{"owner": "b", "environment": "development", "cost_center": "c"}
-	if _, err := inv.Import(ctx, "demo", bucket(false, tags2)); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(false, tags2)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Decide(ctx, "demo", "bob", v.ID, "approve", ""); !errors.Is(err, remediation.ErrStale) {
@@ -286,7 +300,7 @@ func TestRemediationControls(t *testing.T) {
 		string(got.ChangeSet.Signed.Payload) != string(rel.ChangeSet.Signed.Payload) {
 		t.Error("stored signature differs from the released one")
 	}
-	if _, err := inv.Import(ctx, "demo", bucket(false, map[string]string{"owner": "c", "environment": "development", "cost_center": "c"})); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(false, map[string]string{"owner": "c", "environment": "development", "cost_center": "c"})); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.Verify(ctx, "demo", "alice", v.ID)
@@ -294,7 +308,7 @@ func TestRemediationControls(t *testing.T) {
 		t.Fatalf("verification of an unapplied change: %s %v", got.Status, err)
 	}
 	// Once the fix is really applied, verification passes on retry.
-	if _, err := inv.Import(ctx, "demo", bucket(true, map[string]string{"owner": "c", "environment": "development", "cost_center": "c"})); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(true, map[string]string{"owner": "c", "environment": "development", "cost_center": "c"})); err != nil {
 		t.Fatal(err)
 	}
 	if got, err = svc.Verify(ctx, "demo", "alice", v.ID); err != nil || got.Status != remediation.StatusVerified {
@@ -308,7 +322,7 @@ func TestRemediationControls(t *testing.T) {
 	// approved or released, because its simulation no longer holds.
 	moving := &changingPolicy{Policy: testOPA(opaURL)}
 	psvc := &remediation.Service{Pool: pool, OPA: moving}
-	if _, err := inv.Import(ctx, "demo", bucket(false, tags)); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(false, tags)); err != nil {
 		t.Fatal(err)
 	}
 	pv, err := psvc.Propose(ctx, "demo", "alice", remediation.ProposeRequest{Source: "finding", RuleID: "AEGIS-S3-001",
@@ -340,6 +354,26 @@ func TestRemediationControls(t *testing.T) {
 	if got, _ := svc.Get(ctx, "demo", cv.ID); got.StaleReason != "the tenant policy configuration changed since the simulation" {
 		t.Errorf("stale reason: %q", got.StaleReason)
 	}
+
+	// The resource changes between approval and release: the approvers saw
+	// another state, so release refuses and the plan becomes stale.
+	rv, err := svc.Propose(ctx, "demo", "alice", remediation.ProposeRequest{Source: "finding", RuleID: "AEGIS-S3-001",
+		ResourceID: "aws_s3_bucket.logs", Justification: "release staleness test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Decide(ctx, "demo", "bob", rv.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inv.Import(ctx, "demo", "tester", bucket(false, map[string]string{"owner": "d", "environment": "development", "cost_center": "c", "team": "t"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Release(ctx, "demo", "carol", rv.ID); !errors.Is(err, remediation.ErrStale) {
+		t.Fatalf("release after the resource changed: %v", err)
+	}
+	if got, _ := svc.Get(ctx, "demo", rv.ID); got.Status != remediation.StatusStale || got.ChangeSet != nil {
+		t.Errorf("after a refused release: status %s, change set %v", got.Status, got.ChangeSet != nil)
+	}
 }
 
 // changingPolicy reports a different policy bundle once changed is set.
@@ -365,7 +399,7 @@ func TestRemediationPaging(t *testing.T) {
 	pool, inv := migratedPool(t)
 	ctx := context.Background()
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 300, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	svc := &remediation.Service{Pool: pool, OPA: testOPA(opaURL)}

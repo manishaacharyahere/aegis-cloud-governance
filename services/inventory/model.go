@@ -242,4 +242,6 @@ var (
 	ErrTenantNotFound = errors.New("tenant not found")
 	ErrStaleSnapshot  = errors.New("snapshot is older than the latest import for this account")
 	ErrNotFound       = errors.New("not found")
+	ErrInvalidCursor  = errors.New("invalid cursor")
+	ErrInvalidQuery   = errors.New("invalid query")
 )

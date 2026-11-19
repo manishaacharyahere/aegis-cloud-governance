@@ -109,3 +109,21 @@ test_destructive_stateful_change if {
 	stateless := object.union(res("aws_security_group", {"ingress": []}), {"action": "delete", "destructive": true, "after": null})
 	count(terraform.deny) == 0 with input as {"resources": [stateless]}
 }
+
+test_cloudtrail_missing_attribute_fails_closed if {
+	no_validation := res("aws_cloudtrail", {"enable_logging": false})
+	ids(terraform.deny) == {"AEGIS-LOG-001"} with input as {"resources": [no_validation]}
+	only_validation := res("aws_cloudtrail", {"enable_log_file_validation": false})
+	ids(terraform.deny) == {"AEGIS-LOG-001"} with input as {"resources": [only_validation]}
+}
+
+test_blank_tags_warn if {
+	r := json.patch(res("aws_vpc", {}), [{"op": "replace", "path": "/tags", "value": {"owner": " ", "environment": "", "cost_center": "c"}}])
+	ids(terraform.warn) == {"AEGIS-TAG-001"} with input as {"resources": [r]}
+}
+
+test_unknown_region_warns if {
+	r := json.patch(res("aws_vpc", {}), [{"op": "remove", "path": "/region"}])
+	ids(terraform.warn) == {"AEGIS-REG-001"} with input as {"resources": [r]}
+	count(terraform.deny) == 0 with input as {"resources": [r]}
+}

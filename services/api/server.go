@@ -78,7 +78,11 @@ func NewHandler(d Deps) http.Handler {
 			inner = idempotent(d.Idempotency, pattern, inner)
 		}
 		// Rate limiting runs after authentication, so it is per user.
-		mux.Handle(pattern, LimitBody(limit)(routeTag(pattern, d.RateLimit.limit(lim, pattern, d.Auth.authorize(perm, inner)))))
+		var routed http.Handler = LimitBody(limit)(routeTag(pattern, d.RateLimit.limit(lim, pattern, d.Auth.authorize(perm, inner))))
+		if limit > d.MaxBodyBytes {
+			routed = importDeadlines(limit, routed)
+		}
+		mux.Handle(pattern, routed)
 	}
 	if d.MaxImportBytes == 0 {
 		d.MaxImportBytes = d.MaxBodyBytes
@@ -278,4 +282,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// importDeadlines gives the large-upload routes time to read and process a
+// body of up to limit bytes (the server-wide 15 s read timeout assumes a
+// small body): 30 s plus 1 s per 256 KiB, so a 64 MiB import gets about 5 min.
+func importDeadlines(limit int64, next http.Handler) http.Handler {
+	budget := 30*time.Second + time.Duration(limit/(256<<10))*time.Second
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rc := http.NewResponseController(w)
+		_ = rc.SetReadDeadline(time.Now().Add(budget))
+		_ = rc.SetWriteDeadline(time.Now().Add(2 * budget))
+		next.ServeHTTP(w, r)
+	})
 }

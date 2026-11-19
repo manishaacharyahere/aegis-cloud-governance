@@ -99,6 +99,39 @@ function Shell() {
   const [theme, setTheme] = useTheme()
   const [navOpen, setNavOpen] = useState(false)
   const callbackDone = useRef(false)
+  const drawer = useRef<HTMLElement>(null)
+  const openNav = useRef<HTMLButtonElement>(null)
+  const closeNav = useRef<HTMLButtonElement>(null)
+
+  // Mobile drawer: focus moves in when it opens, Escape closes it, Tab stays
+  // inside, and focus returns to the menu button when it closes.
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (navOpen) {
+      wasOpen.current = true
+      closeNav.current?.focus()
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setNavOpen(false)
+        if (e.key !== 'Tab' || !drawer.current) return
+        const items = drawer.current.querySelectorAll<HTMLElement>('a[href],button:not([disabled])')
+        const first = items[0]
+        const last = items[items.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last?.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first?.focus()
+        }
+      }
+      document.addEventListener('keydown', onKey)
+      return () => document.removeEventListener('keydown', onKey)
+    }
+    if (wasOpen.current) {
+      wasOpen.current = false
+      openNav.current?.focus()
+    }
+  }, [navOpen])
 
   useEffect(() => {
     fetchAuthConfig()
@@ -123,7 +156,8 @@ function Shell() {
       setNavOpen(false)
     }
     window.addEventListener('hashchange', onHash)
-    const poll = () => fetchReadiness().then(setReady).catch(() => {})
+    // Store only a changed state: every new object would re-render the page.
+    const poll = () => fetchReadiness().then((r) => setReady((prev) => (prev && JSON.stringify(prev) === JSON.stringify(r) ? prev : r))).catch(() => {})
     poll()
     const id = window.setInterval(poll, 15_000)
     return () => {
@@ -139,7 +173,16 @@ function Shell() {
     setMeError(null)
     setTenants(null)
   }, [])
-  const api = useMemo(() => makeClient({ session, tenant, onUnauthenticated: signOut }), [session, tenant, signOut])
+  // The client reads the session at call time, so a silent token renewal
+  // does not create a new client (which would refetch every page).
+  const [box] = useState(() => new SessionBox(session))
+  useEffect(() => {
+    box.set(session)
+  })
+  const who = session ? `${session.mode}:${session.subject}` : ''
+  const api = useMemo(() => makeClient({ session: box.get, tenant, onUnauthenticated: signOut }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new client per signed-in user and tenant
+    [who, tenant, signOut])
 
   // Who am I in this tenant. A late response for a previous tenant is ignored.
   useEffect(() => {
@@ -152,7 +195,8 @@ function Shell() {
     return () => {
       live = false
     }
-  }, [api, session, meTick])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- api changes with the user and tenant
+  }, [api, meTick])
 
   // The tenants this user holds a role in. If the remembered tenant is not one
   // of them, switch to the first, so nobody lands on an empty tenant.
@@ -166,9 +210,9 @@ function Shell() {
         saveStore(TENANT_KEY, r.items[0].slug)
       }
     }).catch(() => setTenantsError(true))
-    // Only on sign-in: switching tenants must not refetch the list.
+    // Only on sign-in: switching tenants or renewing the token must not refetch the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session])
+  }, [who])
 
   // Silent renewal: refresh the ID token two minutes before it expires.
   useEffect(() => {
@@ -213,13 +257,17 @@ function Shell() {
 
   return (
     <div className="min-h-dvh bg-bg lg:grid lg:grid-cols-[232px_1fr]">
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2">Skip to content</a>
+      <a href="#main" onClick={(e) => {
+        e.preventDefault() // the hash is the route: do not navigate
+        document.getElementById('main')?.focus()
+      }} className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2">Skip to content</a>
       {navOpen && <div className="fixed inset-0 z-30 bg-overlay lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       <aside className={cn('sidebar fixed inset-y-0 left-0 z-40 flex w-[232px] flex-col border-r border-border bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0',
-        navOpen ? 'translate-x-0' : '-translate-x-full')}>
+        navOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible')}
+        ref={drawer} aria-modal={navOpen || undefined} role={navOpen ? 'dialog' : undefined} aria-label={navOpen ? 'Navigation' : undefined}>
         <div className="flex h-14 items-center justify-between px-4">
           <Brand />
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setNavOpen(false)} aria-label="Close navigation"><X /></Button>
+          <Button ref={closeNav} variant="ghost" size="icon" className="lg:hidden" onClick={() => setNavOpen(false)} aria-label="Close navigation"><X /></Button>
         </div>
         <nav aria-label="Main" className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-2">
           {GROUPS.map((g) => (
@@ -250,7 +298,7 @@ function Shell() {
 
       <div className="min-w-0">
         <header className="topbar sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-bg/85 px-4 backdrop-blur md:px-6">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Menu /></Button>
+          <Button ref={openNav} variant="ghost" size="icon" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Menu /></Button>
           <div className="min-w-0 flex-1">
             <h1 className="m-0 truncate text-[17px] font-semibold tracking-tight">{current.label}</h1>
           </div>
@@ -258,7 +306,7 @@ function Shell() {
           <ThemeToggle value={theme} onChange={setTheme} />
           <UserMenu me={me} tenant={tenant} tenants={tenants} tenantsError={tenantsError} onTenant={switchTenant} onSignOut={signOut} />
         </header>
-        <main id="main" className="mx-auto w-full max-w-[1400px] px-4 py-5 md:px-6 md:py-6">
+        <main id="main" tabIndex={-1} className="outline-none mx-auto w-full max-w-[1400px] px-4 py-5 md:px-6 md:py-6">
           <p className="mb-4 mt-0 text-[13px] text-fg-muted">{current.description}</p>
           {me.method === 'dev-headers' && (
             <Callout tone="warning" className="mb-4" title="Development mode">Identities are not authenticated and every user has every permission. Use OIDC mode for anything shared.</Callout>
@@ -283,6 +331,18 @@ function Brand({ muted }: { muted?: boolean }) {
   )
 }
 
+/** Holds the current session for the API client outside React state. */
+class SessionBox {
+  private s: Session | null
+  constructor(s: Session | null) {
+    this.s = s
+  }
+  set(s: Session | null) {
+    this.s = s
+  }
+  get = () => this.s
+}
+
 function Centered({ children }: { children: ReactNode }) {
   return <div className="center flex min-h-dvh items-center justify-center bg-bg p-4">{children}</div>
 }
@@ -292,12 +352,12 @@ function StatusPill({ ready }: { ready: Readiness | null }) {
   const text = ready ? ({ ready: 'Operational', not_ready: 'Degraded', unreachable: 'API unreachable' })[ready.state] : 'Checking…'
   const dot = { ready: 'bg-success', not_ready: 'bg-warning', unreachable: 'bg-danger', loading: 'bg-fg-subtle' }[state]
   return (
-    <a href={hashFor('health')} role="status" className="hidden items-center gap-2 rounded-full border border-border px-2.5 py-1 text-xs text-fg-muted no-underline hover:border-border-strong sm:flex">
+    <a href={hashFor('health')} className="hidden items-center gap-2 rounded-full border border-border px-2.5 py-1 text-xs text-fg-muted no-underline hover:border-border-strong sm:flex">
       <span className="relative flex size-2">
         {state === 'ready' && <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-40 motion-reduce:animate-none" />}
         <span className={cn('relative inline-flex size-2 rounded-full', dot)} />
       </span>
-      {text}
+      <span role="status">{text}</span>
     </a>
   )
 }

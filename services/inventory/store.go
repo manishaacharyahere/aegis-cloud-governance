@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
+	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
 )
 
 // ImportSummary describes one accepted snapshot.
@@ -77,7 +79,12 @@ type ResourceDetail struct {
 	ResourceView
 	IncomingRelationships []IncomingRelationship `json:"incoming_relationships"`
 	Versions              []VersionView          `json:"versions"`
+	// VersionsTruncated is set when only the newest MaxVersions are returned.
+	VersionsTruncated bool `json:"versions_truncated"`
 }
+
+// MaxVersions bounds the version history returned with a resource.
+const MaxVersions = 50
 
 // ListFilter filters and paginates resource listings.
 type ListFilter struct {
@@ -119,7 +126,12 @@ type currentRow struct {
 // whose hash was already imported returns the original import with
 // Duplicate=true and changes nothing. Ordering: snapshots captured at or
 // before the latest import are rejected with ErrStaleSnapshot.
-func (s *Store) Import(ctx context.Context, tenantSlug string, ns NormalizedSnapshot) (ImportReport, error) {
+// Import stores a snapshot. A new import is audited (inventory imports drive
+// compliance, drift and remediation verification, so who imported matters).
+func (s *Store) Import(ctx context.Context, tenantSlug, actor string, ns NormalizedSnapshot) (ImportReport, error) {
+	if actor == "" {
+		return ImportReport{}, errors.New("inventory import: actor is required")
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return ImportReport{}, fmt.Errorf("begin: %w", err)
@@ -195,10 +207,10 @@ func (s *Store) Import(ctx context.Context, tenantSlug string, ns NormalizedSnap
 	importID := newUUID()
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO inventory_imports (id, tenant_id, account_id, source, schema_version, snapshot_sha256, captured_at,
-			resource_count, created_count, updated_count, deleted_count, unchanged_count, warnings)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+			resource_count, created_count, updated_count, deleted_count, unchanged_count, warnings, imported_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		importID, tenantID, accountID, ns.Snapshot.Source, ns.Snapshot.SchemaVersion, ns.SHA256, ns.Snapshot.CapturedAt,
-		len(ns.Resources), created, updated, deleted, unchanged, mustJSON(warnings)); err != nil {
+		len(ns.Resources), created, updated, deleted, unchanged, mustJSON(warnings), actor); err != nil {
 		return ImportReport{}, fmt.Errorf("insert import: %w", err)
 	}
 
@@ -298,6 +310,11 @@ func (s *Store) Import(ctx context.Context, tenantSlug string, ns NormalizedSnap
 			return ImportReport{}, fmt.Errorf("write relationships: %w", err)
 		}
 	}
+	if err := audit.Append(ctx, tx, tenantID, audit.Event{Actor: actor, Action: "inventory.import", TargetType: "inventory_import",
+		TargetID: importID, Outcome: "success", Details: map[string]any{"account_id": accountID, "source": ns.Snapshot.Source,
+			"sha256": ns.SHA256, "resources": len(ns.Resources), "created": created, "updated": updated, "deleted": deleted}}); err != nil {
+		return ImportReport{}, err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return ImportReport{}, fmt.Errorf("commit: %w", err)
@@ -338,8 +355,12 @@ func (s *Store) ListResources(ctx context.Context, tenantSlug string, f ListFilt
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 100
 	}
-	if (f.AccountID != "" && !IsUUID(f.AccountID)) || (f.After != "" && !IsUUID(f.After)) {
-		return ResourcePage{Items: []ResourceView{}}, nil
+	// An empty page here would read as "end of list" to a paging client.
+	if f.AccountID != "" && !IsUUID(f.AccountID) {
+		return ResourcePage{}, fmt.Errorf("%w: account_id must be a UUID", ErrInvalidQuery)
+	}
+	if f.After != "" && !IsUUID(f.After) {
+		return ResourcePage{}, ErrInvalidCursor
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+resourceColumns+` FROM resources
@@ -455,12 +476,15 @@ func (s *Store) GetResource(ctx context.Context, tenantSlug, id string) (Resourc
 
 	rows, err = s.pool.Query(ctx, `
 		SELECT version, change_type, changed_paths, import_id, recorded_at FROM resource_versions
-		WHERE resource_pk = $1 ORDER BY version DESC`, id)
+		WHERE resource_pk = $1 ORDER BY version DESC LIMIT $2`, id, MaxVersions+1)
 	if err != nil {
 		return ResourceDetail{}, fmt.Errorf("versions: %w", err)
 	}
 	if d.Versions, err = pgx.CollectRows(rows, pgx.RowToStructByPos[VersionView]); err != nil {
 		return ResourceDetail{}, fmt.Errorf("versions: %w", err)
+	}
+	if len(d.Versions) > MaxVersions {
+		d.Versions, d.VersionsTruncated = d.Versions[:MaxVersions], true
 	}
 	return d, nil
 }

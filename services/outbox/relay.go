@@ -143,7 +143,7 @@ func (r *Relay) RunOnce(ctx context.Context) (published, failed int, err error) 
 		if perr := r.Pub.Publish(ctx, Subject(e), e.ID, data); perr != nil {
 			msg := perr.Error()
 			if len(msg) > 500 {
-				msg = msg[:500]
+				msg = strings.ToValidUTF8(msg[:500], "")
 			}
 			// A broker outage is not the message's fault: record the error but
 			// do not count the attempt, or a few minutes of downtime would park

@@ -28,7 +28,7 @@ func TestDriftLifecycle(t *testing.T) {
 		t.Fatalf("no inventory: %v", err)
 	}
 	v1 := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 1000, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", v1.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v1.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Compare(ctx, "demo", "", "alice"); !errors.Is(err, drift.ErrNoBaseline) {
@@ -47,7 +47,7 @@ func TestDriftLifecycle(t *testing.T) {
 
 	// Inject drift and observe it.
 	v2, m := synthetic.Mutate(v1, synthetic.MutateOptions{Seed: 5, Modify: 30, Delete: 10, Add: 12, CapturedAt: base.Add(24 * time.Hour)})
-	if _, err := inv.Import(ctx, "demo", v2.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", v2.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	rep, err = svc.Compare(ctx, "demo", "", "bob")
@@ -152,8 +152,8 @@ func TestDriftLifecycle(t *testing.T) {
 	if err != nil || len(page2) != 1 || next2 != "" || page2[0].ID == page1[0].ID || page2[0].ID == page1[1].ID {
 		t.Fatalf("reports page 2: %d %q %v", len(page2), next2, err)
 	}
-	if other, _, _ := svc.ListReports(ctx, "other", "", 10); len(other) != 0 {
-		t.Errorf("reports leak across tenants: %d", len(other))
+	if other, _, err := svc.ListReports(ctx, "other", "", 10); err != nil || len(other) != 0 {
+		t.Errorf("reports leak across tenants: %d %v", len(other), err)
 	}
 	if _, _, err := svc.ListReports(ctx, "demo", "not-a-cursor", 10); !errors.Is(err, drift.ErrInvalid) {
 		t.Errorf("bad cursor: %v", err)

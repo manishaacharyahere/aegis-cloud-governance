@@ -99,6 +99,8 @@ services:
       postgres: { condition: service_healthy }
 
   api:
+    # Longer than the service's own shutdown budget, so it can drain.
+    stop_grace_period: 20s
     <<: *hardening
     profiles: ["core"]
     image: aegis-api:local
@@ -174,6 +176,8 @@ services:
         limits: { memory: 128m }
 
   ml-worker:
+    # Longer than the service's own shutdown budget, so it can drain.
+    stop_grace_period: 60s
     <<: *hardening
     profiles: ["ml"]
     build:

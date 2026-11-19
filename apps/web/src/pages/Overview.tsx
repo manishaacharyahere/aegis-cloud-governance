@@ -1,23 +1,16 @@
 import { BadgeDollarSign, Globe2, ShieldAlert, ShieldCheck, Wrench } from 'lucide-react'
-import { ApiError } from '../client'
+import { notFoundAsNull } from '../client'
+import { severityRail } from '@/lib/tones'
 import type { PageProps } from '../nav'
 import type { AuditEvent, Coverage, Paged, Recommendation, Remediation, RiskRun } from '../types'
 import { Button, Card, DataTable, EmptyState, Meter, Mono, StatCard, StatGrid, StatusBadge } from '@/components/ui'
 import { ago, useLoad, usdCompact } from '../hooks'
 
 /** 404 means "nothing yet"; every other failure is a real error the user must see. */
-const orNull = async <T,>(p: Promise<T>): Promise<T | null> => {
-  try {
-    return await p
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null
-    throw e
-  }
-}
 
 export default function Overview({ api, go }: PageProps) {
   const cov = useLoad(() => api<Coverage>('GET', '/api/v1/compliance/coverage?framework=aegis-baseline-1'), [api])
-  const risk = useLoad(() => orNull(api<RiskRun>('GET', '/api/v1/risk/assessments/latest?limit=6')), [api])
+  const risk = useLoad(() => notFoundAsNull(api<RiskRun>('GET', '/api/v1/risk/assessments/latest?limit=6')), [api])
   const recs = useLoad(() => api<{ items: Recommendation[] }>('GET', '/api/v1/recommendations?status=open'), [api])
   const rems = useLoad(() => api<Paged<Remediation>>('GET', '/api/v1/remediations?status=pending_approval&limit=100'), [api])
   const audit = useLoad(() => api<{ items: AuditEvent[] }>('GET', '/api/v1/audit/events?limit=8'), [api])
@@ -56,7 +49,7 @@ export default function Overview({ api, go }: PageProps) {
             </EmptyState>
           ) : (
             <DataTable rows={risk.data?.assessments} loading={risk.loading} error={risk.error} onRetry={risk.reload}
-              getRowId={(a) => a.rule_id + a.subject} rowTone={(a) => (a.band === 'critical' ? 'danger' : a.band === 'high' ? 'high' : undefined)}
+              getRowId={(a) => a.rule_id + a.subject} rowTone={(a) => severityRail(a.band)}
               columns={[
                 { key: 'band', header: 'Band', cell: (a) => <StatusBadge value={a.band} /> },
                 { key: 'subject', header: 'Resource', cell: (a) => <Mono value={a.subject} copy={false} max={40} /> },

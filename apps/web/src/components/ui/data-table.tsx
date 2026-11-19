@@ -50,6 +50,9 @@ export function DataTable<T>({ columns, rows, getRowId, onRowOpen, rowLabel, row
   }
   const pad = dense ? 'px-3 py-1.5' : 'px-3 py-2.5'
   return (
+    <>
+    {/* A failed refresh or "load more" keeps the rows but must still say so. */}
+    {error ? <ErrorState error={error} onRetry={onRetry} className="mb-3" /> : null}
     <div className={cn('-mx-5 overflow-x-auto', className)}>
       <table className="table w-full border-collapse text-[13px]">
         {caption && <caption className="sr-only">{caption}</caption>}
@@ -84,6 +87,7 @@ export function DataTable<T>({ columns, rows, getRowId, onRowOpen, rowLabel, row
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 

@@ -98,6 +98,17 @@ var (
 
 var subjectRe = regexp.MustCompile(`^([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|sub:[A-Za-z0-9._:@|/-]{1,300})$`)
 
+// CanonicalSubject returns the stored form of a subject: email addresses are
+// case-insensitive and lowercased; "sub:<id>" identifiers come from the
+// identity provider, are case-sensitive and are kept as they are.
+func CanonicalSubject(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "sub:") {
+		return s
+	}
+	return strings.ToLower(s)
+}
+
 // ValidSubject reports whether s is an email address or "sub:<id>".
 func ValidSubject(s string) bool { return len(s) <= 320 && subjectRe.MatchString(s) }
 
@@ -110,6 +121,7 @@ type Store struct {
 
 	mu    sync.Mutex
 	cache map[string]cachedRoles
+	gen   uint64 // bumped by invalidate; a lookup older than that is not cached
 }
 
 type cachedRoles struct {
@@ -127,9 +139,11 @@ func (s *Store) ttl() time.Duration {
 // RolesFor returns subject's roles in the tenant (none if the tenant does not exist).
 func (s *Store) RolesFor(ctx context.Context, tenant, subject string) ([]string, error) {
 	key := tenant + "|" + subject
+	var gen uint64
 	if s.ttl() > 0 {
 		s.mu.Lock()
 		c, ok := s.cache[key]
+		gen = s.gen
 		s.mu.Unlock()
 		if ok && time.Now().Before(c.until) {
 			return c.roles, nil
@@ -143,11 +157,16 @@ func (s *Store) RolesFor(ctx context.Context, tenant, subject string) ([]string,
 	roles, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err == nil && s.ttl() > 0 {
 		s.mu.Lock()
+		defer s.mu.Unlock()
+		// A grant or revoke committed while this query ran: its result may
+		// predate the change, so do not cache it.
+		if s.gen != gen {
+			return roles, nil
+		}
 		if s.cache == nil || len(s.cache) > 10000 {
 			s.cache = map[string]cachedRoles{}
 		}
 		s.cache[key] = cachedRoles{roles: roles, until: time.Now().Add(s.ttl())}
-		s.mu.Unlock()
 	}
 	return roles, err
 }
@@ -155,6 +174,7 @@ func (s *Store) RolesFor(ctx context.Context, tenant, subject string) ([]string,
 func (s *Store) invalidate() {
 	s.mu.Lock()
 	s.cache = nil
+	s.gen++
 	s.mu.Unlock()
 }
 
@@ -238,6 +258,7 @@ func validate(subject, role string) error {
 
 // Grant adds a binding (idempotent) and audits it.
 func (s *Store) Grant(ctx context.Context, tenant, actor, subject, role string) error {
+	subject = CanonicalSubject(subject)
 	if err := validate(subject, role); err != nil {
 		return err
 	}
@@ -268,6 +289,7 @@ func (s *Store) Grant(ctx context.Context, tenant, actor, subject, role string) 
 // Revoke removes a binding. The last admin of a tenant cannot be removed, so
 // a tenant can never lock itself out.
 func (s *Store) Revoke(ctx context.Context, tenant, actor, subject, role string) error {
+	subject = CanonicalSubject(subject)
 	if err := validate(subject, role); err != nil {
 		return err
 	}

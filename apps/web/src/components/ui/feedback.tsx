@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { describeError } from '@/client'
+import { ApiError, describeError } from '@/client'
 import { Button } from './button'
 
 /** Placeholder rows while content loads, so the layout does not jump. */
@@ -36,9 +36,33 @@ export function ErrorState({ error, onRetry, className }: { error: unknown; onRe
   return (
     <div role="alert" className={cn('error flex items-start gap-2.5 rounded-md border border-danger/30 bg-danger/8 px-3.5 py-2.5 text-[13px] text-danger', className)}>
       <AlertOctagon className="mt-0.5 size-4 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1">{describeError(error)}</span>
+      <div className="min-w-0 flex-1">
+        {describeError(error)}
+        <Details error={error} />
+      </div>
       {onRetry && <Button size="sm" variant="ghost" onClick={onRetry}><RefreshCw />Retry</Button>}
     </div>
+  )
+}
+
+/** Per-field problems the API returned (validation issues, bad CSV rows). */
+function Details({ error }: { error: unknown }) {
+  if (!(error instanceof ApiError) || !Array.isArray(error.details) || error.details.length === 0) return null
+  const shown = error.details.slice(0, 8)
+  const line = (d: unknown) => {
+    if (d && typeof d === 'object') {
+      const o = d as Record<string, unknown>
+      const where = o.path ?? o.row ?? o.line ?? ''
+      const what = o.message ?? o.error ?? JSON.stringify(o)
+      return where !== '' ? `${String(where)}: ${String(what)}` : String(what)
+    }
+    return String(d)
+  }
+  return (
+    <ul className="m-0 mt-1.5 list-disc space-y-0.5 pl-4 text-[12.5px] text-fg-muted">
+      {shown.map((d, i) => <li key={i} className="break-words">{line(d)}</li>)}
+      {error.details.length > shown.length && <li>and {error.details.length - shown.length} more</li>}
+    </ul>
   )
 }
 

@@ -56,7 +56,8 @@ decision: [ADR-008](../../architecture/architecture-decisions/ADR-008-postgres-j
 | AEGIS-NET-001 | critical | deny | ingress from `0.0.0.0/0` covering port 22 or 3389 (inline, `aws_security_group_rule`, `aws_vpc_security_group_ingress_rule`) |
 | AEGIS-LOG-001 | high | deny | CloudTrail logging or log-file validation disabled |
 | AEGIS-TAG-001 | medium | warn | taggable resource missing `owner`, `environment` or `cost_center` |
-| AEGIS-REG-001 | high | deny | provider region outside the approved list |
+| AEGIS-REG-001 | high | deny | provider region outside the approved list (a literal, or a root variable `var.<name>`) |
+| AEGIS-REG-001 | medium | warn | the region cannot be determined from the plan (locals, module inputs, functions): check it manually instead of passing silently |
 | AEGIS-TF-001 | high | deny | plan deletes or replaces a stateful resource (DB, bucket, KMS key, …) |
 
 Defaults (approved regions, required tags, stateful types, admin ports) can be

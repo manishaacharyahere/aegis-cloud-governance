@@ -1245,7 +1245,15 @@ paths:
         description: Minimum band
         schema:
           type: string
-      - *id004
+      - name: limit
+        in: query
+        required: false
+        description: Highest-scoring assessments to return
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
       responses:
         '200':
           description: OK
@@ -1267,6 +1275,16 @@ paths:
       x-aegis-permission: read
       parameters:
       - *id002
+      - $ref: '#/components/parameters/Limit'
+      - name: min_sensitivity
+        in: query
+        required: false
+        description: Only paths that reach a resource at least this sensitive.
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 50
       responses:
         '200':
           description: OK
@@ -2093,10 +2111,10 @@ components:
           type: string
     ProposeRequest:
       type: object
+      description: With source "finding" the operations come from the rule's template and are omitted; with "manual" they are required.
       required:
       - source
       - resource_id
-      - operations
       - justification
       properties:
         source:

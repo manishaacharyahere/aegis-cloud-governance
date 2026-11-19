@@ -50,7 +50,7 @@ func TestAppRolePrivileges(t *testing.T) {
 
 	// Normal work succeeds: import, audited role grants, retention.
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 200, CapturedAt: base})
-	if _, err := inventory.NewService(inventory.NewStore(app)).Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inventory.NewService(inventory.NewStore(app)).Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatalf("import as aegis_app: %v", err)
 	}
 	if err := (&access.Store{Pool: app}).Grant(ctx, "demo", "root@example.com", "alice@example.com", access.RoleViewer); err != nil {

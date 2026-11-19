@@ -93,6 +93,25 @@ func TestRegionFromProvider(t *testing.T) {
 	}
 }
 
+func TestRegionFromRootVariable(t *testing.T) {
+	p := &Plan{}
+	if err := json.Unmarshal([]byte(`{"variables":{"region":{"value":"sa-east-1"}}}`), p); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		`{"constant_value":"ap-south-1"}`:           "ap-south-1",
+		`{"references":["var.region"]}`:             "sa-east-1",
+		`{"references":["var.missing"]}`:            "",
+		`{"references":["local.region"]}`:           "",
+		`{"references":["var.region","var.other"]}`: "",
+	}
+	for expr, want := range cases {
+		if got := p.resolveString(json.RawMessage(expr)); got != want {
+			t.Errorf("%s -> %q, want %q", expr, got, want)
+		}
+	}
+}
+
 func TestClassifyActions(t *testing.T) {
 	for in, want := range map[string]Action{
 		"create": ActionCreate, "update": ActionUpdate, "delete": ActionDelete,

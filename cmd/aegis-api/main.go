@@ -94,24 +94,10 @@ func run() error {
 	}
 	defer bg.Close()
 
+	// Migrations run as the schema owner when a separate URL is given; the
+	// API itself then runs as the least-privilege aegis_app role.
 	if cfg.MigrateOnStart {
-		migs, err := database.LoadMigrations(migrations.FS)
-		if err != nil {
-			return err
-		}
-		// Migrations run as the schema owner when a separate URL is given; the
-		// API itself then runs as the least-privilege aegis_app role.
-		migPool := pool
-		if cfg.MigrationDatabaseURL != "" {
-			if migPool, err = database.OpenWith(ctx, cfg.MigrationDatabaseURL, database.Options{MaxConns: 2, AppName: "aegis-migrate"}); err != nil {
-				return fmt.Errorf("migration database: %w", err)
-			}
-		}
-		err = database.Migrate(ctx, migPool, migs, log)
-		if migPool != pool {
-			migPool.Close() // the owner connection is not kept for the API's lifetime
-		}
-		if err != nil {
+		if err := migrateOnly(ctx, cfg, log); err != nil {
 			return err
 		}
 	}
@@ -322,6 +308,6 @@ func migrateOnly(ctx context.Context, cfg config.Config, log *slog.Logger) error
 	if err := database.Migrate(ctx, pool, migs, log); err != nil {
 		return err
 	}
-	log.Info("migrations applied; exiting")
+	log.Info("migrations applied")
 	return nil
 }

@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -24,13 +25,23 @@ import (
 type recordingNotifier struct {
 	mu   sync.Mutex
 	msgs []string
+	down bool // the webhook is failing
 }
 
 func (r *recordingNotifier) Notify(_ context.Context, text string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.down {
+		return errors.New("webhook unavailable")
+	}
 	r.msgs = append(r.msgs, text)
 	return nil
+}
+
+func (r *recordingNotifier) setDown(v bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.down = v
 }
 
 func (r *recordingNotifier) all() []string {
@@ -70,16 +81,28 @@ func TestAutomationEvaluateAndRemind(t *testing.T) {
 	}
 	inv := inventoryFor(pool)
 	ds := synthetic.Generate(synthetic.Options{Seed: 42, Resources: 300, CapturedAt: base})
-	if _, err := inv.Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Evaluate(ctx, "demo"); err != nil {
+	// The reactor and the scheduler can evaluate at the same moment: the
+	// evaluations are serialised, so the risk increase is reported once.
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = a.Evaluate(ctx, "demo")
+		}()
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
 		t.Fatal(err)
 	}
-	if c := count(t, pool, `SELECT count(*) FROM compliance_runs WHERE actor = $1`, automation.Actor); c != 1 {
+	if c := count(t, pool, `SELECT count(*) FROM compliance_runs WHERE actor = $1`, automation.Actor); c != 2 {
 		t.Errorf("automated compliance runs = %d", c)
 	}
-	if c := count(t, pool, `SELECT count(*) FROM risk_runs WHERE actor = $1`, automation.Actor); c != 1 {
+	if c := count(t, pool, `SELECT count(*) FROM risk_runs WHERE actor = $1`, automation.Actor); c != 2 {
 		t.Errorf("automated risk runs = %d", c)
 	}
 	if msgs := n.all(); len(msgs) != 1 || !strings.Contains(msgs[0], "critical and high risks rose from 0") {
@@ -105,6 +128,12 @@ func TestAutomationEvaluateAndRemind(t *testing.T) {
 		FROM tenants WHERE slug = 'demo'`); err != nil {
 		t.Fatal(err)
 	}
+	// A failing webhook must not mark the reminders as sent.
+	n.setDown(true)
+	if sent, err := a.Remind(ctx, "demo"); err == nil || sent != 0 {
+		t.Fatalf("reminders with the webhook down: sent %d, %v", sent, err)
+	}
+	n.setDown(false)
 	sent, err := a.Remind(ctx, "demo")
 	if err != nil || sent != 2 {
 		t.Fatalf("reminders sent = %d, %v (%v)", sent, err, n.all())
@@ -134,10 +163,21 @@ func TestAutomationReactor(t *testing.T) {
 	}
 	defer bus.Close()
 	go func() { _ = a.RunReactor(ctx, bus.JetStream(), 200*time.Millisecond) }()
-	time.Sleep(500 * time.Millisecond) // consumer ready
+	// The consumer delivers events published after it was created: wait until
+	// it exists (a fixed sleep was flaky on a slow runner).
+	ready := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := bus.JetStream().Consumer(ctx, natsbus.Stream, a.Consumer); err == nil {
+			break
+		}
+		if time.Now().After(ready) {
+			t.Fatal("reactor consumer was not created")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	ds := synthetic.Generate(synthetic.Options{Seed: 7, Resources: 200, CapturedAt: base})
-	if _, err := inventoryFor(a.Pool).Import(ctx, "demo", ds.Snapshot); err != nil {
+	if _, err := inventoryFor(a.Pool).Import(ctx, "demo", "tester", ds.Snapshot); err != nil {
 		t.Fatal(err)
 	}
 	relay := &outbox.Relay{Pool: a.Pool, Pub: bus}

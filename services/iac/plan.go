@@ -19,8 +19,9 @@ import (
 const MaxPlanBytes = 64 << 20
 
 // Plan is the subset of `terraform show -json` output Aegis relies on.
-// Fields that commonly contain secrets (variables, prior_state, output
-// values) are deliberately not modelled, so they are never retained.
+// Fields that commonly contain secrets (prior_state, output values) are
+// deliberately not modelled. Root variables are read only to resolve a
+// provider region given as `var.<name>`; they are never retained.
 type Plan struct {
 	FormatVersion    string           `json:"format_version"`
 	TerraformVersion string           `json:"terraform_version"`
@@ -29,6 +30,9 @@ type Plan struct {
 		ProviderConfig map[string]ProviderConfig `json:"provider_config"`
 		RootModule     ConfigModule              `json:"root_module"`
 	} `json:"configuration"`
+	Variables map[string]struct {
+		Value any `json:"value"`
+	} `json:"variables"`
 	Errored bool `json:"errored"`
 }
 
@@ -190,7 +194,7 @@ func Analyze(p *Plan) Analysis {
 
 		c := cfg[rc.Address]
 		prov := p.Configuration.ProviderConfig[c.providerKey]
-		pr.Region = constantString(prov.Expressions["region"])
+		pr.Region = p.resolveString(prov.Expressions["region"])
 
 		pr.Taggable, pr.Tags = effectiveTags(pr.After, rc.Change.AfterUnknown, defaultTags(prov))
 
@@ -277,6 +281,27 @@ func indexConfig(p *Plan) map[string]configInfo {
 	}
 	walk(p.Configuration.RootModule, "")
 	return out
+}
+
+// resolveString returns a literal string expression, or the value of a root
+// variable when the expression is exactly `var.<name>`. Anything else (locals,
+// module inputs, functions) is "", which the region policy reports as unknown.
+func (p *Plan) resolveString(raw json.RawMessage) string {
+	if s := constantString(raw); s != "" {
+		return s
+	}
+	var e struct {
+		References []string `json:"references"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &e) != nil || len(e.References) != 1 {
+		return ""
+	}
+	name, ok := strings.CutPrefix(e.References[0], "var.")
+	if !ok {
+		return ""
+	}
+	s, _ := p.Variables[name].Value.(string)
+	return s
 }
 
 func constantString(raw json.RawMessage) string {

@@ -23,12 +23,12 @@ Every error has the same shape:
 
 | Status | Codes |
 |---|---|
-| 400 | `invalid_json`, `invalid_tenant`, `invalid_query`, `invalid_idempotency_key` |
+| 400 | `invalid_json`, `invalid_body`, `invalid_tenant`, `invalid_query`, `invalid_cursor`, `invalid_idempotency_key` |
 | 401 | `unauthenticated` (with `WWW-Authenticate: Bearer`) |
 | 403 | `forbidden`, `separation_of_duties`, `dev_mode_local_only` |
 | 404 | `not_found`, `tenant_not_found` |
 | 409 | `invalid_transition`, `stale`, `not_observed`, `ambiguous_resource`, `request_in_progress` |
-| 413 | `body_too_large` |
+| 413 | `body_too_large` (any route, whenever the body exceeds that route's limit) |
 | 422 | `invalid_request`, `validation_failed`, `idempotency_key_reused` |
 | 429 | `rate_limited` (with `Retry-After` in seconds) |
 | 503 | `identity_provider_unavailable`, `*_unavailable` |
@@ -48,6 +48,12 @@ GET /api/v1/remediations?limit=50&after=MTc2...   → the next, older page; "nex
 - These routes page this way: `/remediations` and `/compliance/exceptions`.
   `/audit/events` pages by sequence number instead: use `?before_seq=<next_before_seq>`.
 - `/resources` pages by resource ID with `cursor=<next_cursor>`.
+- A cursor that is not one the API issued is rejected with `400 invalid_cursor`
+  on `/resources` and `/iac/scans`, so a mangled cursor never reads as "end of
+  list". (`/remediations`, `/compliance/exceptions` and `/drift/reports` still
+  answer `422 invalid_request`; unifying them is on the backlog.)
+- `GET /resources/{id}` returns the newest 50 versions; `versions_truncated`
+  says whether there are more.
 
 ## Idempotent retries
 
@@ -58,6 +64,11 @@ Any `POST` may carry `Idempotency-Key: <1-128 of A-Z a-z 0-9 . _ : ->`.
   stored response with `Idempotent-Replayed: true`, and the work is not done twice.
 - The same key with a different body gets `422 idempotency_key_reused`.
 - While the first request is still running, a retry gets `409 request_in_progress`.
+- `POST /iac/scans` also stores the key on the scan. Reusing it for another
+  fixture, or from another caller, gets `422 idempotency_key_reused` (never the
+  other request's scan).
+- The import routes allow more time to upload and process a large body (30 s
+  plus 1 s per 256 KiB of the route's limit) than the default 15 s read timeout.
 - Server errors (5xx) are not stored, so the retry runs again.
 
 ## Rate limits

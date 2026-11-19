@@ -42,6 +42,9 @@ func (h tenantHandlers) putPolicyConfig(w http.ResponseWriter, r *http.Request) 
 	}
 	var c tenancy.PolicyConfig
 	if err := decodeStrict(r, &c); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", "body must be a policy config object")
 		return
 	}
@@ -58,6 +61,7 @@ func (h tenantHandlers) fail(w http.ResponseWriter, r *http.Request, err error) 
 		writeError(w, http.StatusUnprocessableEntity, "invalid_request", err.Error())
 	case errors.Is(err, tenancy.ErrTenantNotFound):
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
+	case errors.Is(err, context.Canceled): // the client went away
 	default:
 		logging.FromContext(r.Context()).Error("tenant settings request failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")

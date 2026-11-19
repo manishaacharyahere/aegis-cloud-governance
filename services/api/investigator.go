@@ -55,6 +55,9 @@ func (h investigatorHandlers) create(w http.ResponseWriter, r *http.Request) {
 	}
 	var req investigator.Request
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"resource_id": "...", "account_id": "optional", "question": "optional"}`)
 		return
 	}

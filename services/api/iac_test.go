@@ -18,7 +18,7 @@ type fakeIaC struct {
 	getErr  error
 }
 
-func (f *fakeIaC) Enqueue(_ context.Context, _, ref, key string) (iac.Scan, bool, error) {
+func (f *fakeIaC) Enqueue(_ context.Context, _, _, ref, key string) (iac.Scan, bool, error) {
 	f.gotRef, f.gotKey = ref, key
 	return iac.Scan{ID: "s1", Status: iac.StatusQueued}, f.created, nil
 }
@@ -57,7 +57,7 @@ const scanBody = `{"source":{"type":"fixture","ref":"insecure-storage"}}`
 func TestCreateScan(t *testing.T) {
 	f := &fakeIaC{created: true}
 	rec := do(iacHandler(f), http.MethodPost, "/api/v1/iac/scans", strings.NewReader(scanBody),
-		map[string]string{TenantHeader: "demo", "Idempotency-Key": "ci-run-42"})
+		map[string]string{TenantHeader: "demo", ActorHeader: "alice", "Idempotency-Key": "ci-run-42"})
 	if rec.Code != http.StatusAccepted || rec.Header().Get("Location") != "/api/v1/iac/scans/s1" {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
@@ -66,7 +66,7 @@ func TestCreateScan(t *testing.T) {
 	}
 
 	f.created = false
-	if rec := do(iacHandler(f), http.MethodPost, "/api/v1/iac/scans", strings.NewReader(scanBody), tenantHdr); rec.Code != http.StatusOK {
+	if rec := do(iacHandler(f), http.MethodPost, "/api/v1/iac/scans", strings.NewReader(scanBody), writeHdr); rec.Code != http.StatusOK {
 		t.Errorf("idempotent replay = %d, want 200", rec.Code)
 	}
 }
@@ -78,10 +78,10 @@ func TestCreateScanRejectsBadInput(t *testing.T) {
 		code int
 	}{
 		{scanBody, nil, 400},
-		{`{"source":{"type":"git","ref":"x"}}`, tenantHdr, 422},
-		{`{"source":{"type":"fixture","ref":"../../etc"}}`, tenantHdr, 422},
-		{`{"source":{"type":"fixture","ref":"x"},"extra":1}`, tenantHdr, 400},
-		{scanBody, map[string]string{TenantHeader: "demo", "Idempotency-Key": "bad key with spaces"}, 400},
+		{`{"source":{"type":"git","ref":"x"}}`, writeHdr, 422},
+		{`{"source":{"type":"fixture","ref":"../../etc"}}`, writeHdr, 422},
+		{`{"source":{"type":"fixture","ref":"x"},"extra":1}`, writeHdr, 400},
+		{scanBody, map[string]string{TenantHeader: "demo", ActorHeader: "alice", "Idempotency-Key": "bad key with spaces"}, 400},
 	}
 	for _, c := range cases {
 		if rec := do(iacHandler(&fakeIaC{}), http.MethodPost, "/api/v1/iac/scans", strings.NewReader(c.body), c.hdr); rec.Code != c.code {

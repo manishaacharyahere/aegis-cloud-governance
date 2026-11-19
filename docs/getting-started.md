@@ -122,7 +122,7 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_AI_MAX_CONCURRENT` | `2` | concurrent model calls; extra investigations return the brief without the model |
 | `AEGIS_SCHEDULE_EVERY` | `6h` | re-evaluate compliance, risk and drift for every tenant, and send reminders (0 disables); imports also trigger an evaluation within ~10 s through NATS |
 | `AEGIS_NOTIFY_WEBHOOK_URL` | — (log only) | alerts (more critical or high risks) and reminders (remediations awaiting approval for over 24 h, exceptions expiring within 7 days) as `{"text": ...}`; https in production |
-| `AEGIS_RETENTION_INTERVAL` | `1h` | retention job period (0 disables): published events 7 days, investigations 180 days, compliance/risk/drift runs beyond the latest 50 per key once older than 31 days, 20 ML runs. Evidence is deleted only through the `aegis_retention_purge` database function, which enforces minimums |
+| `AEGIS_RETENTION_INTERVAL` | `1h` | retention job period, 0 (disabled) or at least 1m: published events 7 days, investigations 180 days, compliance/risk/drift runs beyond the latest 50 per key once older than 31 days, 20 ML runs. Evidence is deleted only through the `aegis_retention_purge` database function, which enforces minimums |
 
 ## 4. Run the tests
 

@@ -125,7 +125,7 @@ test('2. investigate risk and propose a fix', async ({ page }) => {
   await page.getByRole('button', { name: /Simulate and propose/ }).click()
   await expect(page.getByText(/Approvals \(0 of \d required\)/)).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.badge').filter({ hasText: 'passed' })).toBeVisible()
-  await expect(page.getByText('You requested this change, so someone else must approve it.')).toBeVisible({ timeout: 1 }).catch(() => {})
+  await expect(page.getByText('You requested this change, so someone else must approve it.')).toBeVisible()
   remediationURL = page.url()
   await shot(page, '05-remediation-proposed')
 })
@@ -153,6 +153,9 @@ test('5. controlled remediation: two approvers, release', async ({ page }) => {
   // The requester cannot approve.
   await signIn(page, 'alice@aegis.local')
   await page.goto('/' + path)
+  // Wait for the remediation itself, or "no Approve button" would pass on an empty page.
+  await expect(page.getByText(/Approvals \(0 of \d required\)/)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('You requested this change, so someone else must approve it.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0)
 
   for (const approver of ['bob@aegis.local', 'carol@aegis.local']) {
@@ -207,8 +210,11 @@ test('6. drift: approve a baseline, then check it', async ({ page }) => {
 test('a viewer sees data but no actions', async ({ page }) => {
   await signIn(page, 'viewer@aegis.local')
   await page.getByRole('link', { name: 'Risk' }).click()
+  // Each negative check waits for the page's data first (an empty page has no buttons either).
+  await expect(page.locator('main li button[aria-expanded]').first()).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: 'Run assessment' })).toHaveCount(0)
   await page.getByRole('link', { name: 'Remediation' }).click()
+  await expect(page.locator('main .table tbody tr').first()).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('heading', { name: 'Propose a remediation' })).toHaveCount(0)
   await page.getByRole('link', { name: 'Drift' }).click()
   await expect(page.getByRole('heading', { name: 'Approved baseline' })).toBeVisible()

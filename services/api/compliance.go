@@ -88,6 +88,9 @@ func (h complianceHandlers) verifyAnchor(w http.ResponseWriter, r *http.Request)
 		Hash string `json:"hash"`
 	}
 	if err := decodeStrict(r, &req); err != nil || req.Seq < 1 || req.Hash == "" {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"seq": <n>, "hash": "<hex>"}`)
 		return
 	}
@@ -134,10 +137,28 @@ func actor(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return a, true
 }
 
+// decodeStrict decodes exactly one JSON value with no unknown fields.
 func decodeStrict(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	return dec.Decode(v)
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if dec.More() {
+		return errors.New("unexpected data after the JSON body")
+	}
+	return nil
+}
+
+// bodyTooLarge answers 413 when err came from the request size limit, so a
+// client can tell "too big" from "malformed".
+func bodyTooLarge(w http.ResponseWriter, err error) bool {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", "request body exceeds the size limit")
+		return true
+	}
+	return false
 }
 
 func (h complianceHandlers) frameworks(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +186,9 @@ func (h complianceHandlers) evaluate(w http.ResponseWriter, r *http.Request) {
 		ScanID string `json:"scan_id"`
 	}
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"source":"inventory"} or {"source":"iac_scan","scan_id":"..."}`)
 		return
 	}
@@ -253,6 +277,9 @@ func (h complianceHandlers) requestException(w http.ResponseWriter, r *http.Requ
 	}
 	var req compliance.ExceptionRequest
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", "body must be {rule_id, subject, justification, expires_at}")
 		return
 	}

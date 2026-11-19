@@ -6,7 +6,7 @@ import {
   BackLink, Button, Callout, Card, DataTable, EmptyState, ErrorState, Field, Input, KeyValue, Mono, Pager, Select,
   SectionTitle, Skeleton, StatCard, StatGrid, StatusBadge, useToast,
 } from '@/components/ui'
-import { SEVERITY_ORDER } from '@/lib/tones'
+import { SEVERITY_ORDER, severityRail, toneOf } from '@/lib/tones'
 import { ago, useAction, useLoad, usePaged, usePoll, when } from '../hooks'
 
 const DONE = ['succeeded', 'failed', 'dead']
@@ -28,7 +28,8 @@ function InventoryHome({ api, me, go, params }: PageProps) {
         </div>
       )}
       <ScanHistory api={api} go={go} />
-      <ResourceList api={api} go={go} params={params} />
+      {/* Keyed by the filters: Back or Forward to another filter starts at its first page. */}
+      <ResourceList key={`${params.get('type') ?? ''}|${params.get('environment') ?? ''}`} api={api} go={go} params={params} />
     </div>
   )
 }
@@ -195,7 +196,7 @@ function ScanView({ api, go, params, id }: PageProps & { id: string }) {
           <StatGrid>
             <StatCard label="Blocking (policy deny)" value={r.blocking} tone="auto" autoTone="danger" />
             {['critical', 'high', 'medium', 'low'].map((s) => (
-              <StatCard key={s} label={s[0].toUpperCase() + s.slice(1)} value={total(s)} tone="auto" autoTone={s === 'critical' ? 'danger' : s === 'high' ? 'high' : s === 'medium' ? 'warning' : 'info'} />
+              <StatCard key={s} label={s[0].toUpperCase() + s.slice(1)} value={total(s)} tone="auto" autoTone={toneOf(s)} />
             ))}
           </StatGrid>
           <Card title={`Scan of ${r.source_ref}`} actions={<StatusBadge value={r.status} />}>
@@ -227,7 +228,7 @@ function ScanView({ api, go, params, id }: PageProps & { id: string }) {
             </>
           }>
             <DataTable rows={findings} getRowId={(f) => f.fingerprint} empty="No findings match."
-              rowTone={(f) => (f.decision === 'deny' ? 'danger' : f.severity === 'critical' ? 'danger' : f.severity === 'high' ? 'high' : undefined)}
+              rowTone={(f) => (f.decision === 'deny' ? 'danger' : severityRail(f.severity))}
               columns={[
                 { key: 'sev', header: 'Severity', cell: (f) => <div className="flex flex-col items-start gap-1"><StatusBadge value={f.severity} />{f.decision === 'deny' && <StatusBadge value="blocking" />}</div> },
                 { key: 'src', header: 'Source', cell: (f) => f.source },

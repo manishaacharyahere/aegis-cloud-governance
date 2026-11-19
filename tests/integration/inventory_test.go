@@ -54,7 +54,7 @@ func TestInventoryImportLifecycle(t *testing.T) {
 	n1 := len(v1.Snapshot.Resources)
 
 	// 1. First import creates everything.
-	rep, err := svc.Import(ctx, "demo", v1.Snapshot)
+	rep, err := svc.Import(ctx, "demo", "tester", v1.Snapshot)
 	if err != nil {
 		t.Fatalf("import v1: %v", err)
 	}
@@ -66,12 +66,19 @@ func TestInventoryImportLifecycle(t *testing.T) {
 	}
 
 	// 2. Re-importing the identical snapshot is idempotent.
-	again, err := svc.Import(ctx, "demo", v1.Snapshot)
+	again, err := svc.Import(ctx, "demo", "tester", v1.Snapshot)
 	if err != nil {
 		t.Fatalf("re-import: %v", err)
 	}
 	if !again.Duplicate || again.ImportID != rep.ImportID {
 		t.Fatalf("re-import not detected as duplicate: %+v", again.ImportSummary)
+	}
+	// Who imported is recorded and audited once (a duplicate is not a new import).
+	if n := count(t, pool, `SELECT count(*) FROM audit_events WHERE action = 'inventory.import' AND actor = 'tester' AND target_id = $1`, rep.ImportID); n != 1 {
+		t.Errorf("inventory.import audit events = %d, want 1", n)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM inventory_imports WHERE id = $1 AND imported_by = 'tester'`, rep.ImportID); n != 1 {
+		t.Error("imported_by not recorded")
 	}
 	if count(t, pool, `SELECT count(*) FROM resources`) != n1 ||
 		count(t, pool, `SELECT count(*) FROM inventory_imports`) != 1 ||
@@ -85,7 +92,7 @@ func TestInventoryImportLifecycle(t *testing.T) {
 
 	// 3. Drifted snapshot: detected changes match the ground truth.
 	v2, m := synthetic.Mutate(v1, synthetic.MutateOptions{Seed: 2, Modify: 25, Delete: 10, Add: 15, CapturedAt: base.Add(24 * time.Hour)})
-	rep2, err := svc.Import(ctx, "demo", v2.Snapshot)
+	rep2, err := svc.Import(ctx, "demo", "tester", v2.Snapshot)
 	if err != nil {
 		t.Fatalf("import v2: %v", err)
 	}
@@ -139,7 +146,7 @@ func TestInventoryImportLifecycle(t *testing.T) {
 	old := v1.Snapshot
 	old.CapturedAt = base.Add(time.Hour) // newer than v1 but older than v2
 	old.Account.Name = "renamed"
-	if _, err := svc.Import(ctx, "demo", old); !errors.Is(err, inventory.ErrStaleSnapshot) {
+	if _, err := svc.Import(ctx, "demo", "tester", old); !errors.Is(err, inventory.ErrStaleSnapshot) {
 		t.Fatalf("stale import: want ErrStaleSnapshot, got %v", err)
 	}
 	if count(t, pool, `SELECT count(*) FROM inventory_imports`) != 2 {
@@ -154,7 +161,7 @@ func TestInventoryImportLifecycle(t *testing.T) {
 	if _, err := svc.GetResource(ctx, "other", target); !errors.Is(err, inventory.ErrNotFound) {
 		t.Fatalf("cross-tenant get: want ErrNotFound, got %v", err)
 	}
-	if _, err := svc.Import(ctx, "nope", v1.Snapshot); !errors.Is(err, inventory.ErrTenantNotFound) {
+	if _, err := svc.Import(ctx, "nope", "tester", v1.Snapshot); !errors.Is(err, inventory.ErrTenantNotFound) {
 		t.Fatalf("unknown tenant: %v", err)
 	}
 }
@@ -171,7 +178,7 @@ func TestConcurrentIdenticalImportsCreateOneImport(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, err := svc.Import(context.Background(), "demo", snap)
+			r, err := svc.Import(context.Background(), "demo", "tester", snap)
 			if err != nil {
 				errs <- err
 				return
@@ -204,7 +211,7 @@ func TestSecretsAreNeverPersisted(t *testing.T) {
 	pool, svc := migratedPool(t)
 	snap := synthetic.Generate(synthetic.Options{Seed: 1, Resources: 30, CapturedAt: base}).Snapshot
 	snap.Resources[0].Configuration["master_password"] = "Sup3r-Secret-Value"
-	if _, err := svc.Import(context.Background(), "demo", snap); err != nil {
+	if _, err := svc.Import(context.Background(), "demo", "tester", snap); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
@@ -224,7 +231,7 @@ func TestSecretsAreNeverPersisted(t *testing.T) {
 func TestResourceVersionsAreAppendOnly(t *testing.T) {
 	pool, svc := migratedPool(t)
 	snap := synthetic.Generate(synthetic.Options{Seed: 3, Resources: 20, CapturedAt: base}).Snapshot
-	if _, err := svc.Import(context.Background(), "demo", snap); err != nil {
+	if _, err := svc.Import(context.Background(), "demo", "tester", snap); err != nil {
 		t.Fatal(err)
 	}
 	_, err := pool.Exec(context.Background(), `UPDATE resource_versions SET change_type = 'deleted'`)

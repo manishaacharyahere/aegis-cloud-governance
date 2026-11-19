@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +94,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (Principal, error) {
 	}
 	subject := "sub:" + tok.Subject
 	if c.Email != "" && c.EmailVerified != nil && *c.EmailVerified {
-		subject = strings.ToLower(c.Email)
+		subject = CanonicalSubject(c.Email)
 	}
 	if !ValidSubject(subject) {
 		return Principal{}, fmt.Errorf("%w: unusable subject", ErrUnauthenticated)

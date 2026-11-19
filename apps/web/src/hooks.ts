@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type DependencyList } from 'react'
 
+/** True on the render where deps differ from the previous render's. Lets a
+ * hook reset derived state during render instead of in an effect. */
+function useDepsChanged(deps: DependencyList): boolean {
+  const [prev, setPrev] = useState(deps)
+  const changed = prev.length !== deps.length || prev.some((d, i) => !Object.is(d, deps[i]))
+  if (changed) setPrev(deps)
+  return changed
+}
+
 /** Loads data when deps change; reload() fetches again (showing loading).
- * A stale response never overwrites a newer one. */
+ * New deps clear the old data at once, so a previous query's result is never
+ * shown as the current one. A stale response never overwrites a newer one. */
 export function useLoad<T>(loader: () => Promise<T>, deps: DependencyList) {
   const [state, setState] = useState<{ data: T | null; error: unknown; loading: boolean }>({ data: null, error: null, loading: true })
   const [tick, setTick] = useState(0)
+  if (useDepsChanged(deps) && (state.data !== null || state.error !== null || !state.loading)) {
+    setState({ data: null, error: null, loading: true })
+  }
   useEffect(() => {
     let live = true
     loader().then(
@@ -23,7 +36,9 @@ export function useLoad<T>(loader: () => Promise<T>, deps: DependencyList) {
   return { ...state, reload }
 }
 
-/** Runs an action with busy/error state. */
+/** Runs an action with busy/error state. run() resolves to the result, or
+ * undefined on error; attempt() resolves to whether it succeeded (use it for
+ * calls whose success has no body, such as 204 No Content). */
 export function useAction() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
@@ -39,7 +54,20 @@ export function useAction() {
       setBusy(false)
     }
   }, [])
-  return { busy, error, run, setError }
+  const attempt = useCallback(async (f: () => Promise<unknown>): Promise<boolean> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await f()
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+  return { busy, error, run, attempt, setError }
 }
 
 /** State that survives reloads and re-sign-in (sessionStorage, this tab only).
@@ -82,6 +110,16 @@ export function usePaged<T>(loader: (after: string) => Promise<{ items: T[]; nex
   const [state, setState] = useState<{ items: T[]; next: string; error: unknown; loading: boolean }>({ items: [], next: '', error: null, loading: true })
   const [tick, setTick] = useState(0)
   const gen = useRef(0)
+  // more() must use the current filter's loader, never one captured earlier.
+  const loaderRef = useRef(loader)
+  useEffect(() => {
+    loaderRef.current = loader
+  })
+  // New deps: drop the old rows and cursor at once, so "Load more" cannot
+  // append a page of the previous filter.
+  if (useDepsChanged(deps) && (state.items.length > 0 || state.next !== '' || state.error !== null || !state.loading)) {
+    setState({ items: [], next: '', error: null, loading: true })
+  }
   useEffect(() => {
     const g = ++gen.current
     loader('').then(
@@ -91,13 +129,13 @@ export function usePaged<T>(loader: (after: string) => Promise<{ items: T[]; nex
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick])
   const more = useCallback(() => {
+    if (!state.next) return
     const g = gen.current
     setState((s) => ({ ...s, loading: true }))
-    loader(state.next).then(
+    loaderRef.current(state.next).then(
       (p) => g === gen.current && setState((s) => ({ items: [...s.items, ...p.items], next: p.next_cursor ?? '', error: null, loading: false })),
       (error: unknown) => g === gen.current && setState((s) => ({ ...s, error, loading: false })),
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.next])
   const reload = useCallback(() => {
     setState((s) => ({ ...s, loading: true }))

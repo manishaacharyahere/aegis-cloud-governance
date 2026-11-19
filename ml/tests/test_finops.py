@@ -258,3 +258,24 @@ def test_short_series_fall_back_instead_of_failing():
         assert len(out) == 14
         assert all(np.isfinite(o["predicted"]) and o["predicted"] >= 0 for o in out)
         assert set(fallbacks) == {"team-a", "total"}
+
+
+def test_diverged_forecast_falls_back(monkeypatch):
+    from aegis_ml import forecast, worker
+
+    idx = pd.date_range("2026-01-01", periods=30, freq="D")
+    frame = pd.DataFrame({"team-a": np.full(30, 10.0)}, index=idx)
+    monkeypatch.setitem(forecast.MODELS, "seasonal_naive", lambda s, h: np.full(h, 1e12))
+    fallbacks: dict[str, str] = {}
+    out = worker.predict(frame, "seasonal_naive", 7, fallbacks)
+    assert fallbacks == {"team-a": "seasonal_naive diverged"}
+    assert all(o["predicted"] < 1_000 for o in out)
+
+
+def test_threshold_must_be_positive(monkeypatch):
+    from aegis_ml import worker
+
+    monkeypatch.setenv("AEGIS_DATABASE_URL", "postgresql://unused")
+    for bad in ("0", "-1", "nan", "inf"):
+        with pytest.raises(SystemExit, match="threshold"):
+            worker.main(["--tenant", "demo", "--threshold", bad])

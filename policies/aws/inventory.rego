@@ -128,7 +128,7 @@ trail_ok(c) if {
 
 warn contains f if {
 	some r in input.resources
-	missing := [t | some t in config.required_tags; not object.get(r, "tags", {})[t]]
+	missing := [t | some t in config.required_tags; not tag_set(object.get(r, "tags", {}), t)]
 	count(missing) > 0
 	f := finding("AEGIS-TAG-001", "medium", r, sprintf("missing required tags: %s", [concat(", ", missing)]))
 }
@@ -139,3 +139,6 @@ deny contains f if {
 	not r.region in config.approved_regions
 	f := finding("AEGIS-REG-001", "high", r, sprintf("region %s is not approved", [r.region]))
 }
+
+# A blank tag value does not count as set.
+tag_set(tags, t) if trim_space(tags[t]) != ""

@@ -44,7 +44,7 @@ func TestFinOpsLifecycle(t *testing.T) {
 		Account: inventory.Account{Provider: "aws", ExternalID: "123456789012", Name: "demo"},
 		Resources: []inventory.Resource{{ResourceID: "aws_s3_bucket.orphan", ResourceType: "aws_s3_bucket",
 			Tags: map[string]string{"cost_center": "analytics", "environment": "staging", "owner": "a"}}}}
-	if _, err := inv.Import(ctx, "demo", snap); err != nil {
+	if _, err := inv.Import(ctx, "demo", "tester", snap); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { severityRail, toneOf } from '@/lib/tones'
 import { GitCompareArrows, ShieldCheck } from 'lucide-react'
 import { can, patchParams, type PageProps } from '../nav'
 import type { Account, DriftBaseline, DriftReport, Paged } from '../types'
@@ -128,7 +129,7 @@ function ReportView({ api, go, params, id }: PageProps & { id: string }) {
           <StatGrid>
             <StatCard label="differences" value={r.counts.total ?? 0} tone="auto" autoTone="warning" />
             {SEVERITIES.map((s) => (
-              <StatCard key={s} label={s} value={r.counts.by_severity?.[s] ?? 0} tone="auto" autoTone={s === 'critical' ? 'danger' : s === 'high' ? 'high' : s === 'medium' ? 'warning' : 'info'} />
+              <StatCard key={s} label={s} value={r.counts.by_severity?.[s] ?? 0} tone="auto" autoTone={toneOf(s)} />
             ))}
           </StatGrid>
           <Card title={`Drift found ${ago(r.created_at)}`} description={`Checked by ${r.actor} · ${when(r.created_at)}`} actions={
@@ -145,7 +146,7 @@ function ReportView({ api, go, params, id }: PageProps & { id: string }) {
           }>
             <DataTable rows={r.items} getRowId={(it) => it.resource_id + it.category}
               empty={<EmptyState icon={<ShieldCheck />} title="No drift matches these filters." />}
-              rowTone={(it) => (it.severity === 'critical' ? 'danger' : it.severity === 'high' ? 'high' : undefined)}
+              rowTone={(it) => severityRail(it.severity)}
               columns={[
                 { key: 'res', header: 'Resource', cell: (it) => <><Mono value={it.resource_id} /><div className="text-xs text-fg-subtle">{it.resource_type}</div></> },
                 { key: 'cat', header: 'Category', cell: (it) => it.category },

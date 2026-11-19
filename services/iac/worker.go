@@ -172,15 +172,25 @@ func (w *Worker) process(parent context.Context, j *Job) {
 		defer close(hbDone)
 		t := time.NewTicker(w.Lease / 3)
 		defer t.Stop()
+		lastOK := time.Now()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				if err := w.Queue.Renew(context.Background(), j, w.ID, w.Lease); err != nil {
+				rctx, rcancel := context.WithTimeout(context.Background(), w.Lease/6)
+				err := w.Queue.Renew(rctx, j, w.ID, w.Lease)
+				rcancel()
+				switch {
+				case err == nil:
+					lastOK = time.Now()
+				case errors.Is(err, ErrLeaseLost) || time.Since(lastOK) >= w.Lease*2/3:
+					// Lost, or about to expire: another worker may take it over.
 					log.Warn("lease renewal failed; abandoning job", "error", err)
 					cancel()
 					return
+				default:
+					log.Warn("lease renewal failed; retrying", "error", err)
 				}
 			}
 		}

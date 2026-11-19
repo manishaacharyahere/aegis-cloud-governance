@@ -23,23 +23,31 @@ func iacStore(t *testing.T) *iac.Store {
 func TestScanEnqueueIsIdempotent(t *testing.T) {
 	s := iacStore(t)
 	ctx := context.Background()
-	a, created, err := s.Enqueue(ctx, "demo", "insecure-storage", "key-1")
+	a, created, err := s.Enqueue(ctx, "demo", "tester", "insecure-storage", "key-1")
 	if err != nil || !created || a.Status != iac.StatusQueued {
 		t.Fatalf("enqueue: %+v created=%v err=%v", a, created, err)
 	}
-	b, created, err := s.Enqueue(ctx, "demo", "insecure-storage", "key-1")
+	b, created, err := s.Enqueue(ctx, "demo", "tester", "insecure-storage", "key-1")
 	if err != nil || created || b.ID != a.ID {
 		t.Fatalf("replay: id=%s created=%v err=%v", b.ID, created, err)
 	}
-	c, created, _ := s.Enqueue(ctx, "demo", "insecure-storage", "")
-	d, created2, _ := s.Enqueue(ctx, "demo", "insecure-storage", "")
+	// The key belongs to one request: another caller, or the same caller
+	// asking for a different fixture, never receives that scan.
+	if _, _, err := s.Enqueue(ctx, "demo", "mallory", "insecure-storage", "key-1"); !errors.Is(err, iac.ErrIdempotencyConflict) {
+		t.Errorf("another actor reusing the key: %v", err)
+	}
+	if _, _, err := s.Enqueue(ctx, "demo", "tester", "iam-wildcard", "key-1"); !errors.Is(err, iac.ErrIdempotencyConflict) {
+		t.Errorf("same key, different fixture: %v", err)
+	}
+	c, created, _ := s.Enqueue(ctx, "demo", "tester", "insecure-storage", "")
+	d, created2, _ := s.Enqueue(ctx, "demo", "tester", "insecure-storage", "")
 	if !created || !created2 || c.ID == d.ID {
 		t.Fatal("requests without a key must each create a scan")
 	}
 	if _, err := s.Get(ctx, "other", a.ID); !errors.Is(err, iac.ErrNotFound) {
 		t.Fatalf("cross-tenant read: %v", err)
 	}
-	if _, _, err := s.Enqueue(ctx, "nope", "x", ""); !errors.Is(err, iac.ErrTenantNotFound) {
+	if _, _, err := s.Enqueue(ctx, "nope", "tester", "x", ""); !errors.Is(err, iac.ErrTenantNotFound) {
 		t.Fatalf("unknown tenant: %v", err)
 	}
 }
@@ -49,7 +57,7 @@ func TestConcurrentClaimsNeverShareAJob(t *testing.T) {
 	ctx := context.Background()
 	const jobs, workers = 20, 8
 	for i := range jobs {
-		if _, _, err := s.Enqueue(ctx, "demo", "insecure-storage", fmt.Sprintf("k%d", i)); err != nil {
+		if _, _, err := s.Enqueue(ctx, "demo", "tester", "insecure-storage", fmt.Sprintf("k%d", i)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -86,18 +94,23 @@ func TestConcurrentClaimsNeverShareAJob(t *testing.T) {
 }
 
 func TestExpiredLeaseIsReclaimedAndOldOwnerCannotWrite(t *testing.T) {
-	s := iacStore(t)
+	pool, _ := migratedPool(t)
+	s := iac.NewStore(pool)
 	ctx := context.Background()
-	scan, _, _ := s.Enqueue(ctx, "demo", "iam-wildcard", "")
+	scan, _, _ := s.Enqueue(ctx, "demo", "tester", "iam-wildcard", "")
 
-	j1, err := s.Claim(ctx, "crashed-worker", 50*time.Millisecond)
+	j1, err := s.Claim(ctx, "crashed-worker", time.Minute)
 	if err != nil || j1 == nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if j, _ := s.Claim(ctx, "w2", time.Minute); j != nil {
 		t.Fatal("job with a live lease was claimed twice")
 	}
-	time.Sleep(150 * time.Millisecond) // lease expires: the first worker "crashed"
+	// The first worker "crashed": expire its lease explicitly instead of
+	// sleeping past a short one (a slow CI runner made that flaky).
+	if _, err := pool.Exec(ctx, `UPDATE iac_scans SET lease_expires_at = now() - interval '1 second' WHERE id = $1`, scan.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	j2, err := s.Claim(ctx, "w2", time.Minute)
 	if err != nil || j2 == nil || j2.ScanID != scan.ID || j2.Attempt != 2 {
@@ -117,7 +130,7 @@ func TestExpiredLeaseIsReclaimedAndOldOwnerCannotWrite(t *testing.T) {
 func TestRetryBackoffThenPermanentFailure(t *testing.T) {
 	s := iacStore(t)
 	ctx := context.Background()
-	scan, _, _ := s.Enqueue(ctx, "demo", "iam-wildcard", "")
+	scan, _, _ := s.Enqueue(ctx, "demo", "tester", "iam-wildcard", "")
 	transient := iac.Retryable(errors.New("docker unavailable"))
 
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -146,7 +159,7 @@ func TestRetryBackoffThenPermanentFailure(t *testing.T) {
 	}
 
 	// Permanent errors fail immediately.
-	scan2, _, _ := s.Enqueue(ctx, "demo", "iam-wildcard", "")
+	scan2, _, _ := s.Enqueue(ctx, "demo", "tester", "iam-wildcard", "")
 	j, _ := s.Claim(ctx, "w", time.Minute)
 	if final, _ := s.Fail(ctx, j, "w", errors.New("invalid terraform"), time.Millisecond, time.Millisecond); !final {
 		t.Fatal("permanent error was retried")
@@ -159,7 +172,7 @@ func TestRetryBackoffThenPermanentFailure(t *testing.T) {
 func TestCompleteStoresReportIdempotently(t *testing.T) {
 	s := iacStore(t)
 	ctx := context.Background()
-	scan, _, _ := s.Enqueue(ctx, "demo", "insecure-storage", "")
+	scan, _, _ := s.Enqueue(ctx, "demo", "tester", "insecure-storage", "")
 	j, _ := s.Claim(ctx, "w", time.Minute)
 	res := iac.Result{
 		Analysis: iac.Analysis{Summary: iac.Summary{Create: 1}, Resources: []iac.PlannedResource{

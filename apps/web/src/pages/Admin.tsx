@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Activity, KeyRound, UserRound } from 'lucide-react'
 import { fetchReadiness, fetchVersion } from '../api'
 import { can, type PageProps } from '../nav'
-import type { Binding } from '../types'
+import type { Binding, RequestBody } from '../types'
 import { Button, Callout, Card, ConfirmAction, DataTable, ErrorState, Field, Input, KeyValue, Select, StatusBadge, useToast } from '@/components/ui'
 import { ago, useAction, useLoad, when } from '../hooks'
+import { humanize } from '@/lib/tones'
 
 const ROLES = [
   { role: 'viewer', can: 'Read everything in the tenant.' },
@@ -23,14 +24,15 @@ export function Access({ api, me }: PageProps) {
     return <Callout tone="info" title="Admin role needed">Managing access needs the admin role in tenant {me.tenant}.</Callout>
   }
   const change = async (method: string, s: string, r: string) => {
-    const out = await act.run(() => api(method, '/api/v1/access/bindings', { subject: s, role: r }))
-    if (out !== undefined || method === 'DELETE') toast(method === 'POST' ? `Granted ${r} to ${s}.` : `Removed ${r} from ${s}.`)
+    const body = { subject: s, role: r as RequestBody<'BindingChange'>['role'] }
+    const ok = await act.attempt(() => api(method, '/api/v1/access/bindings', body))
+    if (ok) toast(method === 'POST' ? `Granted ${r} to ${s}.` : `Removed ${r} from ${s}.`)
     list.reload()
   }
   return (
     <div className="grid gap-5 xl:grid-cols-[3fr_2fr]">
       <Card title={`Who can do what in tenant ${me.tenant}`} icon={<KeyRound />} description="Every change is recorded in the audit log.">
-        <form className="mb-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); void change('POST', subject.trim().toLowerCase(), role) }}>
+        <form className="mb-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); void change('POST', canonicalSubject(subject), role) }}>
           <Field label="Email" className="min-w-[240px] flex-1">
             {(p) => <Input {...p} aria-label="Email" type="email" required placeholder="person@example.com" value={subject} onChange={(e) => setSubject(e.target.value)} />}
           </Field>
@@ -71,7 +73,7 @@ export function Health({ me }: PageProps) {
       <Card title="Dependencies" icon={<Activity />} actions={<Button size="sm" variant="ghost" onClick={ready.reload}>Re-check</Button>}
         description={`API version ${ver.data?.version ?? '—'}. Metrics and traces: see docs/observability.md.`}>
         <ErrorState error={ready.error} onRetry={ready.reload} />
-        <div className="mb-3 flex items-center gap-2"><StatusBadge value={ready.data?.state === 'ready' ? 'passing' : 'failing'} label={ready.data?.state ?? 'checking'} /></div>
+        <div className="mb-3 flex items-center gap-2"><StatusBadge value={ready.data?.state ?? 'queued'} label={ready.data ? humanize(ready.data.state) : 'Checking…'} /></div>
         <DataTable rows={Object.entries(ready.data?.checks ?? {})} loading={ready.loading} getRowId={([k]) => k} dense empty="No checks reported."
           columns={[
             { key: 'dep', header: 'Dependency', cell: ([k]) => k },
@@ -88,4 +90,11 @@ export function Health({ me }: PageProps) {
       </Card>
     </div>
   )
+}
+
+/** Emails are case-insensitive; "sub:" identifiers from the identity
+ * provider are not (the API applies the same rule). */
+function canonicalSubject(s: string): string {
+  const t = s.trim()
+  return t.startsWith('sub:') ? t : t.toLowerCase()
 }

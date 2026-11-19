@@ -10,16 +10,26 @@ SELECT format('CREATE ROLE aegis_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE P
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aegis_app') \gexec
 SELECT format('ALTER ROLE aegis_app LOGIN PASSWORD %L', :'pw') \gexec
 GRANT CONNECT, TEMPORARY ON DATABASE :"DBNAME" TO aegis_app;
--- Grants for tables that already exist (also applied by migration 0015).
+-- Grants for tables that already exist (also applied by migrations 0015 and
+-- 0023). Keep this in step with them: re-running the script must not undo a
+-- revoke a migration made.
 GRANT USAGE ON SCHEMA public TO aegis_app;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'schema_migrations') THEN
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO aegis_app;
-        GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO aegis_app;
+        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aegis_app;
+        REVOKE UPDATE ON ALL SEQUENCES IN SCHEMA public FROM aegis_app; -- no setval
         REVOKE UPDATE, DELETE ON audit_events, resource_versions, remediation_approvals FROM aegis_app;
         REVOKE UPDATE ON compliance_evaluations, drift_items, drift_baseline_resources, risk_assessments FROM aegis_app;
         REVOKE INSERT, UPDATE, DELETE ON schema_migrations FROM aegis_app;
+    END IF;
+    -- Migration 0023: evidence is deleted only through aegis_retention_purge.
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'aegis_retention_purge') THEN
+        REVOKE DELETE ON investigations, compliance_runs, risk_runs, drift_reports, ml_runs,
+            compliance_evaluations, risk_assessments, drift_items, drift_baseline_resources FROM aegis_app;
+        REVOKE UPDATE ON investigations, compliance_runs, risk_runs, drift_reports, ml_runs FROM aegis_app;
+        GRANT EXECUTE ON FUNCTION aegis_retention_purge(integer, interval, interval, integer) TO aegis_app;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'aegis_analyze') THEN
         GRANT EXECUTE ON FUNCTION aegis_analyze(text) TO aegis_app;
@@ -27,5 +37,5 @@ BEGIN
 END
 $$;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aegis_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO aegis_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO aegis_app;
 EOSQL

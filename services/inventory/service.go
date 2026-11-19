@@ -17,11 +17,11 @@ func NewService(store *Store) *Service {
 }
 
 // Import validates, normalises and persists a snapshot.
-func (s *Service) Import(ctx context.Context, tenant string, snap Snapshot) (ImportReport, error) {
+func (s *Service) Import(ctx context.Context, tenant, actor string, snap Snapshot) (ImportReport, error) {
 	if err := Validate(snap, s.now()); err != nil {
 		return ImportReport{}, err
 	}
-	return s.store.Import(ctx, tenant, Normalize(snap))
+	return s.store.Import(ctx, tenant, actor, Normalize(snap))
 }
 
 func (s *Service) GetImport(ctx context.Context, tenant, id string) (ImportReport, error) {

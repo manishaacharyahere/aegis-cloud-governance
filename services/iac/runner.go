@@ -174,10 +174,16 @@ func (d *DockerRunner) run(ctx context.Context, network bool, mounts, env []stri
 
 	cmd := exec.CommandContext(ctx, docker, argv...)
 	// Killing the docker CLI does not stop the container; kill it explicitly.
+	// Kill the CLI first and bound the container kill: a hung daemon must not
+	// keep the step (and the worker's drain) waiting forever.
 	cmd.Cancel = func() error {
-		_ = exec.Command(docker, "kill", name).Run()
-		return cmd.Process.Kill()
+		err := cmd.Process.Kill()
+		kctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(kctx, docker, "kill", name).Run()
+		return err
 	}
+	cmd.WaitDelay = 15 * time.Second
 	var stdout bytes.Buffer
 	stderr := &limitedBuffer{max: 8 << 10}
 	cmd.Stdout = &stdout
@@ -213,7 +219,9 @@ func (l *limitedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (l *limitedBuffer) String() string { return strings.TrimSpace(l.buf.String()) }
+func (l *limitedBuffer) String() string {
+	return strings.TrimSpace(strings.ToValidUTF8(l.buf.String(), ""))
+}
 
 func randomHex(n int) string {
 	b := make([]byte, n)

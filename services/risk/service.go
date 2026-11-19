@@ -249,8 +249,16 @@ func (s *Service) GetRun(ctx context.Context, tenant, id, minBand string, limit 
 	}
 	var r Run
 	var weights, summary []byte
-	err = s.Pool.QueryRow(ctx, `SELECT id, compliance_run_id, weights, actor, summary, created_at FROM risk_runs
-		WHERE tenant_id = $1 AND ($2 = 'latest' OR id::text = $2) ORDER BY created_at DESC, id LIMIT 1`, tenantID, id).Scan(&r.ID, &r.ComplianceRunID, &weights, &r.Actor, &summary, &r.CreatedAt)
+	// Two queries, so an explicit id is one primary-key probe.
+	q := `SELECT id, compliance_run_id, weights, actor, summary, created_at FROM risk_runs
+		WHERE tenant_id = $1 AND id = $2::uuid`
+	args := []any{tenantID, id}
+	if id == "latest" {
+		q = `SELECT id, compliance_run_id, weights, actor, summary, created_at FROM risk_runs
+		WHERE tenant_id = $1 ORDER BY created_at DESC, id LIMIT 1`
+		args = args[:1]
+	}
+	err = s.Pool.QueryRow(ctx, q, args...).Scan(&r.ID, &r.ComplianceRunID, &weights, &r.Actor, &summary, &r.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}

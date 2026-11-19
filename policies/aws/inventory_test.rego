@@ -55,3 +55,26 @@ test_tags_and_region if {
 	global := json.patch(r("identity.role", {}), [{"op": "replace", "path": "/region", "value": ""}])
 	evaluate(global) == set()
 }
+
+test_network_all_protocols_and_ranges if {
+	all_traffic := {"protocol": "-1", "from_port": 0, "to_port": 0, "cidr_blocks": ["0.0.0.0/0"]}
+	evaluate(r("network.security_group", {"ingress": [all_traffic]})) == {"AEGIS-NET-001"}
+	full_range := {"protocol": "tcp", "from_port": 0, "to_port": 65535, "cidr_blocks": ["0.0.0.0/0"]}
+	evaluate(r("network.security_group", {"ingress": [full_range]})) == {"AEGIS-NET-001"}
+	numeric := {"protocol": "6", "from_port": 22, "to_port": 22, "cidr_blocks": ["0.0.0.0/0"]}
+	evaluate(r("network.security_group", {"ingress": [numeric]})) == {"AEGIS-NET-001"}
+}
+
+test_blank_tags_warn if {
+	blank := object.union(r("network.vpc", {}), {"tags": {"owner": "", "environment": "production", "cost_center": " "}})
+	"AEGIS-TAG-001" in evaluate(blank)
+}
+
+test_config_overrides if {
+	web := {"protocol": "tcp", "from_port": 8080, "to_port": 8080, "cidr_blocks": ["0.0.0.0/0"]}
+	res := r("network.security_group", {"ingress": [web]})
+	ids(inventory.deny | inventory.warn) == set() with input as {"resources": [res]}
+	"AEGIS-NET-001" in ids(inventory.deny) with input as {"resources": [res], "config": {"admin_ports": [8080]}}
+	untagged := object.union(r("network.vpc", {}), {"tags": {"owner": "t"}})
+	ids(inventory.warn) == set() with input as {"resources": [untagged], "config": {"required_tags": ["owner"]}}
+}

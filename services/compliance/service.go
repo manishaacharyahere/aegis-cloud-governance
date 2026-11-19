@@ -576,13 +576,16 @@ func (s *Service) Control(ctx context.Context, tenant, framework, control, scope
 	}
 	d.Exceptions = all
 
+	// Walk runs newest first and count only their evaluations of these rules,
+	// so the cost is bounded by the 20 runs returned, not the whole history.
 	rows, err = s.Pool.Query(ctx, `
-		SELECT r.id, r.source, r.source_key, r.evaluated_at,
-		       count(*) FILTER (WHERE e.result = 'pass'), count(*) FILTER (WHERE e.result = 'fail'),
-		       count(*) FILTER (WHERE e.result = 'excepted')
-		FROM compliance_runs r JOIN compliance_evaluations e ON e.run_id = r.id
-		WHERE r.tenant_id = $1 AND e.rule_id = ANY($2)
-		GROUP BY r.id ORDER BY r.evaluated_at DESC LIMIT 20`, tenantID, rules)
+		SELECT r.id, r.source, r.source_key, r.evaluated_at, c.pass, c.fail, c.excepted
+		FROM compliance_runs r CROSS JOIN LATERAL (
+			SELECT count(*) AS n, count(*) FILTER (WHERE e.result = 'pass') AS pass,
+			       count(*) FILTER (WHERE e.result = 'fail') AS fail, count(*) FILTER (WHERE e.result = 'excepted') AS excepted
+			FROM compliance_evaluations e WHERE e.run_id = r.id AND e.rule_id = ANY($2)) c
+		WHERE r.tenant_id = $1 AND c.n > 0
+		ORDER BY r.evaluated_at DESC LIMIT 20`, tenantID, rules)
 	if err != nil {
 		return ControlDetail{}, err
 	}

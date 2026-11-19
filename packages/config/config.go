@@ -217,8 +217,8 @@ func Load(lookup LookupFunc) (Config, error) {
 	} else if cfg.NotifyWebhookURL != "" && cfg.Environment == EnvProduction && u.Scheme != "https" {
 		errs = append(errs, errors.New("AEGIS_NOTIFY_WEBHOOK_URL: must use https in production"))
 	}
-	if d, err := time.ParseDuration(get("AEGIS_RETENTION_INTERVAL", "1h")); err != nil || d < 0 {
-		errs = append(errs, errors.New("AEGIS_RETENTION_INTERVAL: must be a duration such as 1h (0 disables retention)"))
+	if d, err := time.ParseDuration(get("AEGIS_RETENTION_INTERVAL", "1h")); err != nil || d < 0 || (d > 0 && d < time.Minute) {
+		errs = append(errs, errors.New("AEGIS_RETENTION_INTERVAL: must be 0 (disabled) or at least 1m, such as 1h"))
 	} else {
 		cfg.RetentionEvery = d
 	}
@@ -227,8 +227,9 @@ func Load(lookup LookupFunc) (Config, error) {
 	} else {
 		cfg.DBMaxConns = int32(n)
 	}
-	if d, err := time.ParseDuration(get("AEGIS_DB_STATEMENT_TIMEOUT", "60s")); err != nil || d < 0 {
-		errs = append(errs, errors.New("AEGIS_DB_STATEMENT_TIMEOUT: must be a duration (0 disables)"))
+	// A tiny value (1ms meant as 1m) would make every query fail.
+	if d, err := time.ParseDuration(get("AEGIS_DB_STATEMENT_TIMEOUT", "60s")); err != nil || d < 0 || (d > 0 && d < time.Second) {
+		errs = append(errs, errors.New("AEGIS_DB_STATEMENT_TIMEOUT: must be 0 (disabled) or at least 1s"))
 	} else {
 		cfg.DBStatementTimeout = d
 	}
@@ -278,7 +279,12 @@ func Load(lookup LookupFunc) (Config, error) {
 		errs = append(errs, fmt.Errorf("AEGIS_AUTH_MODE: must be oidc or dev-headers, got %q", cfg.AuthMode))
 	}
 	for _, a := range strings.Split(get("AEGIS_BOOTSTRAP_ADMINS", ""), ",") {
-		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+		// Same rule as access.CanonicalSubject: emails are case-insensitive,
+		// "sub:" identifiers from the identity provider are not.
+		if a = strings.TrimSpace(a); !strings.HasPrefix(a, "sub:") {
+			a = strings.ToLower(a)
+		}
+		if a != "" {
 			cfg.BootstrapAdmins = append(cfg.BootstrapAdmins, a)
 		}
 	}

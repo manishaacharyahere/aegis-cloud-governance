@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -29,7 +30,9 @@ var (
 	ErrTenantNotFound = errors.New("tenant not found")
 	ErrNotFound       = errors.New("not found")
 	ErrLeaseLost      = errors.New("scan lease lost to another worker")
-	ErrInvalidCursor  = errors.New("invalid cursor")
+	// ErrIdempotencyConflict: the idempotency key was used for another request.
+	ErrIdempotencyConflict = errors.New("idempotency key already used for a different request")
+	ErrInvalidCursor       = errors.New("invalid cursor")
 )
 
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -86,9 +89,11 @@ type Store struct{ pool *pgxpool.Pool }
 // NewStore returns a Store.
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 
-// Enqueue creates a queued scan. With an idempotency key, repeating the
-// request returns the existing scan (created=false) instead of a new one.
-func (s *Store) Enqueue(ctx context.Context, tenantSlug, fixture, idemKey string) (scan Scan, created bool, err error) {
+// Enqueue creates a queued scan for actor. With an idempotency key, repeating
+// the same request (same actor and fixture) returns the existing scan
+// (created=false); reusing the key for a different request is
+// ErrIdempotencyConflict.
+func (s *Store) Enqueue(ctx context.Context, tenantSlug, actor, fixture, idemKey string) (scan Scan, created bool, err error) {
 	var tenantID string
 	if err := s.pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = $1`, tenantSlug).Scan(&tenantID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -102,17 +107,24 @@ func (s *Store) Enqueue(ctx context.Context, tenantSlug, fixture, idemKey string
 	}
 	var id string
 	err = s.pool.QueryRow(ctx, `
-		INSERT INTO iac_scans (tenant_id, source_type, source_ref, idempotency_key)
-		VALUES ($1, 'fixture', $2, $3)
+		INSERT INTO iac_scans (tenant_id, source_type, source_ref, idempotency_key, requested_by)
+		VALUES ($1, 'fixture', $2, $3, $4)
 		ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-		RETURNING id`, tenantID, fixture, key).Scan(&id)
+		RETURNING id`, tenantID, fixture, key, actor).Scan(&id)
 	switch {
 	case err == nil:
 		created = true
 	case errors.Is(err, pgx.ErrNoRows): // idempotent replay
-		if err := s.pool.QueryRow(ctx, `SELECT id FROM iac_scans WHERE tenant_id = $1 AND idempotency_key = $2`,
-			tenantID, idemKey).Scan(&id); err != nil {
+		var ref string
+		var by *string
+		if err := s.pool.QueryRow(ctx, `SELECT id, source_ref, requested_by FROM iac_scans WHERE tenant_id = $1 AND idempotency_key = $2`,
+			tenantID, idemKey).Scan(&id, &ref, &by); err != nil {
 			return Scan{}, false, err
+		}
+		// Another caller's key, or the same key for a different fixture: never
+		// hand back a scan that answers a different request.
+		if ref != fixture || by == nil || *by != actor {
+			return Scan{}, false, ErrIdempotencyConflict
 		}
 	default:
 		return Scan{}, false, fmt.Errorf("enqueue scan: %w", err)
@@ -228,7 +240,7 @@ func (s *Store) Fail(ctx context.Context, j *Job, owner string, cause error, bas
 	}
 	msg := cause.Error()
 	if len(msg) > 2000 {
-		msg = msg[:2000]
+		msg = strings.ToValidUTF8(msg[:2000], "") // a cut rune would make PostgreSQL reject the update
 	}
 	var tag pgconn.CommandTag
 	if retry {

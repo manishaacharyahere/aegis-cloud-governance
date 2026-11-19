@@ -67,14 +67,17 @@ func TestOutboxRelay(t *testing.T) {
 
 	// A relay that died after claiming leaves its rows leased: nobody else
 	// takes them until the lease expires, then another relay delivers them.
-	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET claimed_until = now() + interval '400 milliseconds', claimed_by = 'dead-relay'`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET claimed_until = now() + interval '1 minute', claimed_by = 'dead-relay'`); err != nil {
 		t.Fatal(err)
 	}
 	other := &recordingPub{ids: map[string]int{}}
 	if pub, _, err := (&outbox.Relay{Pool: pool, Pub: other}).RunOnce(ctx); err != nil || pub != 0 {
 		t.Fatalf("leased rows were taken before the lease expired: %d %v", pub, err)
 	}
-	time.Sleep(500 * time.Millisecond)
+	// Expire the lease explicitly (sleeping past a short one was timing-dependent).
+	if _, err := pool.Exec(ctx, `UPDATE outbox_events SET claimed_until = now() - interval '1 second' WHERE claimed_by = 'dead-relay'`); err != nil {
+		t.Fatal(err)
+	}
 	if pub, _, err := (&outbox.Relay{Pool: pool, Pub: other}).RunOnce(ctx); err != nil || pub != 5 {
 		t.Fatalf("after lease expiry: %d %v", pub, err)
 	}

@@ -49,6 +49,9 @@ func (h driftHandlers) approveBaseline(w http.ResponseWriter, r *http.Request) {
 		Note      string `json:"note"`
 	}
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"account_id":"<optional>","note":"<optional>"}`)
 		return
 	}
@@ -100,6 +103,9 @@ func (h driftHandlers) compare(w http.ResponseWriter, r *http.Request) {
 		AccountID string `json:"account_id"`
 	}
 	if err := decodeStrict(r, &req); err != nil {
+		if bodyTooLarge(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_json", `body must be {"account_id":"<optional>"}`)
 		return
 	}
@@ -137,7 +143,9 @@ func (h driftHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "no_baseline", err.Error())
 	case errors.Is(err, drift.ErrNoInventory):
 		writeError(w, http.StatusConflict, "no_inventory", err.Error())
-	case errors.Is(err, drift.ErrAmbiguous), errors.Is(err, drift.ErrInvalid):
+	case errors.Is(err, drift.ErrAmbiguous): // same answer as investigator and remediation
+		writeError(w, http.StatusConflict, "ambiguous_resource", err.Error())
+	case errors.Is(err, drift.ErrInvalid):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_request", err.Error())
 	case errors.As(err, &unavailable), errors.Is(err, opa.ErrUndefined):
 		logging.FromContext(r.Context()).Error("policy engine unavailable", "error", err)

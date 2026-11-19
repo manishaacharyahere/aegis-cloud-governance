@@ -11,7 +11,7 @@ const TONES: Record<string, Tone> = {
   critical: 'danger', high: 'high', medium: 'warning', low: 'info', info: 'neutral', unknown: 'neutral',
   // results
   fail: 'danger', failing: 'danger', blocked: 'danger', blocking: 'danger', destructive: 'danger',
-  verification_failed: 'danger', rejected: 'danger', failed: 'danger', dead: 'danger', revoked: 'neutral',
+  verification_failed: 'danger', rejected: 'danger', failed: 'danger', dead: 'danger', unreachable: 'danger', revoked: 'neutral',
   pass: 'success', passing: 'success', passed: 'success', verified: 'success', succeeded: 'success',
   accepted: 'success', implemented: 'success', active: 'success', reviewed: 'success', ok: 'success', ready: 'success',
   partial: 'warning', stale: 'warning', pending_approval: 'warning', requested: 'warning', open: 'warning',
@@ -56,4 +56,10 @@ export const toneText: Record<Tone, string> = {
 export function severityRank(s: string): number {
   const i = (SEVERITY_ORDER as readonly string[]).indexOf(s)
   return i === -1 ? SEVERITY_ORDER.length : i
+}
+
+/** The row rail for a severity: only critical and high get one, so the rail
+ * marks what needs attention first. */
+export function severityRail(severity: string | undefined): Tone | undefined {
+  return severity === 'critical' || severity === 'high' ? toneOf(severity) : undefined
 }

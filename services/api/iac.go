@@ -14,15 +14,12 @@ import (
 
 // IaCService is the subset of the IaC module used by the API.
 type IaCService interface {
-	Enqueue(ctx context.Context, tenant, fixture, idempotencyKey string) (iac.Scan, bool, error)
+	Enqueue(ctx context.Context, tenant, actor, fixture, idempotencyKey string) (iac.Scan, bool, error)
 	Get(ctx context.Context, tenant, id string) (iac.Report, error)
 	List(ctx context.Context, tenant, after string, limit int) ([]iac.Scan, string, error)
 }
 
-var (
-	fixtureRef     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
-	idempotencyKey = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
-)
+var fixtureRef = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 type iacHandlers struct {
 	svc      IaCService
@@ -78,6 +75,10 @@ func (h iacHandlers) createScan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	who, ok := actor(w, r)
+	if !ok {
+		return
+	}
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	var req scanRequest
@@ -90,11 +91,11 @@ func (h iacHandlers) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := r.Header.Get("Idempotency-Key")
-	if key != "" && !idempotencyKey.MatchString(key) {
+	if key != "" && !idemKeyRe.MatchString(key) {
 		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "Idempotency-Key must be 1-128 safe characters")
 		return
 	}
-	scan, created, err := h.svc.Enqueue(r.Context(), tenant, req.Source.Ref, key)
+	scan, created, err := h.svc.Enqueue(r.Context(), tenant, who, req.Source.Ref, key)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -128,6 +129,8 @@ func (h iacHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
 	case errors.Is(err, iac.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "scan not found")
+	case errors.Is(err, iac.ErrIdempotencyConflict):
+		writeError(w, http.StatusUnprocessableEntity, "idempotency_key_reused", "Idempotency-Key was already used for a different request")
 	case errors.Is(err, context.Canceled):
 	default:
 		logging.FromContext(r.Context()).Error("iac request failed", "error", err)

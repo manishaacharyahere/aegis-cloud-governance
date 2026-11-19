@@ -1,103 +1,175 @@
 # Aegis
 
-**Local-first cloud governance, security, compliance, risk and FinOps platform.**
+Aegis is a cloud governance platform you can run on your own laptop. It keeps
+track of what infrastructure you have, checks Terraform changes before they
+are applied, maps problems to compliance controls, ranks them by real risk,
+looks at what you spend, and proposes fixes that a human approves. It needs no
+paid cloud services and no AI API.
 
-Aegis discovers cloud resources, analyses Terraform changes, evaluates
-policy-as-code, maps findings to compliance controls, prioritises risk,
-analyses cloud spend, and proposes remediations that are verified by
-deterministic checks and approved by a human. It runs entirely on a developer
-machine with no paid cloud services or mandatory AI API.
+![Overview](screenshots/01-overview.png)
 
-> **Status: v1.0.** All eight modules and the platform work (authentication, events,
-> observability, dashboard) are implemented and tested. Results come from seeded
-> synthetic data and one laptop; read the [evaluation report](docs/research-report.md)
-> for what they do and do not show.
-
-**[Documentation site](https://manishaacharyahere.github.io/aegis-cloud-governance/)** ·
+**[Watch the demo (97 s)](https://github.com/manishaacharyahere/aegis-cloud-governance/releases/download/v1.1.0/aegis-demo.webm)** ·
+**[Documentation](https://manishaacharyahere.github.io/aegis-cloud-governance/)** ·
 **[Evaluation report](docs/research-report.md)** ·
-**[Demo video (82 s)](https://github.com/manishaacharyahere/aegis-cloud-governance/releases/download/v1.0.0/aegis-demo.webm)** ·
-**[Screenshots](screenshots/)**
+**[All screenshots](screenshots/)**
 
-## Current status
+## Why I built it
 
-| Capability | Status |
-|---|---|
-| Go API skeleton (health, readiness, version, structured logs, graceful shutdown) | ✅ implemented, unit-tested |
-| PostgreSQL migrations (advisory-locked, checksummed, idempotent) | ✅ implemented, integration-tested |
-| Scale and resilience - full pipeline measured at 100 / 1 000 / 5 000 / 10 000 resources; database loss mid-import, OPA, NATS and identity-provider outages tested ([docs](docs/performance.md)) | ✅ measured; two scaling defects found and fixed |
-| Authentication and RBAC - OIDC token verification (any provider), per-tenant roles (viewer/analyst/approver/admin) stored in Aegis, one route-permission table, local Dex profile ([docs](docs/auth.md)) | ✅ implemented; verified with real Dex tokens |
-| Observability - OpenTelemetry request spans and metrics (route-pattern labels), trace IDs in logs, Prometheus/Grafana/Jaeger profile with a provisioned dashboard ([docs](docs/observability.md)) | ✅ implemented; verified end to end locally |
-| Hash-chained, append-only audit log with verification; transactional outbox | ✅ implemented; outbox relayed to NATS JetStream with de-duplication ([docs](docs/events.md)) |
-| OPA policies (inventory storage + Terraform plan rules) | ✅ 21/21 policy tests pass |
-| React + TypeScript dashboard: OIDC sign-in (PKCE), the five journeys (import and scan, investigate risk, compliance evidence, cost, controlled remediation), access management ([screenshots](screenshots/), [e2e](apps/web/e2e/README.md)) | ✅ implemented; 6 browser journeys pass against the real stack with real Dex sign-in |
-| Python ML package (cost generator, detectors, forecasters, benchmark, DB worker) | ✅ 27 tests |
-| A. Cloud inventory ingestion — snapshot import, normalisation, secret redaction, idempotent re-import, change detection, version history, seeded 1 000-resource generator with ground truth ([docs](docs/modules/inventory.md)) | ✅ implemented; unit + PostgreSQL integration tests pass |
-| B. Terraform / IaC analysis — sandboxed offline plan, redacted plan analysis, 11 Aegis OPA rules, Trivy + Checkov, unified report, durable job queue with leases/retries ([docs](docs/modules/iac.md)) | ✅ implemented; 6/6 fixtures match ground truth |
-| C. Policy & compliance engine — NIST CSF 2.0 / CIS AWS 3.0.0 / internal baseline catalog, reproducible evaluations (policy text + snapshot pointers), expiring exceptions with separation of duties, coverage with evidence freshness, hash-chained audit log ([docs](docs/modules/compliance.md)) | ✅ implemented; inventory ground truth 132/132, 0 false positives |
-| D. Drift detection - approved baselines vs observed inventory, canonical comparison (defaults, volatile fields, unordered lists), six drift categories, policy-delta severity ([docs](docs/modules/drift.md)) | ✅ implemented; seeded drift detected exactly over 200 seeds |
-| E. Risk intelligence - explainable 6-factor contextual score with sensitivity analysis, attack paths from the internet to sensitive data over the relationship graph ([docs](docs/modules/risk.md)) | ✅ implemented; ranking stable under ±20% weight changes |
-| F. FinOps intelligence - validated idempotent cost import, tag allocation, reports, rule-based recommendations with projected vs measured savings; Python anomaly detection and forecasting benchmarked against baselines ([docs](docs/modules/finops.md)) | ✅ implemented; seasonal-naive baseline beat Holt-Winters and SARIMAX on this data |
-| G. Evidence-grounded investigation assistant (optional) - read-only evidence collection, cited deterministic brief, optional local model (Ollama) with no tools whose every claim is validated against the cited evidence ([docs](docs/modules/investigator.md)) | ✅ implemented; every brief for 1 014 synthetic resources self-validates; with qwen2.5:3b, 48 of 59 accepted model claims were correct on manual review (meaning errors are not caught; documented) |
-| H. Controlled remediation - template or manual patches simulated against the same OPA policies, pinned to the resource version, separation-of-duties approvals (extra for production/disruptive), export-only change sets, verification after re-import ([docs](docs/modules/remediation.md)) | ✅ implemented; 121 synthetic findings remediated in a closed loop, all verified, 0 new failures |
+Cloud security tools usually do one piece of this well: a scanner here, a
+cost dashboard there, a compliance spreadsheet somewhere else. Nobody connects
+"this S3 bucket is public" to "it holds billing data, it is reachable from the
+internet, it fails CIS 2.1.4, and here is a reviewed change that fixes it".
+Aegis is my attempt to build that whole loop properly, with the same care
+you would want from a production control plane: tenant isolation, an audit
+log you can verify, and no step where an AI gets to change anything on its own.
 
-## Architecture
+The rule throughout is **deterministic first, AI second**. OPA policies and
+scanners make every decision. The optional local model only explains evidence
+that is already collected, and each of its claims is checked against that
+evidence before you see it.
 
-A **modular control plane** (one Go module, separately runnable workers) rather
-than early microservices. See [ADR-007](architecture/architecture-decisions/ADR-007-modular-monolith.md).
+## What it does
+
+- **Inventory.** Import snapshots of your cloud (or a Terraform state file).
+  Aegis normalises resource types, strips secrets before anything is stored,
+  ignores re-sent snapshots, and keeps a version history of every resource.
+- **Terraform checks.** Each plan runs in a locked-down container with no
+  network, no capabilities and a read-only filesystem. Aegis evaluates it with
+  its own OPA rules and also runs Trivy and Checkov, then merges the results
+  into one report.
+- **Compliance.** Findings map to NIST CSF 2.0, CIS AWS 3.0.0 and an internal
+  baseline. Exceptions expire and need a second person to approve them. Every
+  evaluation records the exact policy text and snapshot it used, so you can
+  reproduce it later.
+- **Drift.** Approve a baseline, then see what changed since: configuration,
+  tags, relationships, new and deleted resources. Each change is rated by the
+  policy failures it introduces.
+- **Risk.** A six-factor score explains why a finding matters (exposure, data
+  sensitivity, environment and so on). Attack paths show how something
+  reachable from the internet leads to sensitive data.
+- **Cost.** Import billing data and see spend by team or service. Aegis
+  suggests savings (idle and oversized resources) and checks them against what
+  you actually saved later. A Python worker finds anomalies and forecasts
+  spend.
+- **Investigation.** Ask about a resource and get a brief where every
+  sentence cites its evidence. A local model (Ollama) can be switched on; it
+  has no tools and cannot act.
+- **Remediation.** Propose a fix and Aegis simulates it against the same
+  policies, so you see what it resolves and whether it breaks anything else.
+  Production changes need two approvers, and the requester never counts as
+  one. The approved change set is signed and handed to your pipeline; Aegis
+  never touches cloud resources itself. After the next import it checks that
+  the fix really landed.
+
+<table>
+<tr>
+<td><img src="screenshots/03-risk.png" alt="Risk ranking with score factors"></td>
+<td><img src="screenshots/05-remediation-proposed.png" alt="A simulated remediation waiting for approval"></td>
+</tr>
+<tr>
+<td><img src="screenshots/06-compliance-evidence.png" alt="Compliance control with its evidence"></td>
+<td><img src="screenshots/07-cost.png" alt="Spend, anomalies and savings"></td>
+</tr>
+</table>
+
+## How it is built
+
+One Go codebase runs the API and control plane, a separate worker runs the
+Terraform scans, and a Python worker handles the ML. I chose a modular
+monolith over microservices on purpose
+([ADR-007](architecture/architecture-decisions/ADR-007-modular-monolith.md)):
+one team does not need a network between its modules.
 
 ```
-React dashboard ──► Go API / control plane ──► PostgreSQL (system of record)
-                         │        │
-                         │        └──► outbox ──► NATS JetStream ──► workers
-                         │                                    (IaC scan, import, remediation)
-                         └──► OPA (deterministic policy decisions)
-Python ML worker (forecasting, anomaly detection) — optional profile
+React dashboard ──► Go API ──► PostgreSQL (system of record, hash-chained audit log)
+                      │  │
+                      │  └──► outbox ──► NATS JetStream ──► re-evaluation after imports
+                      ├──► OPA (every policy decision)
+                      └──► IaC queue ──► aegis-worker (Terraform, Trivy, Checkov in sandboxed containers)
+Python ML worker (anomalies, forecasts) · Dex for sign-in · Prometheus, Grafana, Jaeger
 ```
 
-Core principle: **deterministic first, AI second.** OPA and scanners decide;
-any AI component only explains evidence and proposes changes that must pass
-the same deterministic checks plus human approval.
+A few things I cared about:
 
-## Tech stack
+- **Separation of duties is enforced in the database transaction**, not just
+  in the UI. The API itself cannot delete or rewrite evidence: its database
+  role has no such rights, and old evidence is removed only through a database
+  function that enforces minimum retention.
+- **The audit log is a hash chain.** You can verify it, and anchor its head
+  outside Aegis to prove nothing was rewritten later.
+- **Writes are safe to retry.** Every `POST` accepts an `Idempotency-Key`,
+  events go through a transactional outbox, and a broker outage delays events
+  without losing them.
+- **The API is described by an OpenAPI contract.** The dashboard's types are
+  generated from it, and a test fails if a route is missing from it.
 
-Go · Python · React + TypeScript · PostgreSQL · NATS · OPA/Rego · Terraform ·
-Trivy · Checkov · Docker Compose · OpenTelemetry
+**Stack:** Go · PostgreSQL · OPA/Rego · NATS JetStream · React 19 + TypeScript
++ Tailwind · Python (statsmodels, scikit-learn) · Terraform, Trivy, Checkov ·
+OpenTelemetry · Docker Compose
 
-## Quick start
+## How it was tested
+
+The numbers below come from seeded synthetic data on one laptop. The
+[evaluation report](docs/research-report.md) says what they do and do not
+show.
+
+- The IaC checks match the ground truth on all 6 Terraform fixtures.
+- The inventory evaluation found all 132 seeded violations with no false
+  positives.
+- The remediation loop fixed 121 synthetic findings, verified every one, and
+  introduced no new failures.
+- Seeded drift was detected exactly over 200 random seeds.
+- Risk rankings stayed stable when each weight moved by ±20 %.
+- For cost forecasting, a plain seasonal-naive baseline beat Holt-Winters and
+  SARIMAX on this data, so it is the default.
+- The full pipeline was measured at 100 to 10 000 resources, with the database,
+  OPA, NATS and the identity provider failing mid-run
+  ([performance](docs/performance.md)).
+
+Every push runs the Go unit and PostgreSQL integration tests, 34 OPA policy
+tests, the web unit tests, the Python tests, type and lint checks, the
+OpenAPI contract check and a secret scan. Seven browser journeys run against
+the real stack with real sign-in (see [apps/web/e2e](apps/web/e2e/README.md)).
+
+The whole codebase has also been through two rounds of adversarial review.
+Several specialist reviewers looked for bugs, races, security holes and
+design problems, and separate verifiers checked each claim against the code
+before anything was changed. Fixes shipped with tests that fail without them.
+
+## Run it
+
+You need Docker, Go 1.27 and Node 24.
 
 ```bash
-cp .env.example .env              # then edit POSTGRES_PASSWORD
+cp .env.example .env                       # set the passwords
 docker compose --profile core up -d --build
-curl http://127.0.0.1:8080/readyz # {"checks":{"database":"ok"},"status":"ready"}
+curl http://127.0.0.1:8080/readyz          # {"checks":{"database":"ok"},"status":"ready"}
 
-cd apps/web && npm ci && npm run dev   # http://127.0.0.1:5173
+cd apps/web && npm ci && npm run dev       # http://127.0.0.1:5173
 ```
 
-Full instructions, including running tests without Docker:
+To sign in with real accounts, run the scanner, or load the demo data, follow
 [docs/getting-started.md](docs/getting-started.md).
 
-## Repository layout
+## Where things are
 
-| Path | Purpose |
+| Path | What is there |
 |---|---|
-| `cmd/` | Process entry points (`aegis-api`, later `aegis-worker`) |
-| `services/` | Control-plane modules (api, inventory, governance, compliance, drift, risk, finops, audit, investigator) |
-| `workers/` | Background workers (iac-scanner, inventory-importer, remediation) |
-| `packages/` | Shared Go libraries (config, logging, database, telemetry, contracts) |
-| `migrations/` | Ordered SQL migrations (embedded into the binary) |
-| `policies/` | OPA/Rego policies and policy tests |
-| `apps/web/` | React + TypeScript dashboard |
-| `ml/` | Python FinOps ML package |
-| `datasets/` | Synthetic, seeded datasets and Terraform fixtures |
-| `tests/` | Integration, e2e, security, resilience and performance tests |
-| `architecture/` | System context, ADRs, data model, diagrams |
-| `security/` | Threat model and security design documents |
-| `research/` | Literature review, research questions, experiments |
-| `docs/` | User and developer documentation |
+| `cmd/` | `aegis-api`, `aegis-worker` (IaC scans), `aegis-datagen` (synthetic data), `aegis-verify` (checks signed change sets) |
+| `services/` | One package per module: inventory, iac, compliance, drift, risk, finops, investigator, remediation, plus access, audit, outbox, automation, retention, tenancy and the HTTP API |
+| `packages/` | Shared Go code: config, database, logging, telemetry, OPA client, NATS, redaction, signing |
+| `migrations/` | SQL migrations, embedded in the binary and applied by a one-shot job |
+| `policies/` | Rego policies and their tests |
+| `apps/web/` | The React dashboard, built on one shared component library ([docs/ui.md](docs/ui.md)) |
+| `ml/` | The Python FinOps package and worker |
+| `datasets/` | Seeded synthetic data and Terraform fixtures with ground truth |
+| `tests/integration/` | Tests against real PostgreSQL, OPA and NATS |
+| `architecture/`, `security/`, `docs/` | Decisions (ADRs), the threat model, and the user and developer docs |
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) and [security/threat-model.md](security/threat-model.md).
+Please report vulnerabilities as described in [SECURITY.md](SECURITY.md). The
+threat model is in [security/threat-model.md](security/threat-model.md).
 
 ## License
 
