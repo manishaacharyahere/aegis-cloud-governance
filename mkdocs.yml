@@ -36,6 +36,7 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Collect a real AWS account: aws-collector.md
   - Evaluation report: research-report.md
   - Modules:
       - A. Inventory: modules/inventory.md

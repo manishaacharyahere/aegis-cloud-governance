@@ -30,7 +30,8 @@ evidence before you see it.
 
 ## What it does
 
-- **Inventory.** Import snapshots of your cloud (or a Terraform state file).
+- **Inventory.** Point the read-only collector at a real AWS account
+  ([how, free](docs/aws-collector.md)), or import a snapshot or a Terraform state file.
   Aegis normalises resource types, strips secrets before anything is stored,
   ignores re-sent snapshots, and keeps a version history of every resource.
 - **Terraform checks.** Each plan runs in a locked-down container with no
@@ -126,7 +127,8 @@ show.
   OPA, NATS and the identity provider failing mid-run
   ([performance](docs/performance.md)).
 
-Every push runs the Go unit and PostgreSQL integration tests, 34 OPA policy
+Every push runs the Go unit and integration tests against real PostgreSQL,
+OPA, NATS and an AWS emulator (81.7 % statement coverage combined), 34 OPA policy
 tests, the web unit tests, the Python tests, type and lint checks, the
 OpenAPI contract check and a secret scan. Seven browser journeys run against
 the real stack with real sign-in (see [apps/web/e2e](apps/web/e2e/README.md)).

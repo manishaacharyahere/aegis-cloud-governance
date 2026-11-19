@@ -26,7 +26,12 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U aegis" --health-interval 5s
           --health-timeout 3s --health-retries 10
+      # Free AWS emulator: the collector is tested against the real SDK calls.
+      moto:
+        image: motoserver/moto:5.2.5
+        ports: ["5055:5000"]
     env:
+      AEGIS_TEST_AWS_ENDPOINT: http://localhost:5055
       AEGIS_TEST_DATABASE_URL: postgres://aegis:ci-only@localhost:5432/aegis_test?sslmode=disable
       AEGIS_TEST_OPA_URL: http://localhost:8181
       AEGIS_TEST_OPA_TOKEN: ci-only-opa-token
@@ -52,8 +57,19 @@ jobs:
       - name: gofmt
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - run: go vet ./...
-      - name: test (unit + integration, race detector)
-        run: go test -race -count=1 ./...
+      - name: test (unit + integration, race detector, combined coverage)
+        # -coverpkg counts the integration tests too: much of the code that
+        # talks to PostgreSQL, OPA and NATS is exercised only there.
+        run: go test -race -count=1 -coverpkg=./services/...,./packages/... -coverprofile=coverage.out ./...
+      - name: coverage summary
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+          echo "Go statement coverage (unit + integration): **$total**" >> "$GITHUB_STEP_SUMMARY"
+          echo "$total"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
       - run: go build ./...
 
   web:
