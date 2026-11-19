@@ -11,6 +11,7 @@ paid cloud services and no AI API.
 **[Watch the demo (97 s)](https://github.com/manishaacharyahere/aegis-cloud-governance/releases/download/v1.1.0/aegis-demo.webm)** ·
 **[Documentation](https://manishaacharyahere.github.io/aegis-cloud-governance/)** ·
 **[Evaluation report](docs/research-report.md)** ·
+**[Design walkthrough](docs/design-walkthrough.md)** ·
 **[All screenshots](screenshots/)**
 
 ## Why I built it

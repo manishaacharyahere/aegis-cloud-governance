@@ -39,6 +39,7 @@ nav:
   - Collect a real AWS account: aws-collector.md
   - Deploy to the cloud: deploy.md
   - Evaluation report: research-report.md
+  - Design walkthrough: design-walkthrough.md
   - Modules:
       - A. Inventory: modules/inventory.md
       - B. IaC scanning: modules/iac.md
