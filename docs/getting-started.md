@@ -118,6 +118,8 @@ AEGIS_DATABASE_URL="postgres://aegis:<password>@127.0.0.1:5432/aegis?sslmode=dis
 | `AEGIS_OPA_TOKEN` | — (required by Compose; required in production) | token for the OPA API, which only allows policy evaluation |
 | `AEGIS_NATS_USER` / `AEGIS_NATS_PASSWORD` | Compose: `aegis_api` / from `.env` | NATS credentials (anonymous access is off) |
 | `AEGIS_RATE_LIMIT_PER_MINUTE` | `600` | requests per user per minute (0 disables) |
+| `AEGIS_AUTH_FAILURES_PER_MINUTE` | `60` | rejected bearer tokens per client address per minute; beyond that, 429 before the token is verified (0 disables) |
+| `AEGIS_TRUSTED_PROXIES` | (none) | CIDRs of proxies whose `X-Forwarded-For` is believed when finding the client address (the Helm chart sets the private ranges) |
 | `AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE` | `20` | imports, scans, evaluations, assessments, investigations, proposals |
 | `AEGIS_AI_MAX_CONCURRENT` | `2` | concurrent model calls; extra investigations return the brief without the model |
 | `AEGIS_SCHEDULE_EVERY` | `6h` | re-evaluate compliance, risk and drift for every tenant, and send reminders (0 disables); imports also trigger an evaluation within ~10 s through NATS |

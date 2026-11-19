@@ -41,6 +41,8 @@ type Auth struct {
 	// DevTrustPrivateNetwork lets development mode accept clients on private
 	// networks (the Docker bridge). Off by default: only loopback is local.
 	DevTrustPrivateNetwork bool
+	// Failures limits rejected bearer tokens per client IP (nil: no limit).
+	Failures *FailedAuthLimit
 }
 
 // routePermissions is the single table of what each route requires.
@@ -133,6 +135,11 @@ func (a Auth) authenticate(next http.Handler) http.Handler {
 		}
 		h := r.Header.Get("Authorization")
 		if raw, ok := strings.CutPrefix(h, "Bearer "); ok && raw != "" && a.Verifier != nil {
+			ip := a.Failures.ClientIP(r)
+			if blocked, wait := a.Failures.blocked(ip); blocked {
+				tooManyFailures(w, wait)
+				return
+			}
 			p, err := a.Verifier.Verify(r.Context(), strings.TrimSpace(raw))
 			switch {
 			case err == nil:
@@ -141,7 +148,8 @@ func (a Auth) authenticate(next http.Handler) http.Handler {
 				r = r.WithContext(context.WithValue(r.Context(), providerDownKey{}, true))
 				logging.FromContext(r.Context()).Warn("identity provider unavailable", "error", err)
 			default:
-				logging.FromContext(r.Context()).Info("rejected bearer token", "error", err)
+				a.Failures.failed(ip)
+				logging.FromContext(r.Context()).Info("rejected bearer token", "error", err, "client", ip)
 			}
 		}
 		next.ServeHTTP(w, r)

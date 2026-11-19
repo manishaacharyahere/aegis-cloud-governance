@@ -160,7 +160,8 @@ func run() error {
 			return err
 		}
 	}
-	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles, DevTrustPrivateNetwork: cfg.DevTrustPrivateNetwork}
+	auth := api.Auth{Mode: cfg.AuthMode, Roles: roles, DevTrustPrivateNetwork: cfg.DevTrustPrivateNetwork,
+		Failures: &api.FailedAuthLimit{PerMinute: cfg.AuthFailuresPerMinute, TrustedProxies: cfg.TrustedProxies}}
 	if cfg.AuthMode == api.AuthOIDC {
 		auth.Verifier = &access.Verifier{Issuer: cfg.OIDCIssuer, ClientID: cfg.OIDCClientID}
 		auth.Issuer, auth.ClientID = cfg.OIDCIssuer, cfg.OIDCClientID

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -64,6 +65,10 @@ type Config struct {
 	// Requests per caller per minute (0 disables), ordinary and expensive routes.
 	RateLimitPerMinute          int
 	RateLimitExpensivePerMinute int
+	// AuthFailuresPerMinute caps rejected bearer tokens per client IP (0: off).
+	AuthFailuresPerMinute int
+	// TrustedProxies are the proxies whose X-Forwarded-For is believed.
+	TrustedProxies []netip.Prefix
 	// NATSURL enables the outbox relay when set (e.g. nats://nats:4222).
 	NATSURL string
 	// NATS credentials (kept out of the URL so they never appear in logs).
@@ -199,12 +204,23 @@ func Load(lookup LookupFunc) (Config, error) {
 		key string
 		def string
 		dst *int
-	}{{"AEGIS_RATE_LIMIT_PER_MINUTE", "600", &cfg.RateLimitPerMinute}, {"AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE", "20", &cfg.RateLimitExpensivePerMinute}} {
+	}{{"AEGIS_RATE_LIMIT_PER_MINUTE", "600", &cfg.RateLimitPerMinute}, {"AEGIS_RATE_LIMIT_EXPENSIVE_PER_MINUTE", "20", &cfg.RateLimitExpensivePerMinute},
+		{"AEGIS_AUTH_FAILURES_PER_MINUTE", "60", &cfg.AuthFailuresPerMinute}} {
 		n, err := strconv.Atoi(get(rl.key, rl.def))
 		if err != nil || n < 0 || n > 100000 {
 			errs = append(errs, fmt.Errorf("%s: must be an integer between 0 and 100000", rl.key))
 		}
 		*rl.dst = n
+	}
+	for _, c := range strings.Split(get("AEGIS_TRUSTED_PROXIES", ""), ",") {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(c); err == nil {
+			cfg.TrustedProxies = append(cfg.TrustedProxies, p.Masked())
+		} else {
+			errs = append(errs, fmt.Errorf("AEGIS_TRUSTED_PROXIES: %q is not a CIDR such as 10.0.0.0/8", c))
+		}
 	}
 	if d, err := time.ParseDuration(get("AEGIS_SCHEDULE_EVERY", "6h")); err != nil || d < 0 || (d > 0 && d < time.Minute) {
 		errs = append(errs, errors.New("AEGIS_SCHEDULE_EVERY: must be 0 (off) or at least 1m"))

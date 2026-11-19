@@ -55,6 +55,9 @@ seccompProfile: { type: RuntimeDefault }
 - { name: AEGIS_OIDC_CLIENT_ID, value: {{ .Values.api.oidc.clientId | quote }} }
 - { name: AEGIS_BOOTSTRAP_TENANT, value: {{ .Values.api.bootstrapTenant | quote }} }
 - { name: AEGIS_BOOTSTRAP_ADMINS, value: {{ join "," .Values.api.bootstrapAdmins | quote }} }
+# Requests arrive through the web proxy and the ingress (private addresses);
+# the client address is then read from X-Forwarded-For.
+- { name: AEGIS_TRUSTED_PROXIES, value: {{ join "," .Values.api.trustedProxies | quote }} }
 {{- if eq .Values.api.authMode "dev-headers" }}
 # The web proxy reaches the API from a pod address.
 - { name: AEGIS_DEV_TRUST_PRIVATE_NETWORK, value: "true" }

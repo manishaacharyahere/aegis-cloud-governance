@@ -6,6 +6,12 @@
 {
 	admin off
 	auto_https off
+	# Keep the client address the ingress controller (a private address in
+	# the cluster) reports in X-Forwarded-For; the API limits rejected sign-in
+	# tokens per client address.
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 :8080 {
