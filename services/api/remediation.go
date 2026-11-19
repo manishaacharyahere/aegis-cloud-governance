@@ -10,6 +10,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/delivery"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/remediation"
 )
@@ -173,6 +174,8 @@ func (h remediationHandlers) step(fn func(RemediationService) func(context.Conte
 func (h remediationHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var unavailable *opa.UnavailableError
 	switch {
+	case errors.Is(err, paging.ErrBadCursor): // same answer on every list
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
 	case errors.As(err, &unavailable), errors.Is(err, opa.ErrUndefined):
 		logging.FromContext(r.Context()).Error("policy engine unavailable", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "policy_engine_unavailable", "policy engine unavailable; nothing was changed")

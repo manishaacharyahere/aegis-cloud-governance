@@ -49,9 +49,7 @@ GET /api/v1/remediations?limit=50&after=MTc2...   → the next, older page; "nex
   `/audit/events` pages by sequence number instead: use `?before_seq=<next_before_seq>`.
 - `/resources` pages by resource ID with `cursor=<next_cursor>`.
 - A cursor that is not one the API issued is rejected with `400 invalid_cursor`
-  on `/resources` and `/iac/scans`, so a mangled cursor never reads as "end of
-  list". (`/remediations`, `/compliance/exceptions` and `/drift/reports` still
-  answer `422 invalid_request`; unifying them is on the backlog.)
+  on every list, so a mangled cursor never reads as "end of list".
 - `GET /resources/{id}` returns the newest 50 versions; `versions_truncated`
   says whether there are more.
 

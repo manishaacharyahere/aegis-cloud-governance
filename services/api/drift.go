@@ -8,6 +8,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 )
 
@@ -135,6 +136,8 @@ func (h driftHandlers) getReport(w http.ResponseWriter, r *http.Request) {
 func (h driftHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var unavailable *opa.UnavailableError
 	switch {
+	case errors.Is(err, paging.ErrBadCursor): // same answer on every list
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
 	case errors.Is(err, drift.ErrTenantNotFound):
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
 	case errors.Is(err, drift.ErrNotFound):

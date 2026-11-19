@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 )
 
@@ -41,9 +43,15 @@ func TestListDriftReports(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"r1"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	rec = do(driftHandler(&fakeDrift{err: drift.ErrInvalid}), http.MethodGet, "/api/v1/drift/reports?after=x", nil, map[string]string{TenantHeader: "demo"})
+	// A bad cursor gets the same answer on every list endpoint.
+	badCursor := fmt.Errorf("%w: %w", drift.ErrInvalid, paging.ErrBadCursor)
+	rec = do(driftHandler(&fakeDrift{err: badCursor}), http.MethodGet, "/api/v1/drift/reports?after=x", nil, map[string]string{TenantHeader: "demo"})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_cursor") {
+		t.Errorf("invalid cursor: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(driftHandler(&fakeDrift{err: drift.ErrInvalid}), http.MethodGet, "/api/v1/drift/reports", nil, map[string]string{TenantHeader: "demo"})
 	if rec.Code != http.StatusUnprocessableEntity {
-		t.Errorf("invalid cursor: %d", rec.Code)
+		t.Errorf("other invalid request: %d", rec.Code)
 	}
 }
 

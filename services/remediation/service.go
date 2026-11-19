@@ -553,7 +553,7 @@ func (s *Service) List(ctx context.Context, tenant, status, after string, limit 
 	}
 	at, id, hasCursor, err := paging.Decode(after)
 	if err != nil || (hasCursor && !uuidRe.MatchString(id)) {
-		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalid, paging.ErrBadCursor)
 	}
 	limit = paging.Limit(limit)
 	rows, err := s.Pool.Query(ctx, `SELECT `+viewCols+` FROM remediations WHERE tenant_id = $1 AND ($2 = '' OR status = $2)

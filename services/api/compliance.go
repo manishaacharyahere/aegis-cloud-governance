@@ -13,6 +13,7 @@ import (
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/logging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/access"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/audit"
@@ -376,6 +377,8 @@ func (h complianceHandlers) verifyAudit(w http.ResponseWriter, r *http.Request) 
 func (h complianceHandlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var unavailable *opa.UnavailableError
 	switch {
+	case errors.Is(err, paging.ErrBadCursor): // same answer on every list
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "invalid cursor")
 	case errors.Is(err, compliance.ErrTenantNotFound):
 		writeError(w, http.StatusNotFound, "tenant_not_found", "tenant not found")
 	case errors.Is(err, compliance.ErrNotFound):

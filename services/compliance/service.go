@@ -736,10 +736,10 @@ func (s *Service) ListExceptions(ctx context.Context, tenant, after string, limi
 	}
 	at, id, hasCursor, err := paging.Decode(after)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalid, paging.ErrBadCursor)
 	}
 	if hasCursor && !uuidRe.MatchString(id) {
-		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalid, paging.ErrBadCursor)
 	}
 	if !hasCursor {
 		id = "00000000-0000-0000-0000-000000000000"

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/opa"
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/packages/signing"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/delivery"
@@ -459,7 +460,7 @@ func TestRemediationPaging(t *testing.T) {
 	if len(seen) != 7 || pages != 3 {
 		t.Errorf("paged %d items in %d pages, want 7 in 3", len(seen), pages)
 	}
-	if _, _, err := svc.List(ctx, "demo", "", "not-a-cursor", 3); !errors.Is(err, remediation.ErrInvalid) {
+	if _, _, err := svc.List(ctx, "demo", "", "not-a-cursor", 3); !errors.Is(err, remediation.ErrInvalid) || !errors.Is(err, paging.ErrBadCursor) {
 		t.Errorf("bad cursor: %v", err)
 	}
 }

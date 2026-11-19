@@ -412,7 +412,7 @@ func (s *Service) GetReport(ctx context.Context, tenant, id, category, minSeveri
 func (s *Service) ListReports(ctx context.Context, tenant, after string, limit int) ([]Report, string, error) {
 	at, id, hasCursor, err := paging.Decode(after)
 	if err != nil || (hasCursor && !uuidRe.MatchString(id)) {
-		return nil, "", fmt.Errorf("%w: invalid cursor", ErrInvalid)
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalid, paging.ErrBadCursor)
 	}
 	var tenantID string
 	if err := s.Pool.QueryRow(ctx, `SELECT id FROM tenants WHERE slug = $1`, tenant).Scan(&tenantID); err != nil {

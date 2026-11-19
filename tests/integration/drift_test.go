@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/manishaacharyahere/aegis-cloud-governance/packages/paging"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/compliance"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/drift"
 	"github.com/manishaacharyahere/aegis-cloud-governance/services/inventory/synthetic"
@@ -155,7 +156,7 @@ func TestDriftLifecycle(t *testing.T) {
 	if other, _, err := svc.ListReports(ctx, "other", "", 10); err != nil || len(other) != 0 {
 		t.Errorf("reports leak across tenants: %d %v", len(other), err)
 	}
-	if _, _, err := svc.ListReports(ctx, "demo", "not-a-cursor", 10); !errors.Is(err, drift.ErrInvalid) {
+	if _, _, err := svc.ListReports(ctx, "demo", "not-a-cursor", 10); !errors.Is(err, drift.ErrInvalid) || !errors.Is(err, paging.ErrBadCursor) {
 		t.Errorf("bad cursor: %v", err)
 	}
 
