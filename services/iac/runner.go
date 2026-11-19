@@ -51,6 +51,20 @@ type DockerRunner struct {
 	MirrorVolume string
 	StepTimeout  time.Duration // per tool invocation
 	WorkRoot     string        // parent for temporary work dirs ("" = OS temp)
+	// User runs the tool containers as "uid:gid". Default (see NewDockerRunner
+	// callers): the worker's own user on Linux, so the containers can use the
+	// worker's private work directory without root's file-access override,
+	// which the dropped capabilities remove anyway. Empty: the image's user.
+	User string
+}
+
+// CurrentUser returns "uid:gid" of this process, or "" where there is none
+// (Windows; Docker Desktop maps file ownership itself).
+func CurrentUser() string {
+	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {
+		return fmt.Sprintf("%d:%d", uid, gid)
+	}
+	return ""
 }
 
 func (d *DockerRunner) Versions() map[string]string {
@@ -70,12 +84,15 @@ func (d *DockerRunner) Plan(ctx context.Context, dir string) ([]byte, error) {
 	}
 
 	tf := func(network bool, args ...string) ([]byte, error) {
-		env := []string{"TF_IN_AUTOMATION=1", "CHECKPOINT_DISABLE=1", "TF_PLUGIN_CACHE_DIR=/plugin-cache",
+		env := []string{"TF_IN_AUTOMATION=1", "CHECKPOINT_DISABLE=1",
 			// Mock credentials: fixtures skip all credential checks and make no API calls.
 			"AWS_ACCESS_KEY_ID=mock", "AWS_SECRET_ACCESS_KEY=mock"}
 		mounts := []string{"type=bind,source=" + work + ",target=/work"}
-		if d.PluginVolume != "" {
+		// A named volume belongs to root: only a root container can write the
+		// provider cache. With a mirror, the cache is not needed at all.
+		if d.PluginVolume != "" && d.User == "" && d.MirrorVolume == "" {
 			mounts = append(mounts, "type=volume,source="+d.PluginVolume+",target=/plugin-cache")
+			env = append(env, "TF_PLUGIN_CACHE_DIR=/plugin-cache")
 		}
 		if d.MirrorVolume != "" {
 			mounts = append(mounts, "type=volume,source="+d.MirrorVolume+",target=/mirror,readonly")
@@ -160,6 +177,9 @@ func (d *DockerRunner) run(ctx context.Context, network bool, mounts, env []stri
 		// directory, the plugin cache and a size-limited /tmp (also HOME).
 		"--read-only", "--tmpfs", "/tmp:rw,exec,size=1g", "-e", "HOME=/tmp",
 		"-w", "/work"}
+	if d.User != "" {
+		argv = append(argv, "--user", d.User)
+	}
 	if !network {
 		argv = append(argv, "--network", "none")
 	}

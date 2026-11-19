@@ -77,7 +77,7 @@ func run() error {
 		Scanner: &iac.Pipeline{
 			Tools: &iac.DockerRunner{
 				Docker: cfg.Docker, Images: iac.DefaultImages,
-				PluginVolume: cfg.PluginVolume, MirrorVolume: cfg.MirrorVolume, StepTimeout: cfg.StepTimeout,
+				PluginVolume: cfg.PluginVolume, MirrorVolume: cfg.MirrorVolume, StepTimeout: cfg.StepTimeout, User: iac.CurrentUser(),
 			},
 			Policy:      policy,
 			FixturesDir: cfg.FixturesDir,

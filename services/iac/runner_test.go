@@ -41,7 +41,7 @@ func fakeRunner(t *testing.T, mirror string) (*DockerRunner, func() [][]string) 
 	t.Helper()
 	log := filepath.Join(t.TempDir(), "docker.log")
 	t.Setenv("AEGIS_FAKE_DOCKER_LOG", log)
-	d := &DockerRunner{Docker: os.Args[0], Images: DefaultImages, MirrorVolume: mirror, WorkRoot: t.TempDir()}
+	d := &DockerRunner{Docker: os.Args[0], Images: DefaultImages, MirrorVolume: mirror, WorkRoot: t.TempDir(), User: "1001:1001"}
 	calls := func() [][]string {
 		raw, err := os.ReadFile(log)
 		if err != nil {
@@ -102,7 +102,9 @@ func TestDockerRunnerSandboxFlags(t *testing.T) {
 		}
 		for _, argv := range runs {
 			name := step(argv)
-			for _, flag := range [][]string{{"--cap-drop", "ALL"}, {"--security-opt", "no-new-privileges"}, {"--read-only"}, {"--pids-limit", "512"}} {
+			// --user: root without capabilities cannot read the worker's private
+			// work directory on Linux; the worker's own user can.
+			for _, flag := range [][]string{{"--cap-drop", "ALL"}, {"--security-opt", "no-new-privileges"}, {"--read-only"}, {"--pids-limit", "512"}, {"--user", "1001:1001"}} {
 				if !has(argv, flag...) {
 					t.Errorf("mirror=%q %s: missing %v", mirror, name, flag)
 				}
