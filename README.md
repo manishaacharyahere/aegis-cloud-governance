@@ -183,4 +183,6 @@ threat model is in [security/threat-model.md](security/threat-model.md).
 
 ## License
 
-[MIT](LICENSE)
+All rights reserved. The source is public so it can be read and evaluated;
+it is not open source. Using, copying, modifying or redistributing it needs
+written permission. See [LICENSE](LICENSE).

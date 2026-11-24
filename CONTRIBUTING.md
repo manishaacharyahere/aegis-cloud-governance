@@ -1,5 +1,8 @@
 # Contributing
 
+Aegis is not open source (see [LICENSE](LICENSE)); outside contributions are
+by invitation only. These are the working rules for changes to this repository.
+
 1. Every change needs tests: unit tests, plus integration and failure/edge-case
    tests where relevant.
 2. Run the checks before pushing (see [docs/getting-started.md](docs/getting-started.md#4-run-the-tests)).
